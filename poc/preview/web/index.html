@@ -1,0 +1,181 @@
+<!doctype html>
+<!-- POC-003 viewer page (throwaway). Loaded inside the Tauri 2 window (WebView2). -->
+<html>
+<head>
+<meta charset="utf-8">
+<title>UMR POC-003 preview</title>
+<style>
+  html,body{margin:0;height:100%;background:#111;color:#ddd;font:12px/1.4 system-ui,sans-serif;overflow:hidden}
+  #wrap{display:flex;flex-direction:column;height:100%}
+  #bar{padding:4px 8px;display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+  #stage{flex:1;display:flex;align-items:center;justify-content:center;min-height:0}
+  canvas{max-width:100%;max-height:100%;background:#000;touch-action:none;cursor:crosshair}
+  button{font:inherit}
+  #stat{white-space:pre;font-family:ui-monospace,monospace}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div id="bar">
+    <button id="back">Back</button><button id="home">Home</button><button id="rot">Rotate</button>
+    <button id="lat">Measure latency</button><button id="fps">Measure fps</button>
+    <span id="stat">connecting…</span>
+  </div>
+  <div id="stage"><canvas id="c" width="1080" height="2400"></canvas></div>
+</div>
+<script>
+const cv = document.getElementById('c');
+const ctx = cv.getContext('2d', { willReadFrequently: true });
+const stat = document.getElementById('stat');
+let ws, dec, W = 1080, H = 2400, config = null, codecStr = null, decoded = 0, gotKey = false;
+const frameHooks = [];
+
+function hex2(b){ return b.toString(16).padStart(2,'0'); }
+function codecFromConfig(buf){
+  for (let i = 0; i + 4 < buf.length; i++) {
+    if (buf[i]===0 && buf[i+1]===0 && buf[i+2]===1 && (buf[i+3] & 0x1f) === 7)
+      return 'avc1.' + hex2(buf[i+4]) + hex2(buf[i+5]) + hex2(buf[i+6]);
+  }
+  return 'avc1.42e01f';
+}
+function makeDecoder(){
+  if (dec && dec.state !== 'closed') dec.close();
+  dec = new VideoDecoder({
+    output: (frame) => {
+      if (cv.width !== frame.displayWidth || cv.height !== frame.displayHeight) {
+        cv.width = frame.displayWidth; cv.height = frame.displayHeight;
+      }
+      ctx.drawImage(frame, 0, 0);
+      frame.close();
+      decoded++;
+      const now = performance.now();
+      for (const h of frameHooks.splice(0)) h(now);
+    },
+    error: (e) => { log('decoder error: ' + e.message); gotKey = false; makeDecoder(); }
+  });
+  dec.configure({ codec: codecStr, optimizeForLatency: true, hardwareAcceleration: 'prefer-hardware' });
+  gotKey = false;
+}
+function log(t){ console.log(t); if (ws && ws.readyState === 1) ws.send(t); }
+
+function connect(){
+  ws = new WebSocket('ws://127.0.0.1:27201/');
+  ws.binaryType = 'arraybuffer';
+  ws.onopen = () => { stat.textContent = 'connected'; log('viewer connected ua=' + navigator.userAgent); };
+  ws.onclose = () => { stat.textContent = 'disconnected, retrying'; setTimeout(connect, 1000); };
+  ws.onmessage = (ev) => {
+    const b = new Uint8Array(ev.data);
+    if (b[0] === 1) {
+      const dv = new DataView(ev.data); W = dv.getUint32(1); H = dv.getUint32(5);
+      log('session ' + W + 'x' + H); return;
+    }
+    if (b[0] !== 2) return;
+    const flags = b[1], isConfig = flags & 1, isKey = (flags >> 1) & 1;
+    const pts = Number(new DataView(ev.data).getBigUint64(2));
+    const payload = b.subarray(10);
+    if (isConfig) {
+      config = payload.slice();
+      const c = codecFromConfig(config);
+      if (c !== codecStr || !dec) { codecStr = c; log('codec ' + c); makeDecoder(); }
+      return;
+    }
+    if (!dec || dec.state !== 'configured') return;
+    let data = payload;
+    if (isKey && config) { data = new Uint8Array(config.length + payload.length); data.set(config); data.set(payload, config.length); gotKey = true; }
+    if (!gotKey) return;
+    try { dec.decode(new EncodedVideoChunk({ type: isKey ? 'key' : 'delta', timestamp: pts, data })); }
+    catch (e) { log('decode throw ' + e.message); gotKey = false; }
+  };
+}
+
+// ---- scrcpy control messages (v5.0.1 layout) ----
+// pid 0 = finger (touchscreen source). pid -1 would be the mouse pointer (no "show touches" dot).
+function touch(action, x, y, pid = 0n){
+  const m = new ArrayBuffer(32), d = new DataView(m);
+  d.setUint8(0, 2); d.setUint8(1, action); d.setBigUint64(2, pid);
+  d.setInt32(10, Math.round(x)); d.setInt32(14, Math.round(y));
+  d.setUint16(18, W); d.setUint16(20, H);
+  d.setUint16(22, action === 1 ? 0 : 0xffff);
+  d.setInt32(24, 0); d.setInt32(28, 0);
+  ws.send(m);
+}
+function key(code){
+  for (const a of [0, 1]) { const m = new ArrayBuffer(14), d = new DataView(m);
+    d.setUint8(0, 0); d.setUint8(1, a); d.setInt32(2, code); d.setInt32(6, 0); d.setInt32(10, 0); ws.send(m); }
+}
+function toDev(ev){ const r = cv.getBoundingClientRect(); return [ (ev.clientX - r.left) * W / r.width, (ev.clientY - r.top) * H / r.height ]; }
+let down = false;
+cv.addEventListener('pointerdown', e => { down = true; cv.setPointerCapture(e.pointerId); touch(0, ...toDev(e)); });
+cv.addEventListener('pointermove', e => { if (down) touch(2, ...toDev(e)); });
+cv.addEventListener('pointerup',   e => { down = false; touch(1, ...toDev(e)); });
+cv.addEventListener('wheel', e => { e.preventDefault();
+  const [x, y] = toDev(e), m = new ArrayBuffer(21), d = new DataView(m);
+  d.setUint8(0, 3); d.setInt32(1, Math.round(x)); d.setInt32(5, Math.round(y)); d.setUint16(9, W); d.setUint16(11, H);
+  d.setInt16(13, 0); d.setInt16(15, e.deltaY > 0 ? -0x4000 : 0x4000); d.setInt32(17, 0); ws.send(m); }, { passive: false });
+window.addEventListener('keydown', e => {
+  if (e.key.length === 1) { const t = new TextEncoder().encode(e.key), m = new Uint8Array(5 + t.length);
+    m[0] = 1; new DataView(m.buffer).setUint32(1, t.length); m.set(t, 5); ws.send(m); }
+  else if (e.key === 'Backspace') key(67); else if (e.key === 'Enter') key(66);
+});
+document.getElementById('back').onclick = () => key(4);
+document.getElementById('home').onclick = () => key(3);
+document.getElementById('rot').onclick = () => ws.send(new Uint8Array([11]));
+
+// ---- measurement ----
+// region around (x,y) in device coords, mapped to canvas pixels
+// pointer_location overlay: top status bar (P:x/y X: Y: Prs:) changes on every touch event
+function regionPix(x, y){
+  return ctx.getImageData(0, 0, cv.width, Math.max(4, Math.round(cv.height * 0.022))).data;
+}
+function changed(a, b){ let n = 0; for (let i = 0; i < a.length; i += 4)
+  if (Math.abs(a[i] - b[i]) + Math.abs(a[i + 1] - b[i + 1]) + Math.abs(a[i + 2] - b[i + 2]) > 40) n++;
+  return n; }
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+function pct(a, p){ const s = [...a].sort((x, y) => x - y); return s[Math.min(s.length - 1, Math.floor(p * s.length))]; }
+async function measureLatency(n = 40){
+  const res = [];
+  for (let i = 0; i < n; i++) {
+    const x = Math.round(W * (0.3 + 0.4 * Math.random())), y = Math.round(H * (0.35 + 0.3 * Math.random()));
+    await sleep(400);
+    const base = regionPix(x, y);
+    const t0 = performance.now();
+    const hit = new Promise(resolve => {
+      const check = (now) => { if (changed(regionPix(x, y), base) > 8) resolve(now - t0);
+        else if (now - t0 > 1500) resolve(null); else frameHooks.push(check); };
+      frameHooks.push(check);
+      setTimeout(() => resolve(null), 1600);
+    });
+    touch(0, x, y);
+    const dt = await hit;
+    touch(1, x, y);
+    if (dt !== null) res.push(dt);
+    stat.textContent = `latency ${i + 1}/${n}: ${dt === null ? 'miss' : dt.toFixed(1) + ' ms'}`;
+  }
+  const out = res.length ? `LATENCY n=${res.length}/${n} p50=${pct(res, .5).toFixed(1)} p95=${pct(res, .95).toFixed(1)} min=${Math.min(...res).toFixed(1)} max=${Math.max(...res).toFixed(1)} ms` : 'LATENCY no hits';
+  log(out); stat.textContent = out; return out;
+}
+async function measureFps(seconds = 10){
+  const start = decoded, t0 = performance.now(); let k = 0;
+  const x0 = W * 0.2, x1 = W * 0.8, y = H * 0.5;
+  touch(0, x0, y);
+  while (performance.now() - t0 < seconds * 1000) {
+    const f = (Math.sin(k++ / 10) + 1) / 2; touch(2, x0 + (x1 - x0) * f, y + 200 * Math.cos(k / 7)); await sleep(8);
+  }
+  touch(1, x0, y);
+  const fps = (decoded - start) / ((performance.now() - t0) / 1000);
+  const out = `FPS during continuous drag: ${fps.toFixed(1)} (frames=${decoded - start}, ${seconds}s, canvas ${cv.width}x${cv.height})`;
+  log(out); stat.textContent = out; return out;
+}
+document.getElementById('lat').onclick = () => measureLatency();
+document.getElementById('fps').onclick = () => measureFps();
+
+connect();
+if (location.search.includes('auto=1')) {
+  (async () => { while (decoded < 5) await sleep(200); await sleep(1500);
+    log('AUTO start'); await measureLatency(40); await measureFps(10); log('AUTO done'); })();
+}
+setInterval(() => { if (!stat.textContent.startsWith('LATENCY') && !stat.textContent.startsWith('FPS') && !stat.textContent.startsWith('latency'))
+  stat.textContent = `${codecStr || '-'} ${cv.width}x${cv.height} decoded=${decoded} dq=${dec ? dec.decodeQueueSize : '-'}`; }, 500);
+</script>
+</body>
+</html>

@@ -1,0 +1,13 @@
+# Local AI development governance and session context
+/master_build.md
+/workflow_context.md
+/todo.md
+
+# Build output of throwaway PoCs
+/poc/**/target/
+/poc/**/results.log
+
+# Local Claude Code settings (machine-specific)
+/.claude/settings.local.json
+# Generated Tauri schemas
+/poc/**/gen/
