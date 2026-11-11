@@ -1,0 +1,33 @@
+[package]
+name = "umr-platform"
+description = "OS abstraction layer (Windows first): user identity, folders, registry, OS version, process trees and Job Objects."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.59", features = [
+    "Win32_Foundation",
+    "Win32_Security",
+    "Win32_Security_Authorization",
+    "Win32_System_Com",
+    "Win32_System_Console",
+    "Win32_System_Diagnostics_ToolHelp",
+    "Win32_System_JobObjects",
+    "Win32_System_LibraryLoader",
+    "Win32_System_Registry",
+    "Win32_Storage_FileSystem",
+    "Win32_System_SystemInformation",
+    "Win32_System_Threading",
+    "Win32_UI_Shell",
+] }
+# Named-pipe server creation with a custom security descriptor (secure_pipe module).
+tokio = { version = "1", features = ["net"] }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["net", "rt-multi-thread", "macros", "io-util"] }
+
+[lints]
+workspace = true

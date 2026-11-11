@@ -1,23 +1,26 @@
 [workspace]
 resolver = "2"
-members = ["crates/umr-core", "apps/cli"]
+members = ["crates/umr-platform", "crates/umr-api", "crates/umr-storage", "crates/umr-env", "crates/umr-resolver", "crates/umr-installer", "crates/umr-core", "apps/cli"]
 # Phase 0 experiments are a separate workspace and are not part of the product.
 exclude = ["poc"]
 
 [workspace.package]
 version = "0.1.0"
 edition = "2021"
-rust-version = "1.85"
+rust-version = "1.89"  # std::fs::File::try_lock
 repository = "https://github.com/Jishnu2608/AI-Mobile-Runtime"
 publish = false
 
 [workspace.lints.rust]
-unsafe_code = "forbid"
+# `unsafe` is denied everywhere. Only crates/umr-platform (Windows API calls) opts out,
+# and every unsafe block there must carry a `// SAFETY:` comment.
+unsafe_code = "deny"
 missing_debug_implementations = "warn"
 
 [workspace.lints.clippy]
 all = { level = "warn", priority = -1 }
 pedantic = { level = "warn", priority = -1 }
+undocumented_unsafe_blocks = "warn"
 module_name_repetitions = "allow"
 missing_errors_doc = "allow"
 

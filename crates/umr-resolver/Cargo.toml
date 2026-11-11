@@ -1,0 +1,25 @@
+[package]
+name = "umr-resolver"
+description = "Knowledge Pack (signed compatibility rules), project constraint readers, version resolver and install-plan generator."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# Knowledge Pack signatures (Ed25519) and their text encoding.
+ed25519-dalek = "2"
+base64 = "0.22"
+getrandom = "0.3"
+umr-env = { path = "../umr-env" }
+umr-platform = { path = "../umr-platform" }
+
+[[bin]]
+name = "kp"
+path = "src/bin/kp.rs"
+
+[lints]
+workspace = true

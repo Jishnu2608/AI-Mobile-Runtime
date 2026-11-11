@@ -1,0 +1,98 @@
+{
+  "schema": 1,
+  "pack_version": "2026.11.12-1",
+  "sources": {
+    "gradle-compat": { "url": "https://docs.gradle.org/current/userguide/compatibility.html", "checked": "2026-11-12" },
+    "about-agp": { "url": "https://developer.android.com/build/releases/about-agp", "checked": "2026-11-12" },
+    "agp-7.0-notes": { "url": "https://developer.android.com/build/releases/past-releases/agp-7-0-0-release-notes", "checked": "2026-11-12" },
+    "agp-8.0-notes": { "url": "https://developer.android.com/build/releases/past-releases/agp-8-0-0-release-notes", "checked": "2026-11-12" },
+    "agp-9.0-notes": { "url": "https://developer.android.com/build/releases/past-releases/agp-9-0-0-release-notes", "checked": "2026-11-12" },
+    "agp-current-notes": { "url": "https://developer.android.com/build/releases/gradle-plugin", "checked": "2026-11-12" },
+    "expo-versions": { "url": "https://docs.expo.dev/versions/latest/", "checked": "2026-11-12" },
+    "rn-env-setup": { "url": "https://reactnative.dev/docs/set-up-your-environment?os=windows&platform=android", "checked": "2026-11-12" },
+    "poc-001": { "url": "https://github.com/Jishnu2608/AI-Mobile-Runtime/blob/main/poc/reports/POC-001-provisioning.md", "checked": "2026-11-11" },
+    "poc-006": { "url": "https://github.com/Jishnu2608/AI-Mobile-Runtime/blob/main/poc/reports/POC-006-adapters.md", "checked": "2026-11-11" },
+    "android-sdk-licence": { "url": "https://developer.android.com/studio/terms", "checked": "2026-11-12" },
+    "temurin-licence": { "url": "https://adoptium.net/docs/faq/", "checked": "2026-11-12" }
+  },
+  "gradle_java": [
+    { "java": 11, "min_gradle": "5.0", "source": "gradle-compat" },
+    { "java": 17, "min_gradle": "7.3", "source": "gradle-compat" },
+    { "java": 21, "min_gradle": "8.5", "source": "gradle-compat" },
+    { "java": 22, "min_gradle": "8.8", "source": "gradle-compat" },
+    { "java": 23, "min_gradle": "8.10", "source": "gradle-compat" },
+    { "java": 24, "min_gradle": "8.14", "source": "gradle-compat" },
+    { "java": 25, "min_gradle": "9.1.0", "source": "gradle-compat" },
+    { "java": 26, "min_gradle": "9.4.0", "source": "gradle-compat" },
+    { "java": 27, "min_gradle": "9.8.0", "source": "gradle-compat" }
+  ],
+  "agp": [
+    { "agp": "7.0", "min_gradle": "7.0", "min_jdk": 11, "default_build_tools": "30.0.2", "default_ndk": "21.4.7075529", "source": "agp-7.0-notes" },
+    { "agp": "7.1", "min_gradle": "7.2", "min_jdk": 11, "source": "about-agp" },
+    { "agp": "7.2", "min_gradle": "7.3.3", "min_jdk": 11, "source": "about-agp" },
+    { "agp": "7.3", "min_gradle": "7.4", "min_jdk": 11, "source": "about-agp" },
+    { "agp": "7.4", "min_gradle": "7.5", "min_jdk": 11, "source": "about-agp" },
+    { "agp": "8.0", "min_gradle": "8.0", "min_jdk": 17, "default_build_tools": "30.0.3", "default_ndk": "25.1.8937393", "source": "agp-8.0-notes" },
+    { "agp": "8.1", "min_gradle": "8.0", "min_jdk": 17, "source": "about-agp" },
+    { "agp": "8.2", "min_gradle": "8.2", "min_jdk": 17, "source": "about-agp" },
+    { "agp": "8.3", "min_gradle": "8.4", "min_jdk": 17, "source": "about-agp" },
+    { "agp": "8.4", "min_gradle": "8.6", "min_jdk": 17, "source": "about-agp" },
+    { "agp": "8.5", "min_gradle": "8.7", "min_jdk": 17, "source": "about-agp" },
+    { "agp": "8.6", "min_gradle": "8.7", "min_jdk": 17, "source": "about-agp" },
+    { "agp": "8.7", "min_gradle": "8.9", "min_jdk": 17, "source": "about-agp" },
+    { "agp": "8.8", "min_gradle": "8.10.2", "min_jdk": 17, "source": "about-agp" },
+    { "agp": "8.9", "min_gradle": "8.11.1", "min_jdk": 17, "source": "about-agp" },
+    { "agp": "8.10", "min_gradle": "8.11.1", "min_jdk": 17, "source": "about-agp" },
+    { "agp": "8.11", "min_gradle": "8.13", "min_jdk": 17, "source": "about-agp" },
+    { "agp": "8.12", "min_gradle": "8.13", "min_jdk": 17, "source": "about-agp" },
+    { "agp": "8.13", "min_gradle": "8.13", "min_jdk": 17, "source": "about-agp" },
+    { "agp": "9.0", "min_gradle": "9.1.0", "min_jdk": 17, "default_build_tools": "36.0.0", "default_ndk": "28.2.13676358", "source": "agp-9.0-notes" },
+    { "agp": "9.1", "min_gradle": "9.3.1", "min_jdk": 17, "source": "about-agp" },
+    { "agp": "9.2", "min_gradle": "9.4.1", "min_jdk": 17, "source": "about-agp" },
+    { "agp": "9.3", "min_gradle": "9.5.0", "min_jdk": 17, "source": "about-agp" },
+    { "agp": "9.4", "min_gradle": "9.6.0", "min_jdk": 17, "source": "about-agp" },
+    { "agp": "9.5", "min_gradle": "9.6.0", "min_jdk": 17, "default_build_tools": "36.0.0", "default_ndk": "28.2.13676358", "source": "agp-current-notes" }
+  ],
+  "api_min_agp": [
+    { "api": "33", "min_agp": "7.2", "source": "about-agp" },
+    { "api": "34", "min_agp": "8.1.1", "source": "about-agp" },
+    { "api": "35", "min_agp": "8.6.0", "source": "about-agp" },
+    { "api": "36", "min_agp": "8.9.1", "source": "about-agp" },
+    { "api": "36.1", "min_agp": "8.13.0", "source": "about-agp" },
+    { "api": "37.0", "min_agp": "9.1.1", "source": "about-agp" }
+  ],
+  "expo_sdk": [
+    { "sdk": 56, "react_native": "0.85", "min_node": "20.19", "source": "expo-versions" },
+    { "sdk": 57, "react_native": "0.86", "min_node": "22.13", "source": "expo-versions" },
+    { "sdk": 58, "react_native": "0.88", "min_node": "22.13", "source": "expo-versions" }
+  ],
+  "react_native": [
+    { "react_native": "0.88", "min_node": "22.11.0", "recommended_jdk": 17, "source": "rn-env-setup" }
+  ],
+  "components": {
+    "jdk": { "title": "Eclipse Temurin JDK", "approx_download_bytes": 190840832, "approx_disk_bytes": 317718528, "licence": "temurin", "source": "poc-001" },
+    "android-cmdline-tools": { "title": "Android SDK Command-line Tools (incl. Android CLI)", "approx_download_bytes": 154957218, "approx_disk_bytes": 179306496, "licence": "android-sdk", "source": "poc-001" },
+    "android-platform-tools": { "title": "Android SDK Platform-Tools (adb)", "approx_download_bytes": 8074035, "approx_disk_bytes": 17825792, "licence": "android-sdk", "source": "poc-001" },
+    "android-emulator": { "title": "Android Emulator", "approx_download_bytes": 1121976320, "approx_disk_bytes": 1121976320, "licence": "android-sdk", "source": "poc-001" },
+    "android-platform": { "title": "Android SDK Platform", "approx_download_bytes": 124780544, "approx_disk_bytes": 124780544, "licence": "android-sdk", "source": "poc-006" },
+    "android-build-tools": { "title": "Android SDK Build-Tools", "approx_download_bytes": 143654912, "approx_disk_bytes": 143654912, "licence": "android-sdk", "source": "poc-001" },
+    "android-system-image": { "title": "Android system image (Google APIs, x86_64)", "approx_download_bytes": 4585422848, "approx_disk_bytes": 4585422848, "licence": "android-sdk", "source": "poc-001" },
+    "android-ndk": { "title": "Android NDK", "approx_download_bytes": 2278555648, "approx_disk_bytes": 2278555648, "licence": "android-sdk", "source": "poc-006" },
+    "android-cmake": { "title": "CMake (Android SDK package)", "approx_download_bytes": 39845888, "approx_disk_bytes": 39845888, "licence": "android-sdk", "source": "poc-006" },
+    "flutter": { "title": "Flutter SDK", "approx_download_bytes": 1939865600, "approx_disk_bytes": 3500146688, "source": "poc-006" },
+    "node": { "title": "Node.js", "approx_download_bytes": 40894464, "approx_disk_bytes": 113246208, "source": "poc-006" }
+  },
+  "licences": {
+    "android-sdk": { "title": "Android Software Development Kit License Agreement", "url": "https://developer.android.com/studio/terms", "requires_acceptance": true },
+    "temurin": { "title": "GNU GPL v2 with Classpath Exception (Eclipse Temurin)", "url": "https://adoptium.net/docs/faq/", "requires_acceptance": false }
+  },
+  "defaults": {
+    "jdk_major": 17,
+    "system_image_tag": "google_apis",
+    "system_image_abi": "x86_64",
+    "node_major": 24,
+    "platform_package_overrides": { "37": "platforms/android-37.0" },
+    "default_cmake": "3.22.1",
+    "source": "poc-006"
+  }
+}

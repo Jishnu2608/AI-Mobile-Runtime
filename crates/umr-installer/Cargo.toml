@@ -1,0 +1,30 @@
+[package]
+name = "umr-installer"
+description = "Installer: resumable verified downloads, safe extraction, transactional installs with a crash-safe journal, and the licence acceptance gate."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# HTTPS client. native-tls = Windows SChannel: uses the Windows certificate store, so corporate
+# TLS-inspecting proxies with a company root CA work like in the browser.
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "native-tls"] }
+# Archive extraction (deflate only: all official archives we use are deflate zips).
+zip = { version = "2", default-features = false, features = ["deflate"] }
+# Read-only XML parsing for the Android SDK repository manifests.
+roxmltree = "0.20"
+# Checksums: SHA-256 (Adoptium, Node, Flutter) and SHA-1 (Google SDK repository).
+sha2 = "0.10"
+sha1 = "0.10"
+getrandom = "0.3"
+umr-storage = { path = "../umr-storage" }
+umr-resolver = { path = "../umr-resolver" }
+umr-env = { path = "../umr-env" }
+umr-platform = { path = "../umr-platform" }
+
+[lints]
+workspace = true

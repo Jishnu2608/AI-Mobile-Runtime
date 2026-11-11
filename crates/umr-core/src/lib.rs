@@ -4,8 +4,21 @@
 //! environment, devices, sessions, processes and diagnostics. The CLI, the
 //! desktop app and the MCP server are thin clients of it.
 //!
-//! This crate is a skeleton (CORE-001). Lifecycle, API and storage follow in
-//! CORE-002 to CORE-006.
+//! Implemented so far: managed paths, single-instance lock, logging, process
+//! lifecycle (CORE-002) and the local JSON-RPC API over a user-only named pipe
+//! (CORE-003). Tokens (CORE-004) and storage (CORE-005) follow.
+
+pub mod api_server;
+pub mod auth;
+pub mod daemon;
+pub mod doctor;
+pub mod install_api;
+pub mod instance;
+pub mod logging;
+pub mod paths;
+
+#[cfg(test)]
+pub(crate) mod test_support;
 
 /// Product name shown to users.
 pub const PRODUCT_NAME: &str = "AI Mobile Runtime";

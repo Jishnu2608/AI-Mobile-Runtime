@@ -1,9 +1,8 @@
 name: CI
 
+# Manual only, to save GitHub Actions minutes. Run scripts/ci-local.ps1 locally before every commit.
 on:
-  push:
-    branches: [main]
-  pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read

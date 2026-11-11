@@ -18,3 +18,15 @@
 
 # Rust build output
 /target/
+
+# Locally installed agent skills (per developer, not part of the application)
+.agents/
+.claude/skills/
+skills-lock.json
+
+# Secrets: never commit (the Knowledge Pack signing key lives in %USERPROFILE%\.umr\keys)
+.env
+.env.*
+*.key
+*.pem
+*.pfx

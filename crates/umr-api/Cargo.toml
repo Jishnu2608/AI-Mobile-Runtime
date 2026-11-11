@@ -1,0 +1,19 @@
+[package]
+name = "umr-api"
+description = "Local API of the Runtime Core: JSON-RPC 2.0 messages, framing, pipe naming and client."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["net", "io-util", "time"] }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["net", "io-util", "time", "rt-multi-thread", "macros"] }
+
+[lints]
+workspace = true

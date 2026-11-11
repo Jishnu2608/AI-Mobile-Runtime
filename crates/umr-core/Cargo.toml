@@ -14,5 +14,30 @@ path = "src/lib.rs"
 name = "umr-core"
 path = "src/main.rs"
 
+[dependencies]
+umr-platform = { path = "../umr-platform" }
+umr-api = { path = "../umr-api" }
+umr-storage = { path = "../umr-storage" }
+umr-env = { path = "../umr-env" }
+umr-resolver = { path = "../umr-resolver" }
+umr-installer = { path = "../umr-installer" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# API tokens: hashing (only SHA-256 hashes are stored) and OS randomness for generation.
+sha2 = "0.10"
+getrandom = "0.3"
+# Async runtime: Ctrl+C handling now; named-pipe API and process supervision later (CORE-003, DEV-004).
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "signal", "time", "sync", "net", "io-util"] }
+# Structured logging to rotating files (+ stderr in foreground mode).
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter"] }
+tracing-appender = "0.2"
+
+[dev-dependencies]
+umr-platform = { path = "../umr-platform" }
+umr-env = { path = "../umr-env" }
+umr-storage = { path = "../umr-storage" }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "io-util", "time"] }
+
 [lints]
 workspace = true

@@ -4,3 +4,6 @@
 *.bat text eol=crlf
 *.ico binary
 *.png binary
+# Signed bytes: never convert line endings.
+knowledge-pack/pack.json -text
+knowledge-pack/pack.json.sig -text

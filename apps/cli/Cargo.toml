@@ -13,6 +13,18 @@ path = "src/main.rs"
 
 [dependencies]
 umr-core = { path = "../../crates/umr-core" }
+umr-api = { path = "../../crates/umr-api" }
+umr-platform = { path = "../../crates/umr-platform" }
+umr-env = { path = "../../crates/umr-env" }
+umr-resolver = { path = "../../crates/umr-resolver" }
+umr-installer = { path = "../../crates/umr-installer" }
+# Command-line parsing (subcommands, --help, --version).
+clap = { version = "4", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["rt", "time", "signal", "macros"] }
+
+[dev-dependencies]
+serde_json = "1"
 
 [lints]
 workspace = true
