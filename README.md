@@ -79,7 +79,9 @@ umr run
 | POC-013 — preview latency breakdown | Our pipeline adds only ~2–15 ms. **Corrected** on a healthy render session: end-to-end p50 52–68 ms, p95 75–107 ms | [`poc/reports/POC-013-preview-latency.md`](poc/reports/POC-013-preview-latency.md) |
 | POC-006 — framework adapters | Kotlin edit→running 7.1–7.6 s; Flutter hot reload ~0.3 s; Expo Fast Refresh 0.24–0.32 s; all from an isolated toolchain | [`poc/reports/POC-006-adapters.md`](poc/reports/POC-006-adapters.md) |
 
-Next: Phase 0 go/no-go report, then Phase 1 (Runtime Core, CLI, environment provisioning) (Flutter hot reload, Metro/Expo), diagnostics extraction, MCP loop with Claude Code and Codex.
+| POC-009 — Phase 0 go/no-go | **GO** recommended: all gating experiments passed | [`poc/reports/POC-009-phase0-go-no-go.md`](poc/reports/POC-009-phase0-go-no-go.md) |
+
+Next: Phase 1 (Runtime Core, CLI, environment provisioning) (Flutter hot reload, Metro/Expo), diagnostics extraction, MCP loop with Claude Code and Codex.
 
 ## Repository layout
 
