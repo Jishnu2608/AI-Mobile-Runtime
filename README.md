@@ -4,8 +4,8 @@ A local desktop runtime that lets you **see and test your Android app while an A
 
 You open a mobile project in Claude Code, Codex or another coding agent, run one command, and a phone preview opens beside your agent. The runtime prepares the Android toolchain for you, boots an emulator, builds and launches the app, and keeps it updated as the agent changes code. Build errors, crashes and screenshots are made available to the agent, so it can see what you see.
 
-> **Status: early development — Phase 0 (research and proof-of-concept).**
-> There is no installable product yet. This repository currently contains throwaway experiments and their measured results.
+> **Status: Phase 0 (research and proof-of-concept) complete — Phase 1 (foundation) starting.**
+> There is no installable product yet. This repository currently contains throwaway experiments and their measured results; product code starts in Phase 1.
 
 ---
 
@@ -41,7 +41,7 @@ umr run
 
 | Area | Initial release |
 |---|---|
-| Host OS | Windows 11 x64 (macOS and Linux hosts later) |
+| Host OS | Windows 11 x64 only (Windows 10 not supported; macOS and Linux hosts later) |
 | Target | Android emulator (physical devices later) |
 | Frameworks | Kotlin, Java, Flutter (Dart), React Native, Expo |
 | Agents | Claude Code, Codex (any MCP-capable agent later) |
