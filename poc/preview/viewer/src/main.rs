@@ -5,7 +5,8 @@ use tauri::{WebviewUrl, WebviewWindowBuilder};
 
 fn main() {
     let auto = std::env::args().any(|a| a == "--auto");
-    let url = if auto { "http://127.0.0.1:27200/?auto=1" } else { "http://127.0.0.1:27200/" };
+    let extra = std::env::var("VIEW_QUERY").unwrap_or_default();
+    let url: &'static str = Box::leak(format!("http://127.0.0.1:27200/?{}{}", if auto { "auto=1&" } else { "" }, extra).into_boxed_str());
     tauri::Builder::default()
         .setup(move |app| {
             WebviewWindowBuilder::new(app, "preview", WebviewUrl::External(url.parse().unwrap()))

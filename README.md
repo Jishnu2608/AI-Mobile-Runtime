@@ -76,7 +76,9 @@ umr run
 | POC-003 — live preview in a Tauri window (scrcpy → Rust → WebSocket → WebCodecs) | Works. p95 latency 149 ms at 1280 px. Frame rate limited by the emulator's software video encoder | [`poc/reports/POC-003-preview.md`](poc/reports/POC-003-preview.md) |
 | POC-012 — host-side emulator frame stream (gRPC `streamScreenshot`) in the same window | 44–51 fps at window-sized streams; p95 latency 172 ms best | [`poc/reports/POC-012-preview-grpc.md`](poc/reports/POC-012-preview-grpc.md) |
 
-Next experiments: preview latency reduction, framework adapters (Flutter hot reload, Metro/Expo), diagnostics extraction, MCP loop with Claude Code and Codex.
+| POC-013 — preview latency breakdown | Our pipeline adds ~2–15 ms; the rest is inside the emulator. Best end-to-end p95 145 ms (WebGL2 + streaming input) | [`poc/reports/POC-013-preview-latency.md`](poc/reports/POC-013-preview-latency.md) |
+
+Next experiments: framework adapters (Flutter hot reload, Metro/Expo), diagnostics extraction, MCP loop with Claude Code and Codex.
 
 ## Repository layout
 

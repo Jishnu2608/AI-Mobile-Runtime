@@ -1262,6 +1262,7 @@ dependencies = [
  "http",
  "prost",
  "tokio",
+ "tokio-stream",
  "tokio-tungstenite",
  "tonic",
 ]

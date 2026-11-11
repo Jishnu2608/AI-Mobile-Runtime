@@ -24,8 +24,36 @@
   <div id="stage"><canvas id="c" width="1080" height="2400"></canvas></div>
 </div>
 <script>
-const cv = document.getElementById('c');
-const ctx = cv.getContext('2d', { willReadFrequently: true });
+const RENDER = new URLSearchParams(location.search).get('render') || '2d';
+let cv = document.getElementById('c');
+let lastRaw = null; const drawMs = [];
+let ctx = null, gl = null, glTex = null;
+if (RENDER === 'gl') {
+  gl = cv.getContext('webgl2', { antialias: false, alpha: false, desynchronized: true, preserveDrawingBuffer: false });
+  const vs = `#version 300 es
+  in vec2 p; out vec2 uv; void main(){ uv = vec2((p.x+1.)/2., (1.-p.y)/2.); gl_Position = vec4(p,0.,1.); }`;
+  const fs = `#version 300 es
+  precision mediump float; in vec2 uv; uniform sampler2D t; out vec4 o; void main(){ o = texture(t, uv); }`;
+  const sh = (type, src) => { const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s); return s; };
+  const pr = gl.createProgram(); gl.attachShader(pr, sh(gl.VERTEX_SHADER, vs)); gl.attachShader(pr, sh(gl.FRAGMENT_SHADER, fs)); gl.linkProgram(pr); gl.useProgram(pr);
+  const vb = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, vb);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, 1,1]), gl.STATIC_DRAW);
+  const loc = gl.getAttribLocation(pr, 'p'); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+  glTex = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, glTex);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+} else {
+  ctx = cv.getContext('2d', { willReadFrequently: true, desynchronized: true });
+}
+let glSize = '';
+function drawGL(f){
+  if (cv.width !== f.w || cv.height !== f.h) { cv.width = f.w; cv.height = f.h; }
+  gl.viewport(0, 0, f.w, f.h);
+  const key = f.w + 'x' + f.h;
+  if (key !== glSize) { gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, f.w, f.h, 0, gl.RGBA, gl.UNSIGNED_BYTE, f.buf); glSize = key; }
+  else gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, f.w, f.h, gl.RGBA, gl.UNSIGNED_BYTE, f.buf);
+  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+}
 const stat = document.getElementById('stat');
 let ws, dec, W = 1080, H = 2400, config = null, codecStr = null, decoded = 0, gotKey = false;
 const frameHooks = [];
@@ -69,12 +97,17 @@ function connect(){
       const dv = new DataView(ev.data); W = dv.getUint32(1); H = dv.getUint32(5);
       log('session ' + W + 'x' + H); return;
     }
-    if (b[0] === 3) { // POC-012: raw RGBA frame from emulator gRPC
+    if (b[0] === 3) { // POC-012/013: raw RGBA frame from emulator gRPC
       const dv = new DataView(ev.data), fw = dv.getUint32(1), fh = dv.getUint32(5);
-      if (cv.width !== fw || cv.height !== fh) { cv.width = fw; cv.height = fh; }
-      ctx.putImageData(new ImageData(new Uint8ClampedArray(ev.data, 21, fw * fh * 4), fw, fh), 0, 0);
-      decoded++; codecStr = 'raw-rgba';
-      const now = performance.now(); for (const h of frameHooks.splice(0)) h(now);
+      const t0 = performance.now();
+      lastRaw = { buf: new Uint8Array(ev.data, 21, fw * fh * 4), w: fw, h: fh };
+      if (RENDER === 'gl') drawGL(lastRaw); else {
+        if (cv.width !== fw || cv.height !== fh) { cv.width = fw; cv.height = fh; }
+        ctx.putImageData(new ImageData(new Uint8ClampedArray(ev.data, 21, fw * fh * 4), fw, fh), 0, 0);
+      }
+      const now = performance.now(); drawMs.push(now - t0);
+      decoded++; codecStr = 'raw-rgba/' + RENDER;
+      for (const h of frameHooks.splice(0)) h(now);
       return;
     }
     if (b[0] !== 2) return;
@@ -133,6 +166,10 @@ document.getElementById('rot').onclick = () => ws.send(new Uint8Array([11]));
 // region around (x,y) in device coords, mapped to canvas pixels
 // pointer_location overlay: top status bar (P:x/y X: Y: Prs:) changes on every touch event
 function regionPix(x, y){
+  if (lastRaw) { // detect on the received frame bytes (works for 2d and gl)
+    const rows = Math.max(4, Math.round(lastRaw.h * 0.022));
+    return lastRaw.buf.slice(0, lastRaw.w * 4 * rows);
+  }
   return ctx.getImageData(0, 0, cv.width, Math.max(4, Math.round(cv.height * 0.022))).data;
 }
 function changed(a, b){ let n = 0; for (let i = 0; i < a.length; i += 4)
@@ -180,7 +217,9 @@ document.getElementById('fps').onclick = () => measureFps();
 connect();
 if (location.search.includes('auto=1')) {
   (async () => { while (decoded < 1) await sleep(200); await sleep(1500);
-    log('AUTO start'); await measureLatency(40); await measureFps(10); log('AUTO done'); })();
+    log('AUTO start render=' + RENDER); await measureLatency(40); await measureFps(10);
+    if (drawMs.length) log(`DRAW render=${RENDER} n=${drawMs.length} p50=${pct(drawMs,.5).toFixed(2)} p95=${pct(drawMs,.95).toFixed(2)} ms`);
+    log('AUTO done'); })();
 }
 setInterval(() => { if (!stat.textContent.startsWith('LATENCY') && !stat.textContent.startsWith('FPS') && !stat.textContent.startsWith('latency'))
   stat.textContent = `${codecStr || '-'} ${cv.width}x${cv.height} decoded=${decoded} dq=${dec ? dec.decodeQueueSize : '-'}`; }, 500);

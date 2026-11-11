@@ -56,6 +56,12 @@ pub struct KeyboardEvent {
 }
 #[derive(Clone, PartialEq, prost::Message)]
 pub struct Empty {}
+/// `InputEvent` oneof modelled as optional fields (same wire format).
+#[derive(Clone, PartialEq, prost::Message)]
+pub struct InputEvent {
+    #[prost(message, optional, tag = "1")] pub key_event: Option<KeyboardEvent>,
+    #[prost(message, optional, tag = "2")] pub touch_event: Option<TouchEvent>,
+}
 
 const SVC: &str = "/android.emulation.control.EmulatorController/";
 
@@ -75,6 +81,19 @@ impl Emu {
         g.ready().await?;
         let path: http::uri::PathAndQuery = format!("{SVC}{method}").parse()?;
         Ok(g.unary(self.req(m), path, ProstCodec::<Q, A>::default()).await?.into_inner())
+    }
+    /// Opens client-streaming `streamInputEvent`; returns a sender for events.
+    async fn input_stream(&self) -> Res<mpsc::Sender<InputEvent>> {
+        let (tx, rx) = mpsc::channel::<InputEvent>(256);
+        let mut g = tonic::client::Grpc::new(self.ch.clone());
+        g.ready().await?;
+        let path: http::uri::PathAndQuery = format!("{SVC}streamInputEvent").parse()?;
+        let req = self.req(tokio_stream::wrappers::ReceiverStream::new(rx));
+        tokio::spawn(async move {
+            let r = g.client_streaming(req, path, ProstCodec::<InputEvent, Empty>::default()).await;
+            println!("[grpc] input stream ended: {:?}", r.err());
+        });
+        Ok(tx)
     }
     async fn stream_screens(&self, f: ImageFormat) -> Res<tonic::Streaming<Image>> {
         let mut g = tonic::client::Grpc::new(self.ch.clone()).max_decoding_message_size(64 << 20);
@@ -131,10 +150,28 @@ async fn main() -> Res<()> {
 
     // input translator
     let (ctl_tx, mut ctl_rx) = mpsc::channel::<Vec<u8>>(256);
+    let stream_mode = std::env::var("INPUT_MODE").map(|v| v == "stream").unwrap_or(false);
+    let in_tx = if stream_mode { Some(emu.input_stream().await?) } else { None };
+    println!("[grpc] input mode = {}", if stream_mode { "streamInputEvent" } else { "unary sendTouch" });
     {
         let emu = emu.clone();
         tokio::spawn(async move {
+            let mut rpc_ms: Vec<f64> = Vec::new();
             while let Some(b) = ctl_rx.recv().await {
+                if let (Some(tx), Some(2)) = (&in_tx, b.first()) {
+                    if b.len() >= 32 {
+                        let x = i32::from_be_bytes(b[10..14].try_into().unwrap());
+                        let y = i32::from_be_bytes(b[14..18].try_into().unwrap());
+                        let w = u16::from_be_bytes(b[18..20].try_into().unwrap()) as i64;
+                        let h = u16::from_be_bytes(b[20..22].try_into().unwrap()) as i64;
+                        let t = Touch { x: (x as i64 * dev_w as i64 / w.max(1)) as i32, y: (y as i64 * dev_h as i64 / h.max(1)) as i32,
+                                        identifier: 0, pressure: if b[1] == 1 { 0 } else { 1 } };
+                        let _ = tx.send(InputEvent { touch_event: Some(TouchEvent { touches: vec![t], display: 0 }), key_event: None }).await;
+                        continue;
+                    }
+                }
+                let t0 = std::time::Instant::now();
+                let is_touch = b.first() == Some(&2);
                 let r: Res<()> = async {
                     match b.first() {
                         Some(2) if b.len() >= 32 => {
@@ -164,6 +201,13 @@ async fn main() -> Res<()> {
                     Ok(())
                 }.await;
                 if let Err(e) = r { println!("[grpc] input error {e}"); }
+                if is_touch {
+                    rpc_ms.push(t0.elapsed().as_secs_f64() * 1000.0);
+                    if rpc_ms.len() % 100 == 0 {
+                        let mut s = rpc_ms.clone(); s.sort_by(|a, b| a.partial_cmp(b).unwrap());
+                        println!("[grpc] sendTouch rpc n={} p50={:.2}ms p95={:.2}ms", s.len(), s[s.len() / 2], s[s.len() * 95 / 100]);
+                    }
+                }
             }
         });
     }
