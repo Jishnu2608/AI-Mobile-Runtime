@@ -1,0 +1,13 @@
+[package]
+name = "grpcbridge"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+tokio = { version = "1", features = ["full"] }
+tokio-tungstenite = "0.24"
+futures-util = "0.3"
+tonic = "0.12"
+prost = "0.13"
+http = "1"

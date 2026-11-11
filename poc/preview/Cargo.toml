@@ -1,4 +1,4 @@
 # POC-003 throwaway workspace. Not product code.
 [workspace]
 resolver = "2"
-members = ["bridge", "viewer"]
+members = ["bridge", "grpcbridge", "viewer"]

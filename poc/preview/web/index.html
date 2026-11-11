@@ -69,6 +69,14 @@ function connect(){
       const dv = new DataView(ev.data); W = dv.getUint32(1); H = dv.getUint32(5);
       log('session ' + W + 'x' + H); return;
     }
+    if (b[0] === 3) { // POC-012: raw RGBA frame from emulator gRPC
+      const dv = new DataView(ev.data), fw = dv.getUint32(1), fh = dv.getUint32(5);
+      if (cv.width !== fw || cv.height !== fh) { cv.width = fw; cv.height = fh; }
+      ctx.putImageData(new ImageData(new Uint8ClampedArray(ev.data, 21, fw * fh * 4), fw, fh), 0, 0);
+      decoded++; codecStr = 'raw-rgba';
+      const now = performance.now(); for (const h of frameHooks.splice(0)) h(now);
+      return;
+    }
     if (b[0] !== 2) return;
     const flags = b[1], isConfig = flags & 1, isKey = (flags >> 1) & 1;
     const pts = Number(new DataView(ev.data).getBigUint64(2));
@@ -171,7 +179,7 @@ document.getElementById('fps').onclick = () => measureFps();
 
 connect();
 if (location.search.includes('auto=1')) {
-  (async () => { while (decoded < 5) await sleep(200); await sleep(1500);
+  (async () => { while (decoded < 1) await sleep(200); await sleep(1500);
     log('AUTO start'); await measureLatency(40); await measureFps(10); log('AUTO done'); })();
 }
 setInterval(() => { if (!stat.textContent.startsWith('LATENCY') && !stat.textContent.startsWith('FPS') && !stat.textContent.startsWith('latency'))

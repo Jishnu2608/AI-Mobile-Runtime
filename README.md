@@ -73,8 +73,9 @@ umr run
 | POC-000 — existing SDK inventory | Done | [`poc/reports/POC-000-sdk-inventory.md`](poc/reports/POC-000-sdk-inventory.md) |
 | POC-001 — isolated JDK + Android SDK provisioning, emulator boot | Done (part A). Cold boot 39 s, snapshot boot 5 s. `sdkmanager` is deprecated; Android CLI is the SDK backend | [`poc/reports/POC-001-provisioning.md`](poc/reports/POC-001-provisioning.md) |
 | POC-003 — live preview in a Tauri window (scrcpy → Rust → WebSocket → WebCodecs) | Works. p95 latency 149 ms at 1280 px. Frame rate limited by the emulator's software video encoder | [`poc/reports/POC-003-preview.md`](poc/reports/POC-003-preview.md) |
+| POC-012 — host-side emulator frame stream (gRPC `streamScreenshot`) in the same window | 44–51 fps at window-sized streams; p95 latency 172 ms best | [`poc/reports/POC-012-preview-grpc.md`](poc/reports/POC-012-preview-grpc.md) |
 
-Next experiments: host-side emulator frame stream (higher frame rate), framework adapters (Flutter hot reload, Metro/Expo), diagnostics extraction, MCP loop with Claude Code and Codex.
+Next experiments: preview latency reduction, framework adapters (Flutter hot reload, Metro/Expo), diagnostics extraction, MCP loop with Claude Code and Codex.
 
 ## Repository layout
 
