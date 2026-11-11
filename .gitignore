@@ -11,3 +11,6 @@
 /.claude/settings.local.json
 # Generated Tauri schemas
 /poc/**/gen/
+
+# Local planning document (kept private)
+/Planning_Mobile_Runtime_Companion.md
