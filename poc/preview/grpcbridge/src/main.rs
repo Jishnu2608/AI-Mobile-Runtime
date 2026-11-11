@@ -117,6 +117,15 @@ async fn main() -> Res<()> {
     let emu = Emu { ch, token };
     println!("[grpc] connected {addr} token={}", emu.token.is_some());
 
+    // One-shot mode: SHOT=<file.png> saves a host-side PNG screenshot and exits.
+    if let Ok(path) = std::env::var("SHOT") {
+        let t = std::time::Instant::now();
+        let img: Image = emu.unary("getScreenshot", ImageFormat { format: 0, width: 0, height: 0, display: 0 }).await?;
+        tokio::fs::write(&path, &img.image).await?;
+        println!("[grpc] screenshot {} bytes in {} ms -> {path}", img.image.len(), t.elapsed().as_millis());
+        return Ok(());
+    }
+
     let (tx, _) = broadcast::channel::<Arc<Vec<u8>>>(4); // small: drop old frames instead of queueing
     let mut session = vec![1u8];
     session.extend_from_slice(&out_w.to_be_bytes());

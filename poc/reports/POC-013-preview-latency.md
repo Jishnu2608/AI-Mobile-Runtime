@@ -46,3 +46,26 @@ During the repeat runs the whole host was slower (FPS fell from ~47 to ~32 for e
 
 ## Cleanup
 Emulator, bridges, viewer, adb stopped; `pointer_location` reset to 0.
+
+---
+
+## Correction (2026-11-11, found during POC-006)
+The POC-012 and POC-013 runs most likely used an emulator restored from a **broken snapshot** in which app windows rendered black under `-gpu host` (only the navigation bar and system overlays such as `pointer_location` were drawn). See `POC-006-adapters.md`, finding 1.
+
+Re-measured on a **healthy render session** (cold boot, then snapshot from the same `-gpu host` session), Settings app in foreground:
+
+| Stream | Render | Input | Latency p50 | Latency p95 | FPS (drag) |
+|---|---|---|---|---|---|
+| 720×1600 | gl | stream | 57.0 ms | 106.5 ms | 51.2 |
+| 720×1600 | gl | unary | 52.4 ms | 74.6 ms | 50.9 |
+| 720×1600 | 2d | stream | 67.5 ms | 105.6 ms | 38.1 |
+| 720×1600 | 2d | unary | 59.8 ms | 82.6 ms | 37.5 |
+| 540×1200 | gl | stream | 54.4 ms | 81.0 ms | 36.0 |
+
+(A first run right after boot showed outliers up to 1.5 s while the app was still starting; excluded as warm-up.)
+
+**Corrected conclusions:**
+- The ~100–130 ms "emulator floor" reported above was an artefact of the broken render state. Real end-to-end latency is **p50 ≈ 52–68 ms, p95 ≈ 75–107 ms**, which meets the **original NFR-02 (p50 ≤ 80 ms, p95 ≤ 150 ms)**.
+- Our pipeline cost (input RPC ~1.5 ms, draw < 1 ms) is unchanged.
+- Differences between WebGL2/2D and stream/unary input remain small and within run-to-run noise.
+- DEC-008 (split of NFR-02 into 02a/02b with 200 ms end-to-end) was based on the flawed numbers and should be revisited (DEC-010).
