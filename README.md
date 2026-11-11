@@ -86,6 +86,10 @@ Next: Phase 1 (Runtime Core, CLI, environment provisioning) (Flutter hot reload,
 ## Repository layout
 
 ```
+Cargo.toml        Rust workspace (product code)
+crates/umr-core   Runtime Core (skeleton)
+apps/cli          umr command (skeleton: --version, --help)
+.github/workflows CI: format, lint, test, build on Windows
 poc/
   preview/        POC-003 throwaway code (Rust bridge, Tauri 2 viewer, WebCodecs page, sweep script)
   reports/        Measured results of each experiment, licence texts reviewed during POC-001
