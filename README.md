@@ -63,6 +63,7 @@ umr run
 
 - **Runtime Core** owns all state and keeps sessions alive when the agent or window closes.
 - **CLI, desktop app and MCP server** are thin clients over a local, user-only named pipe.
+- **Emulator preview** uses the emulator's own host-side gRPC frame stream, sized to the preview window (no in-emulator video encoding).
 - **SDKs are never bundled**; official packages are downloaded on demand and verified.
 - Everything runs **locally**. No source code, logs or app data leave your machine.
 
