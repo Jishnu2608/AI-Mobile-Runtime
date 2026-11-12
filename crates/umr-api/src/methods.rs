@@ -29,6 +29,62 @@ pub const PROJECT_DETECT: &str = "project.detect";
 /// project's build scripts after the user trusted the folder. Scope: admin.
 pub const PROJECT_TRUST: &str = "project.trust";
 
+/// `device.list` → `{ "server": {port, protocol, connected, last_error}, "devices": [Device],
+/// "coexistence": Coexistence }`. Starts the product's private adb server on first use
+/// (never touches port 5037). Scope: observe.
+pub const DEVICE_LIST: &str = "device.list";
+/// `device.profiles` [`ProfilesParams`] → `{ "api": "36", "profiles": [{profile, avd}] }`:
+/// the size-class catalogue and which AVDs exist. Scope: observe.
+pub const DEVICE_PROFILES: &str = "device.profiles";
+/// `device.create` [`CreateDeviceParams`] → AVD info. Creates the AVD for a profile from the
+/// product's own hardware definition (lazy; keeps user data). Scope: control.
+pub const DEVICE_CREATE: &str = "device.create";
+/// `device.boot` [`BootDeviceParams`] → boot report `{avd, serial, console_port, grpc_port, gpu,
+/// mode: cold|warm, cold_reason, seconds, boot_completed_seconds, health, snapshot_saved,
+/// attempts, log}`. Creates the AVD if needed, boots it headless (`-gpu host`, gRPC with token),
+/// waits for `sys.boot_completed`, runs the render health check and keeps a warm snapshot whose
+/// GPU mode is recorded (DEV-003/009). Returns the running report if already booted.
+/// Scope: control.
+pub const DEVICE_BOOT: &str = "device.boot";
+/// `device.stop` [`DeviceRefParams`] → `{ "stopped": bool }`. Stops an emulator the product
+/// started. Scope: control.
+pub const DEVICE_STOP: &str = "device.stop";
+
+// ---- device interaction (DEV-005/006, step 2.5) ---------------------------------------------
+// `target` (optional) is a device serial; without it the Core uses the current session's
+// device, else the only emulator it started, else the only online device.
+
+/// `device.screenshot` [`TargetParams`] → `{ serial, path, width, height, bytes, source }`
+/// (PNG saved under `<home>/screenshots`; gRPC on emulators, `screencap` otherwise). Scope: observe.
+pub const DEVICE_SCREENSHOT: &str = "device.screenshot";
+/// `device.ui` [`TargetParams`] → `{ serial, count, nodes: [UiNode] }`: compact UI tree. Scope: observe.
+pub const DEVICE_UI: &str = "device.ui";
+/// `device.input` [`InputParams`] → `{ serial, via }`: tap, swipe, text or key. Scope: interact.
+pub const DEVICE_INPUT: &str = "device.input";
+/// `device.posture` [`PostureParams`] → `{ serial, posture }`: fold / half-open / unfold a
+/// foldable emulator while it runs (DEV-008b). Scope: interact.
+pub const DEVICE_POSTURE: &str = "device.posture";
+/// `app.install` [`InstallAppParams`] → `{ serial, package }`. Scope: control.
+pub const APP_INSTALL: &str = "app.install";
+/// `app.launch` [`AppParams`] → `{ serial, component, total_ms, pid }`. Scope: control.
+pub const APP_LAUNCH: &str = "app.launch";
+/// `app.stop` [`AppParams`] → `{ serial, package }` (force-stop). Scope: control.
+pub const APP_STOP: &str = "app.stop";
+/// `app.uninstall` [`AppParams`] → `{ serial, package }`. Scope: control.
+pub const APP_UNINSTALL: &str = "app.uninstall";
+
+// ---- sessions (step 2.6) ---------------------------------------------------------------------
+
+/// `session.start` [`StartSessionParams`] → session. Boots the profile's emulator (switching away
+/// from another session's device), optionally installs + launches an app; recovers a session
+/// the previous Core left in `device_error`. Scope: control.
+pub const SESSION_START: &str = "session.start";
+/// `session.status` → `{ session, events, processes, ports }` (checks the device and app are
+/// still alive first). Scope: observe.
+pub const SESSION_STATUS: &str = "session.status";
+/// `session.stop` → session (emulator stopped). Scope: control.
+pub const SESSION_STOP: &str = "session.stop";
+
 // ---- install (INS-001…004) -----------------------------------------------------------------
 // Installing changes the machine, so all install calls except status need the admin scope
 // (agents never get it in the MVP). Licences are accepted only through `install.licence.accept`
@@ -116,6 +172,129 @@ pub struct ProjectPlanParams {
     /// Run a fresh environment scan instead of using the stored one.
     #[serde(default)]
     pub rescan: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub struct ProfilesParams {
+    /// API level of the system image; newest installed when omitted.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub api: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CreateDeviceParams {
+    /// Profile id: `compact`, `standard`, `large`, `fold`, `flip`, `tablet`.
+    pub profile: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub api: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BootDeviceParams {
+    /// Profile id (see [`CreateDeviceParams`]).
+    pub profile: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub api: Option<String>,
+    /// Ignore the warm snapshot and boot cold (a fresh snapshot is saved afterwards).
+    #[serde(default)]
+    pub cold: bool,
+    /// Show the emulator's own window (debugging only; the product preview is headless).
+    #[serde(default)]
+    pub window: bool,
+    /// GPU mode: `host` (default, DEC-006), or the software fallbacks `swiftshader_indirect` /
+    /// `angle_indirect` for machines whose GPU driver fails.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gpu: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DeviceRefParams {
+    pub profile: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub api: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TargetParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub target: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum InputAction {
+    Tap,
+    Swipe,
+    Text,
+    Key,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct InputParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub target: Option<String>,
+    pub action: InputAction,
+    /// tap / swipe start (device pixels)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub x: Option<i32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub y: Option<i32>,
+    /// swipe end
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub x2: Option<i32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub y2: Option<i32>,
+    /// swipe duration (default 300 ms)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ms: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub text: Option<String>,
+    /// `home`, `back`, `recents`, `enter`, `delete`, `tab`, `escape`, `menu`, `power`,
+    /// `volume_up`, `volume_down`, `up`, `down`, `left`, `right`, `wakeup`
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub key: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PostureParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub target: Option<String>,
+    /// `closed`, `half-opened`, `opened`, `flipped`, `tent`
+    pub posture: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct InstallAppParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub target: Option<String>,
+    /// Absolute path of the APK.
+    pub apk: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AppParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub target: Option<String>,
+    pub package: String,
+    /// `app.launch` only: activity (`.Main` or `pkg/.Main`); default the launcher activity.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub activity: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StartSessionParams {
+    pub profile: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub api: Option<String>,
+    /// Boot cold (ignore the warm snapshot).
+    #[serde(default)]
+    pub cold: bool,
+    /// APK to install and launch after boot.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub apk: Option<String>,
+    /// Package to launch (already installed, or the APK's package).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub package: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

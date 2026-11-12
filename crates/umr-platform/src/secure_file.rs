@@ -123,7 +123,9 @@ mod tests {
         let dacl = dir_dacl_sddl(&dir).unwrap();
         assert!(dacl.starts_with("D:P"), "{dacl}");
         assert!(
-            dacl.contains(&sid) && dacl.contains(";SY)") && dacl.contains(";BA)"),
+            crate::identity::sddl_names_user(&dacl, &sid)
+                && dacl.contains(";SY)")
+                && dacl.contains(";BA)"),
             "{dacl}"
         );
         assert_eq!(dacl.matches("(A;").count(), 3, "{dacl}");
@@ -131,7 +133,10 @@ mod tests {
         let child = dir.join("android-sdk");
         std::fs::create_dir_all(&child).unwrap();
         let cd = dir_dacl_sddl(&child).unwrap();
-        assert!(!cd.contains("AU)") && cd.contains(&sid), "{cd}");
+        assert!(
+            !cd.contains("AU)") && crate::identity::sddl_names_user(&cd, &sid),
+            "{cd}"
+        );
         let _ = std::fs::remove_dir_all(&base);
     }
 
@@ -146,7 +151,7 @@ mod tests {
         let dacl = file_dacl_sddl(&path).unwrap();
         let sid = crate::identity::current_user_sid().unwrap();
         assert!(dacl.starts_with("D:P"), "{dacl}");
-        assert!(dacl.contains(&sid), "{dacl}");
+        assert!(crate::identity::sddl_names_user(&dacl, &sid), "{dacl}");
         assert_eq!(dacl.matches("(A;").count(), 1, "{dacl}");
         let _ = std::fs::remove_dir_all(&dir);
     }

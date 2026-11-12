@@ -435,6 +435,198 @@ async fn separate_toolchains_folder_is_created_private_and_reported() {
 }
 
 #[tokio::test]
+async fn device_list_without_platform_tools_says_so() {
+    let f = Fixture::start("device-list");
+    let mut c = f.client().await;
+    match c.call_raw(methods::DEVICE_LIST, Value::Null).await {
+        Err(ClientError::Rpc(e)) => {
+            assert_eq!(e.code, codes::UNAVAILABLE);
+            assert!(e.message.contains("platform-tools"), "{}", e.message);
+        }
+        other => panic!("expected 'not installed', got {other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn sessions_and_device_interaction_reject_bad_requests() {
+    let f = Fixture::start_with("device-session", |root| {
+        let img = root
+            .join("android-sdk")
+            .join("system-images")
+            .join("android-36")
+            .join("google_apis")
+            .join("x86_64");
+        std::fs::create_dir_all(&img).unwrap();
+        std::fs::write(img.join("system.img"), b"x").unwrap();
+    });
+    let mut c = f.client().await;
+    // sessions: none yet; nothing to stop
+    let st = c
+        .call_raw(methods::SESSION_STATUS, Value::Null)
+        .await
+        .unwrap();
+    assert!(st["session"].is_null());
+    assert_eq!(st["processes"], serde_json::json!([]));
+    let stop = c
+        .call_raw(methods::SESSION_STOP, Value::Null)
+        .await
+        .unwrap();
+    assert!(stop["session"].is_null());
+    // invalid input is rejected before any device is needed
+    let bad_pkg = c
+        .call_raw(
+            methods::SESSION_START,
+            serde_json::json!({ "profile": "standard", "package": "x;reboot" }),
+        )
+        .await;
+    assert!(matches!(bad_pkg, Err(ClientError::Rpc(e)) if e.code == codes::INVALID_PARAMS));
+    let bad_launch = c
+        .call_raw(
+            methods::APP_LAUNCH,
+            serde_json::json!({ "package": "nodot" }),
+        )
+        .await;
+    assert!(matches!(bad_launch, Err(ClientError::Rpc(e)) if e.code == codes::INVALID_PARAMS));
+    let bad_posture = c
+        .call_raw(
+            methods::DEVICE_POSTURE,
+            serde_json::json!({ "posture": "sideways" }),
+        )
+        .await;
+    assert!(matches!(bad_posture, Err(ClientError::Rpc(e)) if e.code == codes::INVALID_PARAMS));
+    let bad_action = c
+        .call_raw(
+            methods::DEVICE_INPUT,
+            serde_json::json!({ "action": "shake" }),
+        )
+        .await;
+    assert!(matches!(bad_action, Err(ClientError::Rpc(e)) if e.code == codes::INVALID_PARAMS));
+    // no adb in this fixture: device commands say so
+    let shot = c.call_raw(methods::DEVICE_SCREENSHOT, Value::Null).await;
+    assert!(matches!(shot, Err(ClientError::Rpc(e)) if e.code == codes::UNAVAILABLE));
+    // system image present, emulator missing: the session stops in env_blocked (journaled)
+    let blocked = c
+        .call_raw(
+            methods::SESSION_START,
+            serde_json::json!({ "profile": "standard" }),
+        )
+        .await;
+    assert!(matches!(blocked, Err(ClientError::Rpc(e)) if e.code == codes::UNAVAILABLE));
+    let st = c
+        .call_raw(methods::SESSION_STATUS, Value::Null)
+        .await
+        .unwrap();
+    assert_eq!(st["session"]["state"], "env_blocked");
+    assert_eq!(
+        st["events"].as_array().unwrap().len(),
+        2,
+        "start + env_missing"
+    );
+}
+
+#[tokio::test]
+async fn device_catalogue_and_lazy_creation() {
+    let f = Fixture::start_with("device-catalogue", |root| {
+        // a minimal "installed" system image in the toolchains folder (= home here)
+        let img = root
+            .join("android-sdk")
+            .join("system-images")
+            .join("android-36")
+            .join("google_apis")
+            .join("x86_64");
+        std::fs::create_dir_all(&img).unwrap();
+        std::fs::write(img.join("system.img"), b"x").unwrap();
+    });
+    let mut c = f.client().await;
+    let v = c
+        .call_raw(methods::DEVICE_PROFILES, Value::Null)
+        .await
+        .unwrap();
+    assert_eq!(v["api"], "36");
+    let ids: Vec<&str> = v["profiles"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|p| p["profile"]["id"].as_str())
+        .collect();
+    assert_eq!(
+        ids,
+        ["compact", "standard", "large", "fold", "flip", "tablet"]
+    );
+    assert!(
+        v["profiles"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|p| p["avd"]["exists"] == false),
+        "nothing created up front"
+    );
+
+    let made = c
+        .call_raw(
+            methods::DEVICE_CREATE,
+            serde_json::json!({ "profile": "fold" }),
+        )
+        .await
+        .unwrap();
+    assert_eq!(made["name"], "umr_fold_api36");
+    let cfg = std::fs::read_to_string(
+        std::path::Path::new(made["dir"].as_str().unwrap()).join("config.ini"),
+    )
+    .unwrap();
+    assert!(cfg.contains("hw.sensor.hinge=yes") && cfg.contains("hw.lcd.width=1768"));
+    assert!(
+        made["dir"]
+            .as_str()
+            .unwrap()
+            .starts_with(f.root.to_str().unwrap()),
+        "inside the managed folder"
+    );
+
+    let bad = c
+        .call_raw(
+            methods::DEVICE_CREATE,
+            serde_json::json!({ "profile": "galaxy" }),
+        )
+        .await;
+    assert!(matches!(bad, Err(ClientError::Rpc(e)) if e.code == codes::INVALID_PARAMS));
+    let no_img = c
+        .call_raw(
+            methods::DEVICE_CREATE,
+            serde_json::json!({ "profile": "standard", "api": "35" }),
+        )
+        .await;
+    assert!(matches!(no_img, Err(ClientError::Rpc(e)) if e.code == codes::UNAVAILABLE));
+
+    // boot: bad GPU mode is rejected; without an installed emulator nothing starts
+    let gpu = c
+        .call_raw(
+            methods::DEVICE_BOOT,
+            serde_json::json!({ "profile": "standard", "gpu": "warp" }),
+        )
+        .await;
+    assert!(matches!(gpu, Err(ClientError::Rpc(e)) if e.code == codes::INVALID_PARAMS));
+    let no_adb = c
+        .call_raw(
+            methods::DEVICE_BOOT,
+            serde_json::json!({ "profile": "standard" }),
+        )
+        .await;
+    assert!(matches!(no_adb, Err(ClientError::Rpc(e)) if e.code == codes::UNAVAILABLE));
+    let stop = c
+        .call_raw(
+            methods::DEVICE_STOP,
+            serde_json::json!({ "profile": "standard" }),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        stop,
+        serde_json::json!({ "avd": "umr_standard_api36", "stopped": false })
+    );
+}
+
+#[tokio::test]
 async fn interrupted_install_is_rolled_back_when_the_core_starts() {
     let f = Fixture::start_with("install-recover", |root| {
         let db = umr_storage::Db::open_in(root).unwrap();
@@ -467,7 +659,10 @@ async fn admin_token_file_is_private_and_removed_on_stop() {
     let token_file = f.root.join("run").join("admin.token");
     let dacl = umr_platform::secure_file::file_dacl_sddl(&token_file).unwrap();
     let sid = umr_platform::identity::current_user_sid().unwrap();
-    assert!(dacl.starts_with("D:P") && dacl.contains(&sid), "{dacl}");
+    assert!(
+        dacl.starts_with("D:P") && umr_platform::identity::sddl_names_user(&dacl, &sid),
+        "{dacl}"
+    );
     assert_eq!(dacl.matches("(A;").count(), 1, "{dacl}");
 
     let _: ShutdownAccepted = c.call(methods::SHUTDOWN, Value::Null).await.unwrap();

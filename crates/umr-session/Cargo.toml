@@ -1,0 +1,15 @@
+[package]
+name = "umr-session"
+description = "Runtime session state machine (step 2.6): Idle -> Preparing -> Booting -> Building -> Launching -> Running ..., journaled for recovery."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+umr-storage = { path = "../umr-storage" }
+
+[lints]
+workspace = true

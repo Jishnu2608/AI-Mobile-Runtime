@@ -27,6 +27,8 @@ pub enum StorageError {
         at_version: u32,
         error: rusqlite::Error,
     },
+    /// A request that does not match the stored data (e.g. an unknown id).
+    Invalid(String),
 }
 
 impl std::fmt::Display for StorageError {
@@ -42,6 +44,7 @@ impl std::fmt::Display for StorageError {
             Self::MigrationFailed { version, description, at_version, error } => {
                 write!(f, "database upgrade to version {version} ({description}) failed (still at {at_version}): {error}")
             }
+            Self::Invalid(m) => write!(f, "{m}"),
         }
     }
 }
@@ -130,6 +133,10 @@ impl Db {
 
     pub(crate) fn conn(&self) -> &Connection {
         &self.conn
+    }
+
+    pub(crate) fn conn_mut(&mut self) -> &mut Connection {
+        &mut self.conn
     }
 
     fn migrate(&mut self, migrations: &[Migration]) -> Result<(), StorageError> {

@@ -18,10 +18,11 @@ use tokio::sync::{watch, Notify};
 
 use umr_api::frame::{read_frame, write_frame, ReadFrame};
 use umr_api::methods::{
-    self, AcceptLicenceParams, AdminRunParams, ClientInfo, CoreInfo, CreateClientParams,
-    CreateClientResult, JobParams, LoginParams, LoginResult, Pong, ProjectPathParams,
-    ProjectPlanParams, RemoveComponentParams, RevokeClientParams, RevokeClientResult,
-    ShutdownAccepted, TrustParams,
+    self, AcceptLicenceParams, AdminRunParams, AppParams, BootDeviceParams, ClientInfo, CoreInfo,
+    CreateClientParams, CreateClientResult, CreateDeviceParams, DeviceRefParams, InputParams,
+    InstallAppParams, JobParams, LoginParams, LoginResult, Pong, PostureParams, ProfilesParams,
+    ProjectPathParams, ProjectPlanParams, RemoveComponentParams, RevokeClientParams,
+    RevokeClientResult, ShutdownAccepted, StartSessionParams, TargetParams, TrustParams,
 };
 use umr_api::rpc::{codes, parse_request, Id, Request, Response, RpcError};
 use umr_api::{API_VERSION, MAX_MESSAGE_BYTES};
@@ -46,6 +47,21 @@ pub struct ApiState {
     pub offered_licences: Mutex<std::collections::HashMap<String, String>>,
     /// Set when an install changed the machine; the next plan rescans.
     pub scan_stale: Arc<std::sync::atomic::AtomicBool>,
+    /// Port of the product's private adb server (DEV-007), chosen at start.
+    pub adb_port: u16,
+    /// Device tracking (DEV-001), started on first use.
+    pub adb: Mutex<Option<umr_device::tracker::Tracker>>,
+    /// Emulators the product started (DEV-003), by AVD name.
+    pub emulators: Mutex<std::collections::HashMap<String, umr_device::emulator::Instance>>,
+    /// AVDs being booted right now (a second `device.boot` for one of them is refused as busy).
+    pub booting: Mutex<std::collections::HashSet<String>>,
+    /// DEV-004: every long-lived tool the Core starts.
+    pub supervisor: umr_supervisor::Supervisor,
+    pub ports: umr_supervisor::PortAllocator,
+    /// Step 2.6: the current runtime session (one device at a time in the MVP).
+    pub session: Mutex<Option<umr_session::Session>>,
+    /// A `session.start` is in progress.
+    pub session_busy: std::sync::atomic::AtomicBool,
 }
 
 impl ApiState {
@@ -78,6 +94,14 @@ impl ApiState {
             install_job: Mutex::new(None),
             offered_licences: Mutex::new(std::collections::HashMap::new()),
             scan_stale: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            adb_port: umr_device::server::DEFAULT_PORT,
+            adb: Mutex::new(None),
+            emulators: Mutex::new(std::collections::HashMap::new()),
+            booting: Mutex::new(std::collections::HashSet::new()),
+            supervisor: umr_supervisor::Supervisor::new(),
+            ports: umr_supervisor::PortAllocator::new(),
+            session: Mutex::new(None),
+            session_busy: std::sync::atomic::AtomicBool::new(false),
         }
     }
 }
@@ -95,6 +119,16 @@ pub struct Connection {
 #[must_use]
 pub fn required_scope(method: &str) -> Option<Scope> {
     match method {
+        methods::DEVICE_CREATE
+        | methods::DEVICE_BOOT
+        | methods::DEVICE_STOP
+        | methods::APP_INSTALL
+        | methods::APP_LAUNCH
+        | methods::APP_STOP
+        | methods::APP_UNINSTALL
+        | methods::SESSION_START
+        | methods::SESSION_STOP => Some(Scope::Control),
+        methods::DEVICE_INPUT | methods::DEVICE_POSTURE => Some(Scope::Interact),
         methods::PING | methods::AUTH_LOGIN => None,
         methods::SHUTDOWN
         | methods::PROJECT_TRUST
@@ -156,6 +190,24 @@ fn is_slow(method: &str) -> bool {
             | methods::PROJECT_PLAN
             | methods::INSTALL_PREPARE
             | methods::INSTALL_START
+            | methods::COMPONENTS_LIST
+            | methods::COMPONENTS_REPAIR
+            | methods::COMPONENTS_REMOVE
+            | methods::ADMIN_RUN
+            | methods::DEVICE_LIST
+            | methods::DEVICE_BOOT
+            | methods::DEVICE_STOP
+            | methods::DEVICE_SCREENSHOT
+            | methods::DEVICE_UI
+            | methods::DEVICE_INPUT
+            | methods::DEVICE_POSTURE
+            | methods::APP_INSTALL
+            | methods::APP_LAUNCH
+            | methods::APP_STOP
+            | methods::APP_UNINSTALL
+            | methods::SESSION_START
+            | methods::SESSION_STATUS
+            | methods::SESSION_STOP
     )
 }
 
@@ -181,6 +233,55 @@ pub fn dispatch(state: &ApiState, conn: &mut Connection, req: &Request) -> Respo
                 crate::project_api::trust(state, id, client.as_deref(), &p)
             })
         }
+        methods::DEVICE_LIST => crate::device_api::list(state, id),
+        methods::DEVICE_PROFILES => {
+            let params = if req.params.is_null() {
+                serde_json::json!({})
+            } else {
+                req.params.clone()
+            };
+            with_params(id, &params, |id, p: ProfilesParams| {
+                crate::device_api::profiles(state, id, &p)
+            })
+        }
+        methods::DEVICE_CREATE => with_params(id, &req.params, |id, p: CreateDeviceParams| {
+            crate::device_api::create(state, id, &p)
+        }),
+        methods::DEVICE_BOOT => with_params(id, &req.params, |id, p: BootDeviceParams| {
+            crate::device_api::boot(state, id, &p)
+        }),
+        methods::DEVICE_STOP => with_params(id, &req.params, |id, p: DeviceRefParams| {
+            crate::device_api::stop(state, id, &p)
+        }),
+        methods::DEVICE_SCREENSHOT => with_target(id, &req.params, |id, p: TargetParams| {
+            crate::app_api::screenshot(state, id, &p)
+        }),
+        methods::DEVICE_UI => with_target(id, &req.params, |id, p: TargetParams| {
+            crate::app_api::ui(state, id, &p)
+        }),
+        methods::DEVICE_INPUT => with_params(id, &req.params, |id, p: InputParams| {
+            crate::app_api::input(state, id, &p)
+        }),
+        methods::DEVICE_POSTURE => with_params(id, &req.params, |id, p: PostureParams| {
+            crate::app_api::posture(state, id, &p)
+        }),
+        methods::APP_INSTALL => with_params(id, &req.params, |id, p: InstallAppParams| {
+            crate::app_api::install(state, id, &p)
+        }),
+        methods::APP_LAUNCH => with_params(id, &req.params, |id, p: AppParams| {
+            crate::app_api::launch(state, id, &p)
+        }),
+        methods::APP_STOP => with_params(id, &req.params, |id, p: AppParams| {
+            crate::app_api::stop(state, id, &p)
+        }),
+        methods::APP_UNINSTALL => with_params(id, &req.params, |id, p: AppParams| {
+            crate::app_api::uninstall(state, id, &p)
+        }),
+        methods::SESSION_START => with_params(id, &req.params, |id, p: StartSessionParams| {
+            crate::session_api::start(state, id, &p)
+        }),
+        methods::SESSION_STATUS => crate::session_api::status(state, id),
+        methods::SESSION_STOP => crate::session_api::stop(state, id),
         methods::COMPONENTS_LIST => crate::manage_api::list(state, id),
         methods::COMPONENTS_REMOVE => {
             with_params(id, &req.params, |id, p: RemoveComponentParams| {
@@ -451,6 +552,19 @@ fn lock(state: &ApiState) -> std::sync::MutexGuard<'_, AuthStore> {
         .unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
+/// Like [`with_params`], but a missing / null params object means "all defaults".
+fn with_target<P: DeserializeOwned>(
+    id: Id,
+    params: &Value,
+    f: impl FnOnce(Id, P) -> Response,
+) -> Response {
+    if params.is_null() {
+        with_params(id, &serde_json::json!({}), f)
+    } else {
+        with_params(id, params, f)
+    }
+}
+
 fn with_params<P: DeserializeOwned>(
     id: Id,
     params: &Value,
@@ -599,6 +713,23 @@ mod tests {
         );
         assert!(is_slow(methods::INSTALL_PREPARE) && is_slow(methods::INSTALL_START));
         assert!(!is_slow(methods::INSTALL_STATUS));
+        for m in [
+            methods::COMPONENTS_LIST,
+            methods::ADMIN_RUN,
+            methods::DEVICE_LIST,
+            methods::DEVICE_BOOT,
+            methods::DEVICE_STOP,
+            methods::DEVICE_SCREENSHOT,
+            methods::DEVICE_UI,
+            methods::APP_INSTALL,
+            methods::SESSION_START,
+            methods::SESSION_STATUS,
+        ] {
+            assert!(
+                is_slow(m),
+                "{m} runs tools or waits on the user: blocking thread"
+            );
+        }
     }
 
     fn state(tmp: &TempRoot) -> ApiState {

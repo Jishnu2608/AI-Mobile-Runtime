@@ -94,12 +94,20 @@ where
         e
     })?;
     let toolchains = toolchains_folder(paths.root());
-    let state = Arc::new(ApiState::with_toolchains(
-        paths.root().to_path_buf(),
-        toolchains,
-        auth,
-        db,
-    ));
+    let mut api_state = ApiState::with_toolchains(paths.root().to_path_buf(), toolchains, auth, db);
+    // DEV-007: our own adb server port (configured one, or the next free; never 5037).
+    let wanted = umr_storage::config::Config::load_in(paths.root())
+        .unwrap_or_default()
+        .device
+        .adb_port;
+    api_state.adb_port = umr_device::server::choose_port(wanted).unwrap_or_else(|e| {
+        tracing::error!(error = %e, "no port for the adb server; using the default");
+        umr_device::server::DEFAULT_PORT
+    });
+    tracing::info!(port = api_state.adb_port, "adb server port (private)");
+    let state = Arc::new(api_state);
+    // Sessions whose emulators ended with the previous Core (step 2.6).
+    crate::session_api::recover(&state);
     // INS-003: finish or roll back installs a crash interrupted, before any new one starts.
     match umr_installer::txn::recover(
         &umr_installer::layout::Layout::new(&state.toolchains),
@@ -139,6 +147,20 @@ where
     );
     let _ = stop_tx.send(true);
     let _ = server.await;
+    // The active session ends with the Core; then its emulators and every supervised process.
+    crate::session_api::settle_on_shutdown(&state);
+    crate::device_api::stop_all(&state);
+    state.supervisor.shutdown();
+    // Stop our adb server (only ours: never the one on 5037).
+    let tracker = state
+        .adb
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .take();
+    if let Some(t) = tracker {
+        t.shutdown();
+        tracing::info!(port = t.port(), "adb server stopped");
+    }
     let _ = std::fs::remove_file(paths.admin_token_file());
     drop(lock);
     tracing::info!("Runtime Core stopped");

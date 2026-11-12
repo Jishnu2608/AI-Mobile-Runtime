@@ -1,17 +1,19 @@
 //! `umr` — command-line interface of the AI Mobile Runtime (CLI-001).
 //!
 //! Commands now: `status`, `start`, `stop`, `doctor`, `plan`, `install`, `components`, `remove`,
-//! `repair`, `clean`, `admin`, `project`, `trust`. More (`run`, `device`, `logs`, `mcp`, …)
+//! `repair`, `clean`, `admin`, `project`, `trust`, `device list|profiles|create|boot|stop|use|posture`, `session`, `app`, `screenshot`, `ui`, `input`. More (`run`, `device`, `logs`, `mcp`, …)
 //! arrive with later tasks.
 //!
 //! Exit codes: 0 success · 1 failure / not running (status) / failing checks (doctor) · 2 usage error.
 
 mod core_process;
+mod device_cmd;
 mod env_print;
 mod install_cmd;
 mod manage_cmd;
 mod plan_print;
 mod project_cmd;
+mod session_cmd;
 
 use std::process::ExitCode;
 use std::time::Duration;
@@ -111,6 +113,46 @@ enum Command {
         #[arg(long)]
         yes: bool,
     },
+    /// Devices seen by the product's adb server.
+    Device {
+        #[command(subcommand)]
+        action: DeviceAction,
+    },
+    /// The current runtime session (device and app).
+    Session {
+        #[command(subcommand)]
+        action: Option<SessionAction>,
+    },
+    /// Install, launch, stop or uninstall an app on the current device.
+    App {
+        #[command(subcommand)]
+        action: AppAction,
+    },
+    /// Save a screenshot of the current device (PNG).
+    Screenshot {
+        /// Copy the PNG here as well.
+        #[arg(long)]
+        out: Option<std::path::PathBuf>,
+        /// Device serial (default: the current session's device).
+        #[arg(long)]
+        target: Option<String>,
+        #[arg(long)]
+        json: bool,
+    },
+    /// Show the UI tree of the current screen (text, ids, bounds, clickable elements).
+    Ui {
+        #[arg(long)]
+        target: Option<String>,
+        #[arg(long)]
+        json: bool,
+    },
+    /// Send input to the current device.
+    Input {
+        #[command(subcommand)]
+        action: InputCmd,
+        #[arg(long, global = true)]
+        target: Option<String>,
+    },
     /// Delete the download cache and old logs.
     Clean,
     /// Run one administrator action through a Windows UAC prompt:
@@ -123,6 +165,135 @@ enum Command {
     },
 }
 
+#[derive(Debug, Subcommand)]
+enum DeviceAction {
+    /// List devices and emulators (starts the product's private adb server if needed).
+    List {
+        /// Print machine-readable JSON.
+        #[arg(long)]
+        json: bool,
+    },
+    /// Show the device size classes (compact, standard, large, fold, flip, tablet).
+    Profiles {
+        /// Print machine-readable JSON.
+        #[arg(long)]
+        json: bool,
+    },
+    /// Create the emulator (AVD) for a size class from the product's own hardware definition.
+    Create {
+        profile: String,
+        /// API level of the system image (default: newest installed).
+        #[arg(long)]
+        api: Option<String>,
+    },
+    /// Boot the emulator for a size class headless (creates it if needed). Warm boots from the
+    /// product's snapshot when the GPU mode still matches; checks that the screen renders.
+    Boot {
+        profile: String,
+        #[arg(long)]
+        api: Option<String>,
+        /// Ignore the warm snapshot and boot cold.
+        #[arg(long)]
+        cold: bool,
+        /// Show the emulator's own window (debugging).
+        #[arg(long)]
+        window: bool,
+        /// GPU mode: `host` (default), or software `swiftshader_indirect` / `angle_indirect`.
+        #[arg(long)]
+        gpu: Option<String>,
+        /// Print machine-readable JSON.
+        #[arg(long)]
+        json: bool,
+    },
+    /// Stop an emulator the product started.
+    Stop {
+        profile: String,
+        #[arg(long)]
+        api: Option<String>,
+    },
+    /// Start a session on a size class: boot it (switching from another device), optionally
+    /// install and launch an app.
+    Use {
+        profile: String,
+        #[arg(long)]
+        api: Option<String>,
+        #[arg(long)]
+        cold: bool,
+        /// APK to install and launch after boot.
+        #[arg(long)]
+        apk: Option<std::path::PathBuf>,
+        /// Package to launch (already installed, or the APK's package).
+        #[arg(long)]
+        package: Option<String>,
+        #[arg(long)]
+        json: bool,
+    },
+    /// Fold or unfold a foldable emulator while it runs: closed, half-opened, opened, flipped, tent.
+    Posture {
+        posture: String,
+        #[arg(long)]
+        target: Option<String>,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum SessionAction {
+    /// State, recent events, supervised processes and ports (default).
+    Status {
+        #[arg(long)]
+        json: bool,
+    },
+    /// Stop the session and its emulator.
+    Stop,
+}
+
+#[derive(Debug, Subcommand)]
+enum AppAction {
+    Install {
+        apk: std::path::PathBuf,
+        #[arg(long)]
+        target: Option<String>,
+    },
+    Launch {
+        package: String,
+        /// Activity (`.Main` or `pkg/.Main`); default: the launcher activity.
+        #[arg(long)]
+        activity: Option<String>,
+        #[arg(long)]
+        target: Option<String>,
+    },
+    Stop {
+        package: String,
+        #[arg(long)]
+        target: Option<String>,
+    },
+    Uninstall {
+        package: String,
+        #[arg(long)]
+        target: Option<String>,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum InputCmd {
+    /// Tap at device pixels.
+    Tap { x: i32, y: i32 },
+    /// Swipe from (x1, y1) to (x2, y2).
+    Swipe {
+        x1: i32,
+        y1: i32,
+        x2: i32,
+        y2: i32,
+        #[arg(long, default_value_t = 300)]
+        ms: u64,
+    },
+    /// Type text into the focused field.
+    Text { text: String },
+    /// Press a key: home, back, recents, enter, delete, tab, escape, menu, power, `volume_up`, `volume_down`, up, down, left, right.
+    Key { name: String },
+}
+
+#[allow(clippy::too_many_lines)] // one flat dispatch over all commands
 fn main() -> ExitCode {
     let cli = Cli::parse();
     let rt = match tokio::runtime::Builder::new_current_thread()
@@ -157,6 +328,82 @@ fn main() -> ExitCode {
                 manage_cmd::repair(&target, dir, yes).await
             }
             Command::Clean => manage_cmd::clean(&target).await,
+            Command::Device { action } => match action {
+                DeviceAction::List { json } => device_cmd::list(&target, json).await,
+                DeviceAction::Profiles { json } => device_cmd::profiles(&target, json).await,
+                DeviceAction::Create { profile, api } => {
+                    device_cmd::create(&target, &profile, api).await
+                }
+                DeviceAction::Boot {
+                    profile,
+                    api,
+                    cold,
+                    window,
+                    gpu,
+                    json,
+                } => device_cmd::boot(&target, &profile, api, cold, window, gpu, json).await,
+                DeviceAction::Stop { profile, api } => {
+                    device_cmd::stop(&target, &profile, api).await
+                }
+                DeviceAction::Use {
+                    profile,
+                    api,
+                    cold,
+                    apk,
+                    package,
+                    json,
+                } => session_cmd::use_profile(&target, &profile, api, cold, apk, package, json).await,
+                DeviceAction::Posture { posture, target: t } => {
+                    session_cmd::call_print(
+                        &target,
+                        methods::DEVICE_POSTURE,
+                        serde_json::json!({ "posture": posture, "target": t }),
+                    )
+                    .await
+                }
+            },
+            Command::Session { action } => match action.unwrap_or(SessionAction::Status { json: false }) {
+                SessionAction::Status { json } => session_cmd::status(&target, json).await,
+                SessionAction::Stop => session_cmd::stop(&target).await,
+            },
+            Command::App { action } => {
+                let (method, params) = match action {
+                    AppAction::Install { apk, target: t } => (
+                        methods::APP_INSTALL,
+                        serde_json::json!({ "apk": session_cmd::absolute(&apk), "target": t }),
+                    ),
+                    AppAction::Launch { package, activity, target: t } => (
+                        methods::APP_LAUNCH,
+                        serde_json::json!({ "package": package, "activity": activity, "target": t }),
+                    ),
+                    AppAction::Stop { package, target: t } => (
+                        methods::APP_STOP,
+                        serde_json::json!({ "package": package, "target": t }),
+                    ),
+                    AppAction::Uninstall { package, target: t } => (
+                        methods::APP_UNINSTALL,
+                        serde_json::json!({ "package": package, "target": t }),
+                    ),
+                };
+                session_cmd::call_print(&target, method, params).await
+            }
+            Command::Screenshot { out, target: t, json } => {
+                session_cmd::screenshot(&target, out, t, json).await
+            }
+            Command::Ui { target: t, json } => session_cmd::ui(&target, t, json).await,
+            Command::Input { action, target: t } => {
+                let params = match action {
+                    InputCmd::Tap { x, y } => serde_json::json!({ "action": "tap", "x": x, "y": y }),
+                    InputCmd::Swipe { x1, y1, x2, y2, ms } => serde_json::json!({
+                        "action": "swipe", "x": x1, "y": y1, "x2": x2, "y2": y2, "ms": ms
+                    }),
+                    InputCmd::Text { text } => serde_json::json!({ "action": "text", "text": text }),
+                    InputCmd::Key { name } => serde_json::json!({ "action": "key", "key": name }),
+                };
+                let mut params = params;
+                params["target"] = serde_json::json!(t);
+                session_cmd::call_print(&target, methods::DEVICE_INPUT, params).await
+            }
             Command::Project { path, json } => match project_dir(path) {
                 Ok(dir) => project_cmd::show(&target, dir, json).await,
                 Err(e) => fail(&e),

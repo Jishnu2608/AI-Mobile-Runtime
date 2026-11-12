@@ -1,0 +1,15 @@
+[package]
+name = "umr-supervisor"
+description = "Process Supervisor (DEV-004): process trees in kill-on-close jobs, restart policies, logs, and the port allocator."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+umr-platform = { path = "../umr-platform" }
+
+[lints]
+workspace = true

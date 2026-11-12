@@ -100,6 +100,35 @@ pub const MIGRATIONS: &[Migration] = &[
         ) STRICT;
     ",
     },
+    Migration {
+        version: 4,
+        description: "session recovery journal: sessions, session_events",
+        sql: r"
+        -- Step 2.6: runtime sessions and every state change, for recovery after a Core restart.
+        CREATE TABLE sessions (
+            id           TEXT PRIMARY KEY,
+            profile      TEXT NOT NULL,
+            avd          TEXT NOT NULL,
+            project      TEXT,
+            app          TEXT,
+            state        TEXT NOT NULL,
+            serial       TEXT,
+            detail       TEXT,
+            created_unix INTEGER NOT NULL,
+            updated_unix INTEGER NOT NULL
+        ) STRICT;
+        CREATE TABLE session_events (
+            seq          INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id   TEXT NOT NULL REFERENCES sessions(id),
+            at_unix      INTEGER NOT NULL,
+            from_state   TEXT NOT NULL,
+            event        TEXT NOT NULL,
+            to_state     TEXT NOT NULL,
+            detail       TEXT
+        ) STRICT;
+        CREATE INDEX session_events_by_session ON session_events (session_id, seq);
+    ",
+    },
 ];
 
 /// Highest schema version this build understands.

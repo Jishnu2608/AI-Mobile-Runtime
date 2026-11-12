@@ -18,7 +18,7 @@ $steps = @(
     # The desktop app embeds the built web UI, so it must exist before Rust compiles it.
     @{ Name = 'UI build';  Cmd = { npm --prefix apps/desktop/ui ci --no-audit --no-fund; if ($LASTEXITCODE -eq 0) { npm --prefix apps/desktop/ui run build } } },
     @{ Name = 'Clippy';    Cmd = { cargo clippy --workspace --all-targets --locked } },
-    @{ Name = 'Test';      Cmd = { cargo test --workspace --locked } }
+    @{ Name = 'Test';      Cmd = { cargo test --workspace --locked --no-fail-fast } }
 )
 if (-not $SkipRelease) {
     $steps += @{ Name = 'Release build'; Cmd = { cargo build --workspace --release --locked } }

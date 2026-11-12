@@ -25,9 +25,30 @@ use umr_core::launcher::CoreTarget;
 struct Run {
     log: Vec<String>,
     failures: Vec<String>,
+    /// `%USERPROFILE%\.android` already reported (it must not appear; see LEAK-WATCH lines).
+    android_seen: bool,
 }
 
 impl Run {
+    /// Reports the step during which `%USERPROFILE%\.android` first appears.
+    fn watch_android(&mut self, phase: &str) {
+        if self.android_seen {
+            return;
+        }
+        let Some(profile) = std::env::var_os("USERPROFILE") else {
+            return;
+        };
+        let dir = std::path::Path::new(&profile).join(".android");
+        if dir.exists() {
+            self.android_seen = true;
+            let entries = std::fs::read_dir(&dir).map_or(0, Iterator::count);
+            self.say(format!(
+                "LEAK-WATCH: {} exists ({entries} entries) — first seen: {phase}",
+                dir.display()
+            ));
+        }
+    }
+
     fn say(&mut self, msg: impl Into<String>) {
         let m = msg.into();
         println!("{m}");
@@ -53,7 +74,8 @@ async fn connect(target: &CoreTarget) -> Result<Client, String> {
     target.connect_or_start().await.map(|(c, _)| c)
 }
 
-/// Polls an install job. With `kill_at` (percent), returns `None` once any download passed it.
+/// Polls an install job. With `kill_at` (percent), returns `None` once any download passed it
+/// or the system image is being installed (the moment to kill the Core).
 async fn follow(
     c: &mut Client,
     run: &mut Run,
@@ -79,14 +101,16 @@ async fn follow(
         let line = line.join(" ");
         if line != last {
             run.say(format!("  {line}"));
+            run.watch_android(&format!("install: {line}"));
             last = line;
         }
         if let Some(pct) = kill_at {
             let downloading = st["items"].as_array().into_iter().flatten().any(|i| {
-                i["state"] == "downloading"
+                (i["state"] == "downloading"
                     && i["bytes_total"].as_u64().is_some_and(|t| {
                         t > 0 && i["bytes_done"].as_u64().unwrap_or(0) * 100 >= t * pct
-                    })
+                    }))
+                    || (i["component"] == "android-system-image" && i["state"] == "installing")
             });
             if downloading {
                 return Ok(None); // caller kills the Core now
@@ -148,7 +172,9 @@ async fn accept_licences(c: &mut Client, run: &mut Run, project: &str) -> Result
     Ok(prep)
 }
 
+#[allow(clippy::too_many_lines)] // one linear test scenario
 async fn scenario(project: &str, interrupt: bool, run: &mut Run) -> Result<(), String> {
+    run.watch_android("before the Core started");
     let target = CoreTarget::resolve()?;
     let mut c = connect(&target).await?;
     let info = call(&mut c, methods::INFO, Value::Null).await?;
@@ -157,10 +183,13 @@ async fn scenario(project: &str, interrupt: bool, run: &mut Run) -> Result<(), S
         info["data_root"], info["toolchains_root"]
     ));
 
+    run.watch_android("Core start + core.info");
     let prep = accept_licences(&mut c, run, project).await?;
+    run.watch_android("install.prepare (scan, metadata) + licences");
     let host_accel = call(&mut c, methods::ENV_SCAN, Value::Null).await?["host"]["virtualization"]
         ["acceleration_available"]
         == true;
+    run.watch_android("env.scan");
     if !host_accel {
         let listed = prep["plan"]["admin_actions"]
             .as_array()
@@ -176,7 +205,7 @@ async fn scenario(project: &str, interrupt: bool, run: &mut Run) -> Result<(), S
         run.say(format!(
             "install job {job_id} started; will kill the Core during a download"
         ));
-        if let Some(st) = follow(&mut c, run, &job_id, Some(25)).await? {
+        if let Some(st) = follow(&mut c, run, &job_id, Some(5)).await? {
             run.say(format!(
                 "install finished before the kill point ({}); interruption step skipped",
                 st["state"]
@@ -221,6 +250,7 @@ async fn scenario(project: &str, interrupt: bool, run: &mut Run) -> Result<(), S
     );
 
     let comps = call(&mut c, methods::COMPONENTS_LIST, Value::Null).await?;
+    run.watch_android("components.list (JDK started)");
     let all_ok = comps["components"]
         .as_array()
         .is_some_and(|a| !a.is_empty() && a.iter().all(|x| x["ok"] == true));
@@ -235,6 +265,7 @@ async fn scenario(project: &str, interrupt: bool, run: &mut Run) -> Result<(), S
         json!({ "path": project, "rescan": true }),
     )
     .await?;
+    run.watch_android("project.plan --rescan");
     let installs: Vec<String> = plan["plan"]["items"]
         .as_array()
         .into_iter()
@@ -274,6 +305,7 @@ fn main() -> ExitCode {
     let mut run = Run {
         log: Vec::new(),
         failures: Vec::new(),
+        android_seen: false,
     };
     let result = rt.block_on(scenario(&project, interrupt, &mut run));
     if let Err(e) = &result {

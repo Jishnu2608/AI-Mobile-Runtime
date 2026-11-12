@@ -9,8 +9,10 @@
 //! (CORE-003). Tokens (CORE-004) and storage (CORE-005) follow.
 
 pub mod api_server;
+pub mod app_api;
 pub mod auth;
 pub mod daemon;
+pub mod device_api;
 pub mod doctor;
 pub mod install_api;
 pub mod instance;
@@ -19,6 +21,7 @@ pub mod logging;
 pub mod manage_api;
 pub mod paths;
 pub mod project_api;
+pub mod session_api;
 
 #[cfg(test)]
 pub(crate) mod test_support;

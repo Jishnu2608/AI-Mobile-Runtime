@@ -17,6 +17,22 @@ pub struct Config {
     pub core: CoreConfig,
     pub privacy: PrivacyConfig,
     pub storage: StorageConfig,
+    pub device: DeviceConfig,
+}
+
+/// `[device]` section.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct DeviceConfig {
+    /// Port of the product's own adb server (never 5037, which belongs to Android Studio and the
+    /// user's `adb`). If taken by another program, the next free port is used.
+    pub adb_port: u16,
+}
+
+impl Default for DeviceConfig {
+    fn default() -> Self {
+        Self { adb_port: 5137 }
+    }
 }
 
 /// `[storage]` section.
@@ -84,6 +100,10 @@ telemetry = false
 # Where toolchains go (JDK, Android SDK, emulator images, AVDs, Node, Flutter, downloads).
 # Several GB. Empty = inside this folder. Example: toolchains_dir = 'D:\UMR'
 toolchains_dir = ""
+
+[device]
+# Port of the product's own adb server. 5037 (Android Studio / your own adb) is never used.
+adb_port = 5137
 "#;
 
 impl Config {

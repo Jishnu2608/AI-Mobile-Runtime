@@ -166,6 +166,7 @@ pub fn start(state: &ApiState, id: Id, p: &ProjectPlanParams) -> Response {
         return internal(id, &e);
     }
     let sel = umr_env::recipe::Selection {
+        adb_port: Some(state.adb_port),
         android_sdk: Some(layout.android_sdk()),
         ..Default::default()
     };

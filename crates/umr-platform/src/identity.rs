@@ -66,8 +66,31 @@ pub fn current_user_sid() -> io::Result<String> {
         .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "SID is not valid UTF-16"))
 }
 
+/// Does an SDDL string grant something to `sid`?
+///
+/// Windows prints some well-known accounts as two-letter aliases instead of their SID: the
+/// built-in Administrator (RID 500, e.g. the GitHub runner user) appears as `LA`.
+#[must_use]
+pub fn sddl_names_user(sddl: &str, sid: &str) -> bool {
+    sddl.contains(sid)
+        || (sid.starts_with("S-1-5-21-") && sid.ends_with("-500") && sddl.contains(";LA)"))
+}
+
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn sddl_user_match_handles_the_builtin_administrator_alias() {
+        let user = "S-1-5-21-1-2-3-1001";
+        let admin = "S-1-5-21-1-2-3-500";
+        assert!(super::sddl_names_user(
+            "D:P(A;;FA;;;S-1-5-21-1-2-3-1001)",
+            user
+        ));
+        assert!(super::sddl_names_user("D:P(A;;FA;;;LA)", admin));
+        assert!(!super::sddl_names_user("D:P(A;;FA;;;LA)", user));
+        assert!(!super::sddl_names_user("D:P(A;;FA;;;BA)", admin));
+    }
+
     use super::*;
 
     #[test]

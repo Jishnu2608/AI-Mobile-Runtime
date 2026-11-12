@@ -21,6 +21,9 @@ umr-storage = { path = "../umr-storage" }
 umr-env = { path = "../umr-env" }
 umr-resolver = { path = "../umr-resolver" }
 umr-installer = { path = "../umr-installer" }
+umr-device = { path = "../umr-device" }
+umr-supervisor = { path = "../umr-supervisor" }
+umr-session = { path = "../umr-session" }
 umr-elevate = { path = "../../helpers/elevated-helper" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

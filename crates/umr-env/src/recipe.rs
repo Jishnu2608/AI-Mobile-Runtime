@@ -41,6 +41,9 @@ pub struct Selection {
     pub extra_path: Vec<PathBuf>,
     /// Point `APPDATA` at `<managed>\appdata` (tools that keep settings there: Flutter, Dart).
     pub isolate_appdata: bool,
+    /// The product's private adb server port (`ANDROID_ADB_SERVER_PORT`), so every tool the
+    /// product starts uses its adb server and never the one on 5037 (DEV-007).
+    pub adb_port: Option<u16>,
 }
 
 /// Managed folders used by the recipe.
@@ -117,6 +120,9 @@ pub fn child_env(ctx: &ScanContext, sel: &Selection) -> HashMap<String, String> 
     env.insert("ANDROID_AVD_HOME".into(), s(&dirs.avd_home));
     env.insert("TEMP".into(), s(&dirs.tmp));
     env.insert("TMP".into(), s(&dirs.tmp));
+    if let Some(port) = sel.adb_port {
+        env.insert("ANDROID_ADB_SERVER_PORT".into(), port.to_string());
+    }
 
     // Caches and settings that would otherwise land in AppData or ~/.expo (step 1.11)
     env.insert("PUB_CACHE".into(), s(&dirs.pub_cache));
@@ -231,6 +237,21 @@ mod tests {
             },
         );
         assert_eq!(flutter["APPDATA"], r"D:\UMR\appdata");
+        assert!(
+            !env.contains_key("ANDROID_ADB_SERVER_PORT"),
+            "only when a port is chosen"
+        );
+        let with_adb = child_env(
+            &ctx,
+            &Selection {
+                adb_port: Some(5137),
+                ..Selection::default()
+            },
+        );
+        assert_eq!(
+            with_adb["ANDROID_ADB_SERVER_PORT"], "5137",
+            "tools use our private adb server"
+        );
     }
 
     #[test]

@@ -142,7 +142,10 @@ mod tests {
         let dacl = dacl_sddl(server.as_raw_handle()).unwrap();
         let sid = crate::identity::current_user_sid().unwrap();
         assert!(dacl.starts_with("D:P"), "DACL must be protected: {dacl}");
-        assert!(dacl.contains(&sid), "DACL must name the user: {dacl}");
+        assert!(
+            crate::identity::sddl_names_user(&dacl, &sid),
+            "DACL must name the user: {dacl}"
+        );
         assert_eq!(
             dacl.matches("(A;").count(),
             1,
