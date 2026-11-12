@@ -1,0 +1,17 @@
+[package]
+name = "umr-adapter"
+description = "Framework adapter contract (ADP-001): the interface every framework adapter implements, shared event / problem types, and the contract test kit."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+umr-device = { path = "../../crates/umr-device" }
+umr-resolver = { path = "../../crates/umr-resolver" }
+umr-supervisor = { path = "../../crates/umr-supervisor" }
+
+[lints]
+workspace = true

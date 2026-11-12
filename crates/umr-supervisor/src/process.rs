@@ -7,6 +7,10 @@
 //!   or `OnFailure` with a budget (Metro / Flutter tool in Phase 3: max 3 restarts in 5 min).
 //!   A clean exit (code 0) is never restarted.
 //! * A monitor thread notices exits within ~200 ms.
+//! * Groups: processes with the same `group` share one job that outlives each process (a Gradle
+//!   build leaves its daemon running for the next build); [`Supervisor::stop_group`] ends it.
+//! * Piped processes ([`Supervisor::start_piped`]) hand stdin / stdout to the caller (machine
+//!   protocols such as `flutter run --machine`); stderr still goes to the log.
 
 use std::collections::HashMap;
 use std::fs::{File, OpenOptions};
@@ -67,6 +71,8 @@ pub struct ProcessSpec {
     pub cwd: Option<PathBuf>,
     pub log: PathBuf,
     pub restart: RestartPolicy,
+    /// Shared job (see the module docs); `None` = a job of its own.
+    pub group: Option<String>,
 }
 
 impl ProcessSpec {
@@ -80,6 +86,7 @@ impl ProcessSpec {
             cwd: None,
             log: log.into(),
             restart: RestartPolicy::Never,
+            group: None,
         }
     }
 
@@ -153,8 +160,8 @@ fn now_unix() -> u64 {
         .map_or(0, |d| d.as_secs())
 }
 
-/// Starts `spec` in a new kill-on-close job, output into its log file.
-fn launch(spec: &ProcessSpec, append: bool) -> Result<(Child, Option<KillOnCloseJob>), String> {
+/// Starts `spec`; output into its log file (stdout piped instead when `piped`).
+fn launch(spec: &ProcessSpec, append: bool, piped: bool) -> Result<Child, String> {
     if let Some(dir) = spec.log.parent() {
         std::fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
     }
@@ -169,34 +176,50 @@ fn launch(spec: &ProcessSpec, append: bool) -> Result<(Child, Option<KillOnClose
     }
     let err = out.try_clone().map_err(|e| e.to_string())?;
     let mut cmd = Command::new(&spec.program);
-    cmd.args(&spec.args)
-        .envs(&spec.env)
-        .stdin(Stdio::null())
-        .stdout(out)
-        .stderr(err);
+    cmd.args(&spec.args).envs(&spec.env).stderr(err);
+    if piped {
+        cmd.stdin(Stdio::piped()).stdout(Stdio::piped());
+    } else {
+        cmd.stdin(Stdio::null()).stdout(out);
+    }
     if let Some(d) = &spec.cwd {
         cmd.current_dir(d);
     }
-    let child = cmd
-        .spawn()
-        .map_err(|e| format!("cannot start {}: {e}", spec.program.display()))?;
-    // A job failure (e.g. nested-job limits) is not fatal: the process still runs and is killed
-    // directly on stop.
-    let job = KillOnCloseJob::new()
-        .and_then(|j| j.assign(&child).map(|()| j))
-        .ok();
-    Ok((child, job))
+    cmd.spawn()
+        .map_err(|e| format!("cannot start {}: {e}", spec.program.display()))
 }
 
 #[derive(Debug, Default)]
 struct Inner {
     procs: Mutex<HashMap<String, Entry>>,
+    /// Shared jobs by group name.
+    groups: Mutex<HashMap<String, KillOnCloseJob>>,
     shutdown: AtomicBool,
 }
 
 impl Inner {
     fn lock(&self) -> std::sync::MutexGuard<'_, HashMap<String, Entry>> {
         self.procs.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
+    /// Puts the child into its group's job (returns `None`) or into a job of its own. A job
+    /// failure (e.g. nested-job limits) is not fatal: the process is still killed directly.
+    fn jobify(&self, spec: &ProcessSpec, child: &Child) -> Option<KillOnCloseJob> {
+        if let Some(g) = &spec.group {
+            let mut groups = self.groups.lock().unwrap_or_else(PoisonError::into_inner);
+            if !groups.contains_key(g) {
+                if let Ok(j) = KillOnCloseJob::new() {
+                    groups.insert(g.clone(), j);
+                }
+            }
+            if let Some(j) = groups.get(g) {
+                let _ = j.assign(child);
+            }
+            return None;
+        }
+        KillOnCloseJob::new()
+            .and_then(|j| j.assign(child).map(|()| j))
+            .ok()
     }
 
     /// One monitor pass: notice exits, apply restart policies, run due restarts.
@@ -237,11 +260,11 @@ impl Inner {
                 }
                 RunState::Restarting if e.restart_at.is_some_and(|t| now >= t) => {
                     e.restart_at = None;
-                    match launch(&e.spec, true) {
-                        Ok((child, job)) => {
+                    match launch(&e.spec, true, false) {
+                        Ok(child) => {
                             e.pid = Some(child.id());
+                            e.job = self.jobify(&e.spec, &child);
                             e.child = Some(child);
-                            e.job = job;
                             e.state = RunState::Running;
                             e.started_unix = now_unix();
                             e.recent_restarts.push(now);
@@ -297,13 +320,46 @@ impl Supervisor {
 
     /// Starts a process; returns its PID. A name that is still running (or restarting) is refused.
     pub fn start(&self, spec: ProcessSpec) -> Result<u32, String> {
+        self.start_inner(spec, false).map(|(pid, _)| pid)
+    }
+
+    /// Starts a process whose stdin / stdout the caller drives (restart policy forced to
+    /// `Never`: a restarted process could not be handed back).
+    pub fn start_piped(
+        &self,
+        mut spec: ProcessSpec,
+    ) -> Result<(u32, std::process::ChildStdin, std::process::ChildStdout), String> {
+        spec.restart = RestartPolicy::Never;
+        let (pid, io) = self.start_inner(spec, true)?;
+        io.ok_or_else(|| "no pipes".to_string())
+            .map(|(i, o)| (pid, i, o))
+    }
+
+    #[allow(clippy::type_complexity)]
+    fn start_inner(
+        &self,
+        spec: ProcessSpec,
+        piped: bool,
+    ) -> Result<
+        (
+            u32,
+            Option<(std::process::ChildStdin, std::process::ChildStdout)>,
+        ),
+        String,
+    > {
         let mut procs = self.inner.lock();
         if let Some(e) = procs.get(&spec.name) {
             if matches!(e.state, RunState::Running | RunState::Restarting) {
                 return Err(format!("{} is already running", spec.name));
             }
         }
-        let (child, job) = launch(&spec, false)?;
+        let mut child = launch(&spec, false, piped)?;
+        let job = self.inner.jobify(&spec, &child);
+        let io = if piped {
+            child.stdin.take().zip(child.stdout.take())
+        } else {
+            None
+        };
         let pid = child.id();
         procs.insert(
             spec.name.clone(),
@@ -321,7 +377,24 @@ impl Supervisor {
                 last_error: None,
             },
         );
-        Ok(pid)
+        Ok((pid, io))
+    }
+
+    /// Ends every process of a group and whatever they left behind (e.g. a Gradle daemon).
+    pub fn stop_group(&self, group: &str) {
+        for e in self.inner.lock().values_mut() {
+            if e.spec.group.as_deref() == Some(group) {
+                e.kill();
+                if matches!(e.state, RunState::Running | RunState::Restarting) {
+                    e.state = RunState::Stopped;
+                }
+            }
+        }
+        self.inner
+            .groups
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .remove(group);
     }
 
     #[must_use]
@@ -391,6 +464,11 @@ impl Supervisor {
     /// Stops everything and ends the monitor (Core shutdown).
     pub fn shutdown(&self) {
         self.inner.shutdown.store(true, Ordering::SeqCst);
+        self.inner
+            .groups
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clear();
         for e in self.inner.lock().values_mut() {
             e.kill();
             if matches!(e.state, RunState::Running | RunState::Restarting) {
@@ -457,6 +535,56 @@ mod tests {
         assert!(s.last_error.unwrap().contains("used up"));
         let text = std::fs::read_to_string(log("crashy")).unwrap();
         assert_eq!(text.matches("restarted by the Supervisor").count(), 2);
+    }
+
+    #[test]
+    fn group_outlives_its_process_until_stopped() {
+        let sup = Supervisor::new();
+        // the process starts a background child (like a Gradle daemon) and exits at once
+        let mut spec = cmd("build", "start /b ping -n 60 127.0.0.1 >nul");
+        spec.group = Some("project:x".into());
+        let pid = sup.start(spec).unwrap();
+        let start = Instant::now();
+        let daemon = loop {
+            if let Some(p) = descendants(pid)
+                .unwrap_or_default()
+                .into_iter()
+                .find(|p| p.exe_name.eq_ignore_ascii_case("PING.EXE"))
+            {
+                break p.pid;
+            }
+            assert!(
+                start.elapsed() < Duration::from_secs(10),
+                "no background child"
+            );
+            std::thread::sleep(Duration::from_millis(50));
+        };
+        let _ = wait_for(&sup, "build", RunState::Exited, 10);
+        assert!(
+            is_running(daemon).unwrap(),
+            "the background child survives the build"
+        );
+        sup.stop_group("project:x");
+        let start = Instant::now();
+        while is_running(daemon).unwrap_or(false) && start.elapsed() < Duration::from_secs(5) {
+            std::thread::sleep(Duration::from_millis(50));
+        }
+        assert!(!is_running(daemon).unwrap_or(false), "stop_group ends it");
+    }
+
+    #[test]
+    fn piped_process_talks_to_the_caller() {
+        use std::io::{BufRead, BufReader, Write as _};
+        let sup = Supervisor::new();
+        let spec = ProcessSpec::new("echo", "findstr.exe", log("echo")).args(["x"]);
+        let (_pid, mut stdin, stdout) = sup.start_piped(spec).unwrap();
+        writeln!(stdin, "abc").unwrap();
+        writeln!(stdin, "xyz").unwrap();
+        drop(stdin);
+        let mut line = String::new();
+        BufReader::new(stdout).read_line(&mut line).unwrap();
+        assert_eq!(line.trim(), "xyz");
+        let _ = wait_for(&sup, "echo", RunState::Exited, 10);
     }
 
     #[test]

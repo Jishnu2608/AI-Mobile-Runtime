@@ -192,10 +192,16 @@ fn read_android(root: &Path, dir: &Path, notes: &mut Vec<String>) -> AndroidFact
     .iter()
     .filter_map(|f| std::fs::read_to_string(dir.join(f)).ok())
     .collect();
+    // React Native pins AGP in its Gradle plugin (`node_modules/@react-native/gradle-plugin`)
+    let rn_catalog = std::fs::read_to_string(
+        root.join("node_modules/@react-native/gradle-plugin/gradle/libs.versions.toml"),
+    )
+    .ok();
     let agp = toml
         .as_deref()
         .and_then(agp_from_version_catalog)
-        .or_else(|| build_files.iter().find_map(|t| agp_from_build_script(t)));
+        .or_else(|| build_files.iter().find_map(|t| agp_from_build_script(t)))
+        .or_else(|| rn_catalog.as_deref().and_then(agp_from_version_catalog));
     if agp.is_none() {
         notes.push(
             "Android Gradle Plugin version not found in version catalog or build scripts".into(),
@@ -207,12 +213,29 @@ fn read_android(root: &Path, dir: &Path, notes: &mut Vec<String>) -> AndroidFact
         .find_map(|f| std::fs::read_to_string(dir.join(f)).ok())
         .unwrap_or_default();
     let catalog = toml.as_deref().unwrap_or("");
-    let level = |keys: &[&str]| keys.iter().find_map(|k| sdk_level(&app, k, catalog));
+    // `rootProject.ext.<name>` (React Native) → the root build script's `ext { <name> = … }`
+    let ext = build_files.iter().map(|t| ext_values(t)).fold(
+        std::collections::HashMap::new(),
+        |mut m, e| {
+            m.extend(e);
+            m
+        },
+    );
+    let from_ext = |key: &str| {
+        app.contains(&format!("rootProject.ext.{key}"))
+            .then(|| ext.get(key).cloned())
+            .flatten()
+    };
+    let level = |keys: &[&str]| {
+        keys.iter()
+            .find_map(|k| sdk_level(&app, k, catalog))
+            .or_else(|| keys.iter().find_map(|k| from_ext(k)))
+    };
     let compile_sdk = level(&["compileSdk", "compileSdkVersion"]);
     if compile_sdk.is_none() {
         notes.push("compileSdk is computed in the build script (e.g. flutter.compileSdkVersion); resolved later by the build".into());
     }
-    let ndk_version = quoted_assignment(&app, "ndkVersion");
+    let ndk_version = quoted_assignment(&app, "ndkVersion").or_else(|| from_ext("ndkVersion"));
     let uses_cmake = app.contains("cmake") && app.contains("externalNativeBuild")
         || dir
             .join("app")
@@ -232,6 +255,73 @@ fn read_android(root: &Path, dir: &Path, notes: &mut Vec<String>) -> AndroidFact
         ndk_version,
         uses_cmake,
         cmake_version,
+    }
+}
+
+/// The defaults a Flutter SDK gives `flutter.compileSdkVersion`, `flutter.minSdkVersion`,
+/// `flutter.targetSdkVersion` and `flutter.ndkVersion` (read from its `FlutterExtension.kt`).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct FlutterDefaults {
+    pub compile_sdk: Option<String>,
+    pub min_sdk: Option<String>,
+    pub target_sdk: Option<String>,
+    pub ndk_version: Option<String>,
+}
+
+/// Parses `FlutterExtension.kt` (`val compileSdkVersion: Int = 36`, `val ndkVersion: String = "…"`).
+#[must_use]
+pub fn parse_flutter_defaults(kotlin: &str) -> FlutterDefaults {
+    let val = |name: &str| {
+        kotlin.lines().find_map(|l| {
+            let l = l.trim();
+            let rest = l.strip_prefix("val ")?.strip_prefix(name)?;
+            let v = rest.split_once('=')?.1.trim().trim_matches('"');
+            (!v.is_empty()).then(|| v.to_string())
+        })
+    };
+    FlutterDefaults {
+        compile_sdk: val("compileSdkVersion"),
+        min_sdk: val("minSdkVersion"),
+        target_sdk: val("targetSdkVersion"),
+        ndk_version: val("ndkVersion"),
+    }
+}
+
+/// Fills values the app's build script takes from `flutter.*` with the installed Flutter SDK's
+/// defaults, so the plan can include them (e.g. the NDK, which the Android build cannot
+/// install itself: POC-006 finding 4). Values the project sets itself are kept.
+pub fn apply_flutter_defaults(facts: &mut ProjectFacts, root: &Path, flutter_root: &Path) {
+    let Some(a) = facts.android.as_mut() else {
+        return;
+    };
+    let ext =
+        flutter_root.join("packages/flutter_tools/gradle/src/main/kotlin/FlutterExtension.kt");
+    let Ok(kotlin) = std::fs::read_to_string(&ext) else {
+        return;
+    };
+    let d = parse_flutter_defaults(&kotlin);
+    let app = ["app/build.gradle.kts", "app/build.gradle"]
+        .iter()
+        .find_map(|f| std::fs::read_to_string(root.join(&a.dir).join(f)).ok())
+        .unwrap_or_default();
+    let mut used = Vec::new();
+    let mut fill = |slot: &mut Option<String>, value: Option<String>, key: &str| {
+        if slot.is_none() && app.contains(&format!("flutter.{key}")) {
+            if let Some(v) = value {
+                used.push(format!("{key} = {v}"));
+                *slot = Some(v);
+            }
+        }
+    };
+    fill(&mut a.compile_sdk, d.compile_sdk, "compileSdkVersion");
+    fill(&mut a.min_sdk, d.min_sdk, "minSdkVersion");
+    fill(&mut a.target_sdk, d.target_sdk, "targetSdkVersion");
+    fill(&mut a.ndk_version, d.ndk_version, "ndkVersion");
+    if !used.is_empty() {
+        facts.notes.push(format!(
+            "Flutter SDK defaults used for flutter.* values: {}",
+            used.join(", ")
+        ));
     }
 }
 
@@ -351,6 +441,48 @@ fn sdk_level(app: &str, key: &str, catalog: &str) -> Option<String> {
     None
 }
 
+/// `ext { name = value … }` assignments of a root build script (quotes removed).
+#[must_use]
+pub fn ext_values(text: &str) -> std::collections::HashMap<String, String> {
+    let mut out = std::collections::HashMap::new();
+    let Some(start) = text.find("ext {").or_else(|| text.find("ext{")) else {
+        return out;
+    };
+    let body = &text[start..];
+    let Some(open) = body.find('{') else {
+        return out;
+    };
+    let mut depth = 0usize;
+    for (i, c) in body[open..].char_indices() {
+        match c {
+            '{' => depth += 1,
+            '}' => {
+                depth -= 1;
+                if depth == 0 {
+                    for line in body[open + 1..open + i].lines() {
+                        if let Some((k, v)) = line.split_once('=') {
+                            let k = k.trim().trim_start_matches("set(").trim();
+                            let v = v
+                                .trim()
+                                .trim_end_matches(')')
+                                .trim()
+                                .trim_matches(['"', '\'']);
+                            if !k.is_empty()
+                                && k.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+                            {
+                                out.insert(k.to_string(), v.to_string());
+                            }
+                        }
+                    }
+                    break;
+                }
+            }
+            _ => {}
+        }
+    }
+    out
+}
+
 fn quoted_assignment(text: &str, key: &str) -> Option<String> {
     text.lines()
         .map(str::trim)
@@ -451,6 +583,97 @@ pub fn parse_pubspec_environment(text: &str) -> (Option<String>, Option<String>)
 #[must_use]
 pub fn root_path(f: &ProjectFacts) -> PathBuf {
     PathBuf::from(&f.root)
+}
+
+#[cfg(test)]
+mod react_native_ext_tests {
+    use super::*;
+
+    #[test]
+    fn root_ext_values_resolve_root_project_references() {
+        let root_build = "buildscript {\n    ext {\n        buildToolsVersion = \"37.0.0\"\n        minSdkVersion = 24\n        compileSdkVersion = 37\n        targetSdkVersion = 36\n        ndkVersion = \"27.1.12297006\"\n    }\n}\n";
+        let e = ext_values(root_build);
+        assert_eq!(e["ndkVersion"], "27.1.12297006");
+        assert_eq!(e["compileSdkVersion"], "37");
+
+        let base = std::env::temp_dir().join(format!("umr-rn-ext-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(base.join("android/app")).unwrap();
+        std::fs::write(
+            base.join("package.json"),
+            r#"{"dependencies":{"react-native":"0.88.1"}}"#,
+        )
+        .unwrap();
+        std::fs::write(base.join("android/settings.gradle"), "include ':app'").unwrap();
+        std::fs::write(base.join("android/build.gradle"), root_build).unwrap();
+        std::fs::write(
+            base.join("android/app/build.gradle"),
+            "android {\n    ndkVersion rootProject.ext.ndkVersion\n    compileSdk rootProject.ext.compileSdkVersion\n    defaultConfig {\n        minSdkVersion rootProject.ext.minSdkVersion\n        targetSdkVersion rootProject.ext.targetSdkVersion\n    }\n}\n",
+        )
+        .unwrap();
+        let rn = base.join("node_modules/@react-native/gradle-plugin/gradle");
+        std::fs::create_dir_all(&rn).unwrap();
+        std::fs::write(
+            rn.join("libs.versions.toml"),
+            "[versions]\nagp = \"8.12.0\"\n",
+        )
+        .unwrap();
+        let f = read(&base);
+        let a = f.android.unwrap();
+        assert_eq!(a.compile_sdk.as_deref(), Some("37"));
+        assert_eq!(a.target_sdk.as_deref(), Some("36"));
+        assert_eq!(a.min_sdk.as_deref(), Some("24"));
+        assert_eq!(a.ndk_version.as_deref(), Some("27.1.12297006"));
+        assert_eq!(a.agp.as_deref(), Some("8.12.0"));
+        let _ = std::fs::remove_dir_all(&base);
+    }
+}
+
+#[cfg(test)]
+mod flutter_default_tests {
+    use super::*;
+
+    #[test]
+    fn flutter_defaults_fill_symbolic_values_only() {
+        let kt = "open class FlutterExtension {\n    val compileSdkVersion: Int = 36\n    val minSdkVersion: Int = 24\n    val targetSdkVersion: Int = 36\n    val ndkVersion: String = \"28.2.13676358\"\n}\n";
+        let d = parse_flutter_defaults(kt);
+        assert_eq!(d.ndk_version.as_deref(), Some("28.2.13676358"));
+        assert_eq!(d.compile_sdk.as_deref(), Some("36"));
+
+        let base =
+            std::env::temp_dir().join(format!("umr-flutter-defaults-{}", std::process::id()));
+        let (proj, sdk) = (base.join("p"), base.join("flutter"));
+        let ext = sdk.join("packages/flutter_tools/gradle/src/main/kotlin");
+        std::fs::create_dir_all(&ext).unwrap();
+        std::fs::write(ext.join("FlutterExtension.kt"), kt).unwrap();
+        std::fs::create_dir_all(proj.join("android/app")).unwrap();
+        std::fs::write(proj.join("android/settings.gradle.kts"), "").unwrap();
+        std::fs::write(
+            proj.join("pubspec.yaml"),
+            "name: x\ndependencies:\n  flutter:\n    sdk: flutter\n",
+        )
+        .unwrap();
+        std::fs::write(
+            proj.join("android/app/build.gradle.kts"),
+            "android {\n    compileSdk = flutter.compileSdkVersion\n    ndkVersion = flutter.ndkVersion\n    defaultConfig { minSdk = 26; targetSdk = flutter.targetSdkVersion }\n}\n",
+        )
+        .unwrap();
+        let mut facts = read(&proj);
+        apply_flutter_defaults(&mut facts, &proj, &sdk);
+        let a = facts.android.as_ref().unwrap();
+        assert_eq!(a.ndk_version.as_deref(), Some("28.2.13676358"));
+        assert_eq!(a.compile_sdk.as_deref(), Some("36"));
+        assert_eq!(
+            a.min_sdk.as_deref(),
+            Some("26"),
+            "the project's own value is kept"
+        );
+        assert!(facts
+            .notes
+            .iter()
+            .any(|n| n.contains("Flutter SDK defaults")));
+        let _ = std::fs::remove_dir_all(&base);
+    }
 }
 
 #[cfg(test)]

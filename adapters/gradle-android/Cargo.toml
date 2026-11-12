@@ -1,0 +1,16 @@
+[package]
+name = "umr-adapter-gradle"
+description = "Gradle Android adapter (ADP-002): Kotlin and Java projects built with the project's Gradle wrapper, installed and launched on the session's device."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+umr-adapter = { path = "../sdk" }
+umr-device = { path = "../../crates/umr-device" }
+umr-supervisor = { path = "../../crates/umr-supervisor" }
+
+[lints]
+workspace = true

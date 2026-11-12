@@ -24,6 +24,11 @@ umr-installer = { path = "../umr-installer" }
 umr-device = { path = "../umr-device" }
 umr-supervisor = { path = "../umr-supervisor" }
 umr-session = { path = "../umr-session" }
+umr-adapter = { path = "../../adapters/sdk" }
+umr-adapter-gradle = { path = "../../adapters/gradle-android" }
+umr-adapter-flutter = { path = "../../adapters/flutter" }
+umr-adapter-react-native = { path = "../../adapters/react-native" }
+notify = "8"
 umr-elevate = { path = "../../helpers/elevated-helper" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

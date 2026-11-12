@@ -104,6 +104,19 @@ impl Db {
         Ok(())
     }
 
+    /// Binds a project folder to a session (a device session that starts running a project).
+    pub fn set_session_project(&self, id: &str, project: &str) -> Result<(), StorageError> {
+        let n = self.conn().execute(
+            "UPDATE sessions SET project = ?2 WHERE id = ?1",
+            params![id, project],
+        )?;
+        if n == 1 {
+            Ok(())
+        } else {
+            Err(StorageError::Invalid(format!("no session {id}")))
+        }
+    }
+
     pub fn session(&self, id: &str) -> Result<Option<SessionRow>, StorageError> {
         Ok(self
             .conn()

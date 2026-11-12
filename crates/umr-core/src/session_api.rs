@@ -16,7 +16,7 @@ fn journal_error(e: &umr_session::SessionError) -> RpcError {
 }
 
 /// Applies an event, journals it and publishes the new state.
-fn apply(
+pub(crate) fn apply(
     state: &ApiState,
     s: &mut Session,
     event: Event,
@@ -32,7 +32,7 @@ fn apply(
     Ok(())
 }
 
-fn current(state: &ApiState) -> Option<Session> {
+pub(crate) fn current(state: &ApiState) -> Option<Session> {
     state
         .session
         .lock()
@@ -80,6 +80,20 @@ impl Drop for Busy<'_> {
 
 fn view(s: &Session, boot: Option<&umr_device::emulator::BootReport>) -> serde_json::Value {
     serde_json::json!({ "session": s, "boot": boot })
+}
+
+/// The session's device for a profile is up (booted, switched or recovered); used by
+/// `project.run`.
+pub(crate) fn ensure_device(state: &ApiState, p: &StartSessionParams) -> Result<(), RpcError> {
+    if state
+        .session_busy
+        .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+        .is_err()
+    {
+        return Err(RpcError::new(codes::BUSY, "a session is already starting"));
+    }
+    let _busy = Busy(state);
+    start_inner(state, p).map(|_| ())
 }
 
 pub fn start(state: &ApiState, id: Id, p: &StartSessionParams) -> Response {
@@ -256,6 +270,7 @@ pub fn stop(state: &ApiState, id: Id) -> Response {
         return ok(id, &serde_json::json!({ "session": null }));
     };
     if s.state.is_active() {
+        crate::run_api::stop_run(state);
         device_api::stop_avd(state, &s.avd);
         if let Err(e) = apply(state, &mut s, Event::Stop, Some("stopped by the user")) {
             return Response::err(Some(id), e);
@@ -284,6 +299,7 @@ pub fn recover(state: &ApiState) {
 
 /// Core stop: the active session ends with it.
 pub fn settle_on_shutdown(state: &ApiState) {
+    crate::run_api::stop_run(state);
     if let Some(mut s) = current(state).filter(|s| s.state.is_active()) {
         let _ = apply(state, &mut s, Event::Stop, Some("the Runtime Core stopped"));
     }

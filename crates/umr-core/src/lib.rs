@@ -21,7 +21,9 @@ pub mod logging;
 pub mod manage_api;
 pub mod paths;
 pub mod project_api;
+pub mod run_api;
 pub mod session_api;
+pub mod watch;
 
 #[cfg(test)]
 pub(crate) mod test_support;

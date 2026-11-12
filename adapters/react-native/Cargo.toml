@@ -1,0 +1,18 @@
+[package]
+name = "umr-adapter-react-native"
+description = "React Native / Expo adapter (ADP-004/005/007): Expo Go fast path, native builds (bare React Native, Expo dev builds), Metro on --localhost with adb reverse."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+serde_json = "1"
+umr-adapter = { path = "../sdk" }
+umr-adapter-gradle = { path = "../gradle-android" }
+umr-device = { path = "../../crates/umr-device" }
+umr-supervisor = { path = "../../crates/umr-supervisor" }
+
+[lints]
+workspace = true

@@ -301,6 +301,13 @@ impl Session {
         }
     }
 
+    /// Binds the project this session runs.
+    pub fn set_project(&mut self, db: &Db, project: &str) -> Result<(), SessionError> {
+        db.set_session_project(&self.id, project)?;
+        self.project = Some(project.to_string());
+        Ok(())
+    }
+
     /// Applies an event: validated, journaled, then applied.
     pub fn apply(
         &mut self,

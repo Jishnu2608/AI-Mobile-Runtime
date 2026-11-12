@@ -1,0 +1,17 @@
+[package]
+name = "umr-adapter-flutter"
+description = "Flutter adapter (ADP-003): drives `flutter run --machine` on the session's device; hot reload and hot restart over its JSON protocol."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+serde_json = "1"
+umr-adapter = { path = "../sdk" }
+umr-device = { path = "../../crates/umr-device" }
+umr-supervisor = { path = "../../crates/umr-supervisor" }
+
+[lints]
+workspace = true

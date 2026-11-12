@@ -106,6 +106,7 @@ where
     });
     tracing::info!(port = api_state.adb_port, "adb server port (private)");
     let state = Arc::new(api_state);
+    let _ = state.self_ref.set(Arc::downgrade(&state));
     // Sessions whose emulators ended with the previous Core (step 2.6).
     crate::session_api::recover(&state);
     // INS-003: finish or roll back installs a crash interrupted, before any new one starts.

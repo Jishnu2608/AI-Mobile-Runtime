@@ -13,6 +13,7 @@ mod install_cmd;
 mod manage_cmd;
 mod plan_print;
 mod project_cmd;
+mod run_cmd;
 mod session_cmd;
 
 use std::process::ExitCode;
@@ -117,6 +118,37 @@ enum Command {
     Device {
         #[command(subcommand)]
         action: DeviceAction,
+    },
+    /// Build, install and launch a project on the session's device (Kotlin/Java via Gradle,
+    /// Flutter). The folder must be trusted and its toolchain installed.
+    Run {
+        /// Project folder (default: current folder).
+        path: Option<std::path::PathBuf>,
+        /// Device size class (default: standard).
+        #[arg(long)]
+        profile: Option<String>,
+        /// Boot the device cold.
+        #[arg(long)]
+        cold: bool,
+        /// Stop the running app and its tools instead.
+        #[arg(long)]
+        stop: bool,
+        /// Do not reload on saved files.
+        #[arg(long)]
+        no_watch: bool,
+        #[arg(long)]
+        json: bool,
+    },
+    /// Apply code changes to the running app: hot (default), restart or full.
+    Reload {
+        kind: Option<String>,
+        #[arg(long)]
+        json: bool,
+    },
+    /// Framework adapters.
+    Adapter {
+        #[command(subcommand)]
+        action: AdapterAction,
     },
     /// The current runtime session (device and app).
     Session {
@@ -233,6 +265,18 @@ enum DeviceAction {
         posture: String,
         #[arg(long)]
         target: Option<String>,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum AdapterAction {
+    /// Run the adapter contract test kit live: start, every reload kind, stop.
+    Check {
+        path: Option<std::path::PathBuf>,
+        #[arg(long)]
+        profile: Option<String>,
+        #[arg(long)]
+        json: bool,
     },
 }
 
@@ -362,6 +406,22 @@ fn main() -> ExitCode {
                     .await
                 }
             },
+            Command::Run {
+                stop: true,
+                ..
+            } => run_cmd::stop(&target).await,
+            Command::Run {
+                path,
+                profile,
+                cold,
+                json,
+                no_watch,
+                ..
+            } => run_cmd::run(&target, path, profile, cold, !no_watch, json).await,
+            Command::Reload { kind, json } => run_cmd::reload(&target, kind, json).await,
+            Command::Adapter {
+                action: AdapterAction::Check { path, profile, json },
+            } => run_cmd::check(&target, path, profile, json).await,
             Command::Session { action } => match action.unwrap_or(SessionAction::Status { json: false }) {
                 SessionAction::Status { json } => session_cmd::status(&target, json).await,
                 SessionAction::Stop => session_cmd::stop(&target).await,

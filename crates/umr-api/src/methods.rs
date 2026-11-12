@@ -85,6 +85,26 @@ pub const SESSION_STATUS: &str = "session.status";
 /// `session.stop` → session (emulator stopped). Scope: control.
 pub const SESSION_STOP: &str = "session.stop";
 
+// ---- running projects (Phase 3: ADP-001..003) -------------------------------------------------
+
+/// `project.run` [`RunParams`] → `{ status: running|build_failed|launch_failed|failed, adapter,
+/// package, seconds, problems, session }`. Trusted folders only; the toolchain must be installed.
+/// Boots (or reuses) the session's device, then the adapter builds, installs and launches.
+/// Scope: control.
+pub const PROJECT_RUN: &str = "project.run";
+/// `project.reload` [`ReloadParams`] → `{ status: reloaded|unsupported|build_failed|failed, kind,
+/// ms, problems }`. Scope: control.
+pub const PROJECT_RELOAD: &str = "project.reload";
+/// `project.stop` → `{ stopped }`: stops the app and its tools (Gradle daemon, Flutter tool).
+/// Scope: control.
+pub const PROJECT_STOP: &str = "project.stop";
+/// `project.status` [`RunStatusParams`] → `{ run, alive, events, cursor }`: adapter events
+/// (progress, problems with file and line, reloads) after `since`. Scope: observe.
+pub const PROJECT_STATUS: &str = "project.status";
+/// `adapter.check` [`AdapterCheckParams`] → `{ passed, report }`: the adapter contract test kit
+/// run live on the session's device (start, each reload kind, stop). Scope: control.
+pub const ADAPTER_CHECK: &str = "adapter.check";
+
 // ---- install (INS-001…004) -----------------------------------------------------------------
 // Installing changes the machine, so all install calls except status need the admin scope
 // (agents never get it in the MVP). Licences are accepted only through `install.licence.accept`
@@ -295,6 +315,43 @@ pub struct StartSessionParams {
     /// Package to launch (already installed, or the APK's package).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub package: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RunParams {
+    /// Absolute path of the project folder.
+    pub path: String,
+    /// Device size class (default `standard`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub profile: Option<String>,
+    #[serde(default)]
+    pub cold: bool,
+    /// ADP-006: reload on saved files (default on).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub watch: Option<bool>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ReloadParams {
+    /// `hot` (default), `restart` or `full`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub kind: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RunStatusParams {
+    /// Only events after this cursor (from the previous call).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub since: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub limit: Option<usize>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AdapterCheckParams {
+    pub path: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub profile: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

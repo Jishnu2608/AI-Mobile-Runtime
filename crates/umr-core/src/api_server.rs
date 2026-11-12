@@ -18,11 +18,12 @@ use tokio::sync::{watch, Notify};
 
 use umr_api::frame::{read_frame, write_frame, ReadFrame};
 use umr_api::methods::{
-    self, AcceptLicenceParams, AdminRunParams, AppParams, BootDeviceParams, ClientInfo, CoreInfo,
-    CreateClientParams, CreateClientResult, CreateDeviceParams, DeviceRefParams, InputParams,
-    InstallAppParams, JobParams, LoginParams, LoginResult, Pong, PostureParams, ProfilesParams,
-    ProjectPathParams, ProjectPlanParams, RemoveComponentParams, RevokeClientParams,
-    RevokeClientResult, ShutdownAccepted, StartSessionParams, TargetParams, TrustParams,
+    self, AcceptLicenceParams, AdapterCheckParams, AdminRunParams, AppParams, BootDeviceParams,
+    ClientInfo, CoreInfo, CreateClientParams, CreateClientResult, CreateDeviceParams,
+    DeviceRefParams, InputParams, InstallAppParams, JobParams, LoginParams, LoginResult, Pong,
+    PostureParams, ProfilesParams, ProjectPathParams, ProjectPlanParams, ReloadParams,
+    RemoveComponentParams, RevokeClientParams, RevokeClientResult, RunParams, RunStatusParams,
+    ShutdownAccepted, StartSessionParams, TargetParams, TrustParams,
 };
 use umr_api::rpc::{codes, parse_request, Id, Request, Response, RpcError};
 use umr_api::{API_VERSION, MAX_MESSAGE_BYTES};
@@ -62,6 +63,14 @@ pub struct ApiState {
     pub session: Mutex<Option<umr_session::Session>>,
     /// A `session.start` is in progress.
     pub session_busy: std::sync::atomic::AtomicBool,
+    /// Phase 3: the app an adapter runs now, what it is, and its events.
+    pub run_app: Mutex<Option<Box<dyn umr_adapter::RunningApp>>>,
+    pub run_info: Mutex<Option<crate::run_api::RunInfo>>,
+    pub run_events: Arc<Mutex<crate::run_api::EventLog>>,
+    /// ADP-006: file watcher of the current run.
+    pub run_watch: Mutex<Option<crate::watch::Watch>>,
+    /// The `Arc` this state lives in (set at start), for background threads such as the watcher.
+    pub self_ref: std::sync::OnceLock<std::sync::Weak<ApiState>>,
 }
 
 impl ApiState {
@@ -102,6 +111,11 @@ impl ApiState {
             ports: umr_supervisor::PortAllocator::new(),
             session: Mutex::new(None),
             session_busy: std::sync::atomic::AtomicBool::new(false),
+            run_app: Mutex::new(None),
+            run_info: Mutex::new(None),
+            run_events: Arc::default(),
+            run_watch: Mutex::new(None),
+            self_ref: std::sync::OnceLock::new(),
         }
     }
 }
@@ -127,7 +141,11 @@ pub fn required_scope(method: &str) -> Option<Scope> {
         | methods::APP_STOP
         | methods::APP_UNINSTALL
         | methods::SESSION_START
-        | methods::SESSION_STOP => Some(Scope::Control),
+        | methods::SESSION_STOP
+        | methods::PROJECT_RUN
+        | methods::PROJECT_RELOAD
+        | methods::PROJECT_STOP
+        | methods::ADAPTER_CHECK => Some(Scope::Control),
         methods::DEVICE_INPUT | methods::DEVICE_POSTURE => Some(Scope::Interact),
         methods::PING | methods::AUTH_LOGIN => None,
         methods::SHUTDOWN
@@ -208,6 +226,11 @@ fn is_slow(method: &str) -> bool {
             | methods::SESSION_START
             | methods::SESSION_STATUS
             | methods::SESSION_STOP
+            | methods::PROJECT_RUN
+            | methods::PROJECT_RELOAD
+            | methods::PROJECT_STOP
+            | methods::PROJECT_STATUS
+            | methods::ADAPTER_CHECK
     )
 }
 
@@ -281,6 +304,19 @@ pub fn dispatch(state: &ApiState, conn: &mut Connection, req: &Request) -> Respo
             crate::session_api::start(state, id, &p)
         }),
         methods::SESSION_STATUS => crate::session_api::status(state, id),
+        methods::PROJECT_RUN => with_params(id, &req.params, |id, p: RunParams| {
+            crate::run_api::run(state, id, &p)
+        }),
+        methods::PROJECT_RELOAD => with_target(id, &req.params, |id, p: ReloadParams| {
+            crate::run_api::reload(state, id, &p)
+        }),
+        methods::PROJECT_STOP => crate::run_api::stop(state, id),
+        methods::PROJECT_STATUS => with_target(id, &req.params, |id, p: RunStatusParams| {
+            crate::run_api::status(state, id, &p)
+        }),
+        methods::ADAPTER_CHECK => with_params(id, &req.params, |id, p: AdapterCheckParams| {
+            crate::run_api::check(state, id, &p)
+        }),
         methods::SESSION_STOP => crate::session_api::stop(state, id),
         methods::COMPONENTS_LIST => crate::manage_api::list(state, id),
         methods::COMPONENTS_REMOVE => {
@@ -443,9 +479,17 @@ pub(crate) fn build_plan(
             .db
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
+        // a scan older than the newest managed install misses it (also after a Core restart,
+        // which forgets `scan_stale`)
+        let newest_install = db
+            .components(None)
+            .ok()
+            .and_then(|c| c.iter().map(|x| x.installed_unix).max())
+            .unwrap_or(0);
         db.latest_env_scan()
             .ok()
             .flatten()
+            .filter(|(at, _)| *at >= newest_install)
             .and_then(|(_, json)| serde_json::from_str::<umr_env::EnvReport>(&json).ok())
     };
     let env = match stored {
@@ -453,7 +497,20 @@ pub(crate) fn build_plan(
         None => scan_and_store(state)
             .map_err(|e| RpcError::new(codes::INTERNAL_ERROR, e.to_string()))?,
     };
-    let facts = umr_resolver::project::read(root);
+    let mut facts = umr_resolver::project::read(root);
+    // `flutter.*` values come from the installed Flutter SDK (NDK, SDK levels)
+    if let Some(f) = env.tools.iter().find(|t| t.name == "flutter") {
+        let bin = std::path::Path::new(&f.path);
+        // the tool path is `<root>\bin\flutter(.bat)` or the root itself
+        let froot = if bin.is_file() {
+            bin.parent().and_then(std::path::Path::parent)
+        } else {
+            Some(bin)
+        };
+        if let Some(froot) = froot {
+            umr_resolver::project::apply_flutter_defaults(&mut facts, root, froot);
+        }
+    }
     let resolution = umr_resolver::resolve::resolve(&facts, &pack);
     let managed_sdk = state.toolchains.join("android-sdk").display().to_string();
     let plan = umr_resolver::plan::build(&p.path, &resolution, &env, &pack, &managed_sdk);

@@ -522,6 +522,37 @@ async fn sessions_and_device_interaction_reject_bad_requests() {
         2,
         "start + env_missing"
     );
+
+    // projects: untrusted folders never build; a trusted folder without a framework is refused
+    let proj = f.root.join("not-a-project");
+    std::fs::create_dir_all(&proj).unwrap();
+    let path = proj.display().to_string();
+    let untrusted = c
+        .call_raw(methods::PROJECT_RUN, serde_json::json!({ "path": path }))
+        .await;
+    assert!(matches!(untrusted, Err(ClientError::Rpc(e)) if e.code == codes::UNTRUSTED));
+    c.call_raw(methods::PROJECT_TRUST, serde_json::json!({ "path": path }))
+        .await
+        .unwrap();
+    let none = c
+        .call_raw(methods::PROJECT_RUN, serde_json::json!({ "path": path }))
+        .await;
+    assert!(
+        matches!(&none, Err(ClientError::Rpc(e)) if e.code == codes::INVALID_PARAMS && e.message.contains("no adapter")),
+        "{none:?}"
+    );
+    let rs = c
+        .call_raw(methods::PROJECT_STATUS, Value::Null)
+        .await
+        .unwrap();
+    assert!(rs["run"].is_null() && rs["cursor"] == 0);
+    let rl = c.call_raw(methods::PROJECT_RELOAD, Value::Null).await;
+    assert!(matches!(rl, Err(ClientError::Rpc(e)) if e.code == codes::UNAVAILABLE));
+    let sp = c
+        .call_raw(methods::PROJECT_STOP, Value::Null)
+        .await
+        .unwrap();
+    assert!(sp["stopped"].is_null());
 }
 
 #[tokio::test]
