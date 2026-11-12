@@ -21,6 +21,7 @@ pub mod conflicts;
 pub mod context;
 pub mod host;
 pub mod jdk;
+pub mod leaks;
 pub mod model;
 pub mod pathsearch;
 pub mod readiness;

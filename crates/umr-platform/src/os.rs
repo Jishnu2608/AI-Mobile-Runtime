@@ -51,9 +51,42 @@ pub fn long_paths_enabled() -> io::Result<bool> {
         == 1)
 }
 
+/// Full name of the packaged (MSIX) app this process belongs to, e.g. `Claude_1.0.0_x64__pzs8…`.
+///
+/// Processes started by a packaged app such as Claude Desktop inherit its package identity, and
+/// Windows then redirects their writes to `%LOCALAPPDATA%` / `%APPDATA%` into a private copy
+/// (CORE-007). `None` for normal desktop processes.
+#[must_use]
+pub fn package_full_name() -> Option<String> {
+    use windows_sys::Win32::Storage::Packaging::Appx::GetCurrentPackageFullName;
+    const ERROR_INSUFFICIENT_BUFFER: u32 = 122;
+    let mut len = 0u32;
+    // SAFETY: a null buffer with length 0 asks for the required length.
+    let rc = unsafe { GetCurrentPackageFullName(&raw mut len, std::ptr::null_mut()) };
+    if rc != ERROR_INSUFFICIENT_BUFFER || len == 0 {
+        return None; // APPMODEL_ERROR_NO_PACKAGE (15700): not packaged
+    }
+    let mut buf = vec![0u16; len as usize];
+    // SAFETY: `buf` has `len` u16 slots as reported by the first call.
+    let rc = unsafe { GetCurrentPackageFullName(&raw mut len, buf.as_mut_ptr()) };
+    if rc != 0 {
+        return None;
+    }
+    let end = buf.iter().position(|c| *c == 0).unwrap_or(buf.len());
+    Some(String::from_utf16_lossy(&buf[..end]))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn package_identity_is_queryable() {
+        // Either value is valid (tests may run inside a packaged app's terminal); it must not panic.
+        if let Some(name) = package_full_name() {
+            assert_ne!(name, "");
+        }
+    }
 
     #[test]
     fn version_classification() {

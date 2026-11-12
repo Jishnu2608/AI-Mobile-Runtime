@@ -24,6 +24,8 @@ pub mod codes {
     pub const DISK_SPACE: i64 = -32012;
     /// Release metadata or network failure while preparing.
     pub const UNAVAILABLE: i64 = -32013;
+    /// The project folder is not trusted yet (workspace trust, PROJ-001).
+    pub const UNTRUSTED: i64 = -32014;
 }
 
 /// A request id: number or string (JSON-RPC allows both).

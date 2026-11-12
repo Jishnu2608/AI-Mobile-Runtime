@@ -1,0 +1,18 @@
+[package]
+name = "umr-elevate"
+description = "Elevated helper (INS-005): a fixed set of administrator actions, each started by the user through a UAC prompt."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "umr-elevate"
+path = "src/main.rs"
+
+[dependencies]
+umr-platform = { path = "../../crates/umr-platform" }
+
+[lints]
+workspace = true

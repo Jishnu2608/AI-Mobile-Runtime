@@ -23,6 +23,8 @@
 mod wide;
 
 #[cfg(windows)]
+pub mod elevate;
+#[cfg(windows)]
 pub mod folders;
 #[cfg(windows)]
 pub mod identity;

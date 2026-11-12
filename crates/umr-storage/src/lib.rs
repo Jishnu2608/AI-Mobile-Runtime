@@ -14,5 +14,6 @@ pub mod db;
 pub mod env_scans;
 pub mod install;
 mod migrations;
+pub mod trust;
 
 pub use db::{Db, StorageError};

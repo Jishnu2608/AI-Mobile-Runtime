@@ -1,0 +1,99 @@
+name: Clean machine (TEST-001)
+
+# Manual only. Full first-run install on a fresh GitHub-hosted Windows VM:
+# real downloads (~6 GB), licence gate, a hard Core kill mid-download, resume, re-plan,
+# and a before/after diff of the global environment and the known leak locations.
+on:
+  workflow_dispatch:
+    inputs:
+      interrupt:
+        description: "Kill the Runtime Core once during a download"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: clean-machine
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  clean-machine:
+    name: First-run install on a fresh Windows VM
+    runs-on: windows-latest
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v4
+      - name: Show toolchain and machine
+        shell: pwsh
+        run: |
+          rustup show active-toolchain
+          Get-CimInstance Win32_OperatingSystem | Select-Object Caption, Version, BuildNumber | Format-List
+          Get-PSDrive -PSProvider FileSystem | Select-Object Name, @{n='FreeGB';e={[math]::Round($_.Free/1GB,1)}} | Format-Table
+      - uses: Swatinem/rust-cache@v2
+      - name: Build umr, umr-core, umr-elevate and the test driver
+        run: |
+          cargo build --release --locked -p umr-core -p umr-cli -p umr-elevate
+          cargo build --release --locked -p umr-cli --example clean_machine
+
+      - name: Choose toolchains folder (drive with most free space)
+        shell: pwsh
+        run: |
+          $drive = Get-PSDrive -PSProvider FileSystem | Where-Object { $_.Free -gt 0 } | Sort-Object Free -Descending | Select-Object -First 1
+          $tc = "$($drive.Name):\umr-toolchains"
+          $home2 = "$env:USERPROFILE\.umr"
+          New-Item -ItemType Directory -Force $home2 | Out-Null
+          @"
+          [storage]
+          toolchains_dir = '$tc'
+          "@ | Set-Content -Encoding utf8 "$home2\config.toml"
+          "UMR_TOOLCHAINS=$tc" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+          Write-Host "home $home2 · toolchains $tc ($([math]::Round($drive.Free/1GB,1)) GB free)"
+
+      - name: Snapshot before
+        shell: pwsh
+        run: ./tests/env-matrix/collect.ps1 -Out before.json
+
+      - name: Install from scratch (licences, kill, resume, re-plan)
+        shell: pwsh
+        run: |
+          # Hide the runner's pre-installed SDK/JDK variables from the product, like a fresh PC.
+          foreach ($v in 'JAVA_HOME', 'ANDROID_HOME', 'ANDROID_SDK_ROOT', 'ANDROID_NDK', 'ANDROID_NDK_HOME', 'ANDROID_NDK_ROOT', 'ANDROID_NDK_LATEST_HOME') {
+            Remove-Item "Env:$v" -ErrorAction SilentlyContinue
+          }
+          Get-ChildItem Env: | Where-Object { $_.Name -like 'JAVA_HOME_*' } | ForEach-Object { Remove-Item "Env:$($_.Name)" }
+          $env:UMR_CORE_BIN = "$env:GITHUB_WORKSPACE\target\release\umr-core.exe"
+          $project = "$env:GITHUB_WORKSPACE\tests\env-matrix\samples\android-native"
+          $args = @($project, '--out', 'summary.json')
+          if ('${{ inputs.interrupt }}' -eq 'false') { $args += '--no-interrupt' }
+          ./target/release/examples/clean_machine.exe @args
+          $code = $LASTEXITCODE
+          ./target/release/umr.exe components
+          ./target/release/umr.exe stop
+          exit $code
+
+      - name: Snapshot after and compare
+        if: always()
+        shell: pwsh
+        run: |
+          ./tests/env-matrix/collect.ps1 -Out after.json
+          ./tests/env-matrix/compare.ps1 before.json after.json
+
+      - name: Collect logs
+        if: always()
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force artifacts | Out-Null
+          Copy-Item before.json, after.json, summary.json artifacts/ -ErrorAction SilentlyContinue
+          Copy-Item "$env:USERPROFILE\.umr\logs" artifacts/home-logs -Recurse -ErrorAction SilentlyContinue
+          if ($env:UMR_TOOLCHAINS) { Copy-Item "$env:UMR_TOOLCHAINS\logs" artifacts/install-logs -Recurse -ErrorAction SilentlyContinue }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: clean-machine-results
+          path: artifacts/
+          retention-days: 14

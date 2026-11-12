@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/umr-platform", "crates/umr-api", "crates/umr-storage", "crates/umr-env", "crates/umr-resolver", "crates/umr-installer", "crates/umr-core", "apps/cli"]
+members = ["crates/umr-platform", "crates/umr-api", "crates/umr-storage", "crates/umr-env", "crates/umr-resolver", "crates/umr-installer", "crates/umr-core", "apps/cli", "apps/desktop", "helpers/elevated-helper"]
 # Phase 0 experiments are a separate workspace and are not part of the product.
 exclude = ["poc"]
 

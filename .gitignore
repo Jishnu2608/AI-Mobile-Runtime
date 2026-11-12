@@ -30,3 +30,10 @@ skills-lock.json
 *.key
 *.pem
 *.pfx
+
+# Desktop app build output and dependencies
+/apps/desktop/ui/node_modules/
+/apps/desktop/ui/dist/
+/apps/desktop/gen/
+# Local preview server config (machine-specific)
+/.claude/launch.json

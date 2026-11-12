@@ -7,6 +7,7 @@
 //! | [`txn`] | INS-003 transactional install: download → verify → extract to staging → check → commit, crash-safe journal, rollback, recovery |
 //! | [`licence`] | INS-004 licence texts and the acceptance gate (no install without recorded acceptance of the exact text) |
 //! | [`catalog`] | Official metadata: Adoptium (JDK), nodejs.org, Flutter releases, Google SDK repository |
+//! | [`manage`] | INS-006 verify / repair / remove / disk usage / clean; INS-007 Android CLI runtime fingerprint and metrics guard |
 //! | [`engine`] | Turns an install plan into steps and runs them as a job with progress and cancel |
 //!
 //! Rules (master build §5, §11): only official HTTPS hosts; nothing is executed or extracted
@@ -20,9 +21,12 @@ pub mod error;
 pub mod http;
 pub mod layout;
 pub mod licence;
+pub mod manage;
 pub mod txn;
 pub mod verify;
 
+#[cfg(test)]
+mod interruptions;
 #[cfg(test)]
 pub(crate) mod testkit;
 

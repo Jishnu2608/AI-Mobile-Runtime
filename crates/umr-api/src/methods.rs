@@ -22,6 +22,13 @@ pub const ENV_SCAN: &str = "env.scan";
 /// Scope: observe. Reads the project (never changes it) and uses the latest stored environment
 /// scan, scanning first if there is none or `rescan` is set. Installs nothing.
 pub const PROJECT_PLAN: &str = "project.plan";
+/// `project.detect` [`ProjectPathParams`] → `{ "detection": umr_resolver::detect::Detection,
+/// "trusted": bool }`. Reads files only. Scope: observe.
+pub const PROJECT_DETECT: &str = "project.detect";
+/// `project.trust` [`TrustParams`] → [`TrustResult`]. Workspace trust: the product only runs a
+/// project's build scripts after the user trusted the folder. Scope: admin.
+pub const PROJECT_TRUST: &str = "project.trust";
+
 // ---- install (INS-001…004) -----------------------------------------------------------------
 // Installing changes the machine, so all install calls except status need the admin scope
 // (agents never get it in the MVP). Licences are accepted only through `install.licence.accept`
@@ -39,6 +46,23 @@ pub const INSTALL_START: &str = "install.start";
 pub const INSTALL_STATUS: &str = "install.status";
 /// `install.cancel` [`JobParams`] → [`CancelResult`]. Downloads are kept for resume. Scope: admin.
 pub const INSTALL_CANCEL: &str = "install.cancel";
+
+// ---- components and administrator actions (INS-005/006) ------------------------------------
+
+/// `components.list` → `{ "components": [umr_installer::manage::ComponentHealth], "disk": DiskUsage }`.
+/// Verifies every recorded component (starts JDK/Node once). Scope: observe.
+pub const COMPONENTS_LIST: &str = "components.list";
+/// `components.remove` [`RemoveComponentParams`] → `umr_installer::manage::Removed`. Managed
+/// components only. Scope: admin.
+pub const COMPONENTS_REMOVE: &str = "components.remove";
+/// `components.repair` → `{ "removed": [Removed] }`: removes broken managed components so the
+/// next `install.start` restores them. Scope: admin.
+pub const COMPONENTS_REPAIR: &str = "components.repair";
+/// `components.clean` → `{ "freed_bytes": u64 }`: download cache and old logs. Scope: admin.
+pub const COMPONENTS_CLEAN: &str = "components.clean";
+/// `admin.run` [`AdminRunParams`] → [`AdminRunResult`]. Starts the elevated helper for one
+/// fixed action; Windows shows its UAC prompt. Scope: admin.
+pub const ADMIN_RUN: &str = "admin.run";
 
 /// `core.shutdown` → [`ShutdownAccepted`]. Scope: admin.
 pub const SHUTDOWN: &str = "core.shutdown";
@@ -73,7 +97,11 @@ pub struct CoreInfo {
     pub api_version: u32,
     pub pid: u32,
     pub uptime_s: u64,
+    /// Home folder (config, database, logs).
     pub data_root: String,
+    /// Toolchains folder (SDKs, images, caches); same as `data_root` unless configured.
+    #[serde(default)]
+    pub toolchains_root: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -88,6 +116,30 @@ pub struct ProjectPlanParams {
     /// Run a fresh environment scan instead of using the stored one.
     #[serde(default)]
     pub rescan: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ProjectPathParams {
+    /// Absolute path of the project folder.
+    pub path: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TrustParams {
+    pub path: String,
+    /// `false` removes trust.
+    #[serde(default = "yes")]
+    pub trusted: bool,
+}
+
+fn yes() -> bool {
+    true
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TrustResult {
+    pub path: String,
+    pub trusted: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -119,6 +171,28 @@ pub struct JobParams {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CancelResult {
     pub cancelling: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RemoveComponentParams {
+    pub id: String,
+    /// Remove even if other components depend on it.
+    #[serde(default)]
+    pub force: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AdminRunParams {
+    /// `enable-whpx` | `enable-long-paths`
+    pub action: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AdminRunResult {
+    pub action: String,
+    /// `already-on` | `done` | `restart-required` | `declined` | `failed` | `needs-firmware`
+    pub status: String,
+    pub message: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

@@ -14,8 +14,11 @@ pub mod daemon;
 pub mod doctor;
 pub mod install_api;
 pub mod instance;
+pub mod launcher;
 pub mod logging;
+pub mod manage_api;
 pub mod paths;
+pub mod project_api;
 
 #[cfg(test)]
 pub(crate) mod test_support;

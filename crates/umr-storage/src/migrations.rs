@@ -87,6 +87,19 @@ pub const MIGRATIONS: &[Migration] = &[
         ) STRICT;
     ",
     },
+    Migration {
+        version: 3,
+        description: "workspace trust: trusted_projects",
+        sql: r"
+        -- PROJ-001: folders the user trusts to run their build scripts (Gradle, npm, Flutter).
+        CREATE TABLE trusted_projects (
+            path_key     TEXT PRIMARY KEY,           -- normalised (lower-case, backslashes, no trailing slash)
+            path         TEXT NOT NULL,              -- as shown to the user
+            trusted_unix INTEGER NOT NULL,
+            client_id    TEXT
+        ) STRICT;
+    ",
+    },
 ];
 
 /// Highest schema version this build understands.

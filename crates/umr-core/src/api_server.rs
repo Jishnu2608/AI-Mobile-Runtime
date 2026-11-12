@@ -18,9 +18,10 @@ use tokio::sync::{watch, Notify};
 
 use umr_api::frame::{read_frame, write_frame, ReadFrame};
 use umr_api::methods::{
-    self, AcceptLicenceParams, ClientInfo, CoreInfo, CreateClientParams, CreateClientResult,
-    JobParams, LoginParams, LoginResult, Pong, ProjectPlanParams, RevokeClientParams,
-    RevokeClientResult, ShutdownAccepted,
+    self, AcceptLicenceParams, AdminRunParams, ClientInfo, CoreInfo, CreateClientParams,
+    CreateClientResult, JobParams, LoginParams, LoginResult, Pong, ProjectPathParams,
+    ProjectPlanParams, RemoveComponentParams, RevokeClientParams, RevokeClientResult,
+    ShutdownAccepted, TrustParams,
 };
 use umr_api::rpc::{codes, parse_request, Id, Request, Response, RpcError};
 use umr_api::{API_VERSION, MAX_MESSAGE_BYTES};
@@ -31,7 +32,10 @@ use crate::auth::{AuthStore, Principal, Scope};
 #[derive(Debug)]
 pub struct ApiState {
     pub started: Instant,
+    /// Home folder: config, database, logs, tokens.
     pub data_root: PathBuf,
+    /// Toolchains folder (`[storage] toolchains_dir`); the home unless configured.
+    pub toolchains: PathBuf,
     pub auth: Mutex<AuthStore>,
     pub db: Arc<Mutex<umr_storage::Db>>,
     /// Fired by `core.shutdown`; the daemon waits on it.
@@ -47,8 +51,26 @@ pub struct ApiState {
 impl ApiState {
     #[must_use]
     pub fn new(data_root: PathBuf, auth: AuthStore, db: umr_storage::Db) -> Self {
+        Self::with_toolchains(data_root.clone(), data_root, auth, db)
+    }
+
+    /// Like [`Self::new`] with a separate toolchains folder.
+    #[must_use]
+    pub fn with_toolchains(
+        data_root: PathBuf,
+        toolchains: PathBuf,
+        auth: AuthStore,
+        db: umr_storage::Db,
+    ) -> Self {
+        let mut s = Self::bare(data_root, auth, db);
+        s.toolchains = toolchains;
+        s
+    }
+
+    fn bare(data_root: PathBuf, auth: AuthStore, db: umr_storage::Db) -> Self {
         Self {
             started: Instant::now(),
+            toolchains: data_root.clone(),
             data_root,
             auth: Mutex::new(auth),
             db: Arc::new(Mutex::new(db)),
@@ -75,6 +97,11 @@ pub fn required_scope(method: &str) -> Option<Scope> {
     match method {
         methods::PING | methods::AUTH_LOGIN => None,
         methods::SHUTDOWN
+        | methods::PROJECT_TRUST
+        | methods::COMPONENTS_REMOVE
+        | methods::COMPONENTS_REPAIR
+        | methods::COMPONENTS_CLEAN
+        | methods::ADMIN_RUN
         | methods::INSTALL_PREPARE
         | methods::INSTALL_ACCEPT_LICENCE
         | methods::INSTALL_START
@@ -134,6 +161,7 @@ fn is_slow(method: &str) -> bool {
 
 /// Handles one request on a connection (blocking; env.scan takes seconds — the server runs it
 /// on a blocking thread).
+#[allow(clippy::too_many_lines)] // one flat match over all API methods
 pub fn dispatch(state: &ApiState, conn: &mut Connection, req: &Request) -> Response {
     if let Some(denied) = authorize(conn, req) {
         return denied;
@@ -144,6 +172,29 @@ pub fn dispatch(state: &ApiState, conn: &mut Connection, req: &Request) -> Respo
         methods::PROJECT_PLAN => with_params(id, &req.params, |id, p: ProjectPlanParams| {
             project_plan(state, id, &p)
         }),
+        methods::PROJECT_DETECT => with_params(id, &req.params, |id, p: ProjectPathParams| {
+            crate::project_api::detect(state, id, &p)
+        }),
+        methods::PROJECT_TRUST => {
+            let client = conn.principal.as_ref().map(|p| p.client_id.clone());
+            with_params(id, &req.params, |id, p: TrustParams| {
+                crate::project_api::trust(state, id, client.as_deref(), &p)
+            })
+        }
+        methods::COMPONENTS_LIST => crate::manage_api::list(state, id),
+        methods::COMPONENTS_REMOVE => {
+            with_params(id, &req.params, |id, p: RemoveComponentParams| {
+                crate::manage_api::remove(state, id, &p)
+            })
+        }
+        methods::COMPONENTS_REPAIR => crate::manage_api::repair(state, id),
+        methods::COMPONENTS_CLEAN => crate::manage_api::clean(state, id),
+        methods::ADMIN_RUN => {
+            let client = conn.principal.as_ref().map(|p| p.client_id.clone());
+            with_params(id, &req.params, |id, p: AdminRunParams| {
+                crate::manage_api::admin_run(state, id, client.as_deref(), &p)
+            })
+        }
         methods::INSTALL_PREPARE => with_params(id, &req.params, |id, p: ProjectPlanParams| {
             crate::install_api::prepare(state, id, &p)
         }),
@@ -179,6 +230,7 @@ pub fn dispatch(state: &ApiState, conn: &mut Connection, req: &Request) -> Respo
                 pid: std::process::id(),
                 uptime_s: state.started.elapsed().as_secs(),
                 data_root: state.data_root.display().to_string(),
+                toolchains_root: state.toolchains.display().to_string(),
             },
         ),
         methods::DOCTOR => {
@@ -186,7 +238,10 @@ pub fn dispatch(state: &ApiState, conn: &mut Connection, req: &Request) -> Respo
                 .db
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
-            ok(id, &crate::doctor::run_checks(&state.data_root, Some(&db)))
+            ok(
+                id,
+                &crate::doctor::run_checks(&state.data_root, &state.toolchains, Some(&db)),
+            )
         }
         methods::SHUTDOWN => {
             tracing::info!(client = ?conn.principal.as_ref().map(|p| &p.client_id), "shutdown requested through the API");
@@ -233,7 +288,7 @@ fn env_scan(state: &ApiState, id: Id) -> Response {
 }
 
 pub(crate) fn scan_and_store(state: &ApiState) -> Result<umr_env::EnvReport, serde_json::Error> {
-    let report = umr_env::scan_system(state.data_root.clone());
+    let report = umr_env::scan_system(state.toolchains.clone());
     tracing::info!(
         duration_ms = report.duration_ms,
         jdks = report.jdks.len(),
@@ -299,7 +354,7 @@ pub(crate) fn build_plan(
     };
     let facts = umr_resolver::project::read(root);
     let resolution = umr_resolver::resolve::resolve(&facts, &pack);
-    let managed_sdk = state.data_root.join("android-sdk").display().to_string();
+    let managed_sdk = state.toolchains.join("android-sdk").display().to_string();
     let plan = umr_resolver::plan::build(&p.path, &resolution, &env, &pack, &managed_sdk);
     tracing::info!(
         framework = ?facts.framework,
@@ -527,6 +582,10 @@ mod tests {
     #[test]
     fn install_methods_need_admin_except_status() {
         for m in [
+            methods::COMPONENTS_REMOVE,
+            methods::COMPONENTS_REPAIR,
+            methods::COMPONENTS_CLEAN,
+            methods::ADMIN_RUN,
             methods::INSTALL_PREPARE,
             methods::INSTALL_ACCEPT_LICENCE,
             methods::INSTALL_START,

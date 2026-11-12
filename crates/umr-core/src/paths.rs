@@ -1,20 +1,30 @@
 //! Locations of the Runtime Core's own files.
 //!
-//! Everything the product writes lives under one managed root:
+//! The Core's own files live in one per-user home folder:
 //!
 //! ```text
-//! <root>/            %LOCALAPPDATA%\UMR on Windows (override: UMR_HOME)
+//! <home>/            %USERPROFILE%\.umr on Windows (override: UMR_HOME)
+//!   config.toml      settings, incl. [storage] toolchains_dir
+//!   umr.db           database
 //!   logs/            rotating daily log files of the Core
-//!   run/             lock and pid files of the running Core
+//!   run/             lock, pid and admin token of the running Core
 //! ```
 //!
-//! SDKs, caches and devices will get their own subfolders in later tasks.
+//! Toolchains (JDK, Android SDK, images, AVDs, Node, Flutter, download cache) go to the
+//! toolchains folder: `toolchains_dir` from `config.toml`, else the home folder itself.
+//!
+//! The home is deliberately **not** in `AppData` (CORE-007): processes started by a packaged
+//! (MSIX) app such as Claude Desktop get their `AppData` writes redirected into a private copy,
+//! so an agent inside Claude Desktop and a normal terminal would see different data.
 
 use std::io;
 use std::path::{Path, PathBuf};
 
-/// Environment variable that overrides the managed root (used by tests and power users).
+/// Environment variable that overrides the home folder (used by tests and power users).
 pub const HOME_ENV: &str = "UMR_HOME";
+
+/// Name of the default home folder inside the user's profile.
+pub const DEFAULT_DIR: &str = ".umr";
 
 /// Resolved directories of the Runtime Core.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -41,15 +51,15 @@ impl CorePaths {
         }
     }
 
-    /// Resolves the root: `UMR_HOME` if set, else the user's local application-data known folder
-    /// (asked from the shell, not the possibly-stale environment) + `UMR`, else `%LOCALAPPDATA%\UMR`.
+    /// Resolves the home: `UMR_HOME` if set, else the user's profile known folder (asked from
+    /// the shell, not the possibly-stale environment) + `.umr`, else `%USERPROFILE%\.umr`.
     pub fn resolve() -> io::Result<Self> {
         if let Some(home) = std::env::var_os(HOME_ENV).filter(|v| !v.is_empty()) {
             return Ok(Self::with_root(home));
         }
         #[cfg(windows)]
-        if let Ok(local) = umr_platform::folders::local_app_data() {
-            return Ok(Self::default_root(local.join("UMR")));
+        if let Ok(profile) = umr_platform::folders::profile() {
+            return Ok(Self::default_root(profile.join(DEFAULT_DIR)));
         }
         Self::resolve_from(|key| std::env::var_os(key))
     }
@@ -59,12 +69,12 @@ impl CorePaths {
         if let Some(home) = env(HOME_ENV).filter(|v| !v.is_empty()) {
             return Ok(Self::with_root(home));
         }
-        if let Some(local) = env("LOCALAPPDATA").filter(|v| !v.is_empty()) {
-            return Ok(Self::default_root(PathBuf::from(local).join("UMR")));
+        if let Some(profile) = env("USERPROFILE").filter(|v| !v.is_empty()) {
+            return Ok(Self::default_root(PathBuf::from(profile).join(DEFAULT_DIR)));
         }
         Err(io::Error::new(
             io::ErrorKind::NotFound,
-            format!("cannot determine data folder: set {HOME_ENV} or LOCALAPPDATA"),
+            format!("cannot determine data folder: set {HOME_ENV} or USERPROFILE"),
         ))
     }
 
@@ -148,24 +158,40 @@ mod tests {
     }
 
     #[test]
-    fn umr_home_overrides_localappdata() {
-        let p =
-            CorePaths::resolve_from(env_of(&[("UMR_HOME", r"D:\x"), ("LOCALAPPDATA", r"C:\L")]))
-                .unwrap();
+    fn umr_home_overrides_profile() {
+        let p = CorePaths::resolve_from(env_of(&[("UMR_HOME", r"D:\x"), ("USERPROFILE", r"C:\U")]))
+            .unwrap();
         assert_eq!(p.root(), Path::new(r"D:\x"));
     }
 
     #[test]
-    fn falls_back_to_localappdata_umr() {
-        let p = CorePaths::resolve_from(env_of(&[("LOCALAPPDATA", r"C:\L")])).unwrap();
-        assert_eq!(p.root(), Path::new(r"C:\L\UMR"));
+    fn falls_back_to_profile_dot_umr() {
+        let p = CorePaths::resolve_from(env_of(&[
+            ("USERPROFILE", r"C:\U"),
+            ("LOCALAPPDATA", r"C:\U\AppData\Local"),
+        ]))
+        .unwrap();
+        assert_eq!(
+            p.root(),
+            Path::new(r"C:\U\.umr"),
+            "never AppData (CORE-007)"
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn default_home_is_outside_appdata() {
+        let profile = umr_platform::folders::profile().unwrap();
+        let home = profile.join(DEFAULT_DIR);
+        assert!(!home.starts_with(umr_platform::folders::local_app_data().unwrap()));
+        assert!(!home.starts_with(umr_platform::folders::roaming_app_data().unwrap()));
     }
 
     #[test]
     fn empty_values_are_ignored() {
-        let p = CorePaths::resolve_from(env_of(&[("UMR_HOME", ""), ("LOCALAPPDATA", r"C:\L")]))
-            .unwrap();
-        assert_eq!(p.root(), Path::new(r"C:\L\UMR"));
+        let p =
+            CorePaths::resolve_from(env_of(&[("UMR_HOME", ""), ("USERPROFILE", r"C:\U")])).unwrap();
+        assert_eq!(p.root(), Path::new(r"C:\U\.umr"));
     }
 
     #[test]

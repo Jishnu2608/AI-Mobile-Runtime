@@ -357,6 +357,84 @@ async fn install_api_guards_without_network() {
 }
 
 #[tokio::test]
+async fn components_and_admin_api_guards() {
+    let f = Fixture::start("components");
+    let mut c = f.client().await;
+    let rpc_code = |r: Result<Value, ClientError>| match r {
+        Err(ClientError::Rpc(e)) => e.code,
+        other => panic!("expected an RPC error, got {other:?}"),
+    };
+    let v = c
+        .call_raw(methods::COMPONENTS_LIST, Value::Null)
+        .await
+        .unwrap();
+    assert_eq!(v["components"], serde_json::json!([]));
+    assert!(v["disk"]["total_bytes"].is_u64());
+    let r = c
+        .call_raw(
+            methods::COMPONENTS_REMOVE,
+            serde_json::json!({ "id": "jdk/nope" }),
+        )
+        .await;
+    assert_eq!(rpc_code(r), codes::INVALID_PARAMS);
+    let v = c
+        .call_raw(methods::COMPONENTS_REPAIR, Value::Null)
+        .await
+        .unwrap();
+    assert_eq!(v["removed"], serde_json::json!([]));
+    let v = c
+        .call_raw(methods::COMPONENTS_CLEAN, Value::Null)
+        .await
+        .unwrap();
+    assert_eq!(v["freed_bytes"], 0);
+    // only the fixed action names are accepted; nothing is elevated for anything else
+    for bad in ["cmd", "enable-whpx; calc", ""] {
+        let r = c
+            .call_raw(methods::ADMIN_RUN, serde_json::json!({ "action": bad }))
+            .await;
+        assert_eq!(rpc_code(r), codes::INVALID_PARAMS, "{bad}");
+    }
+    let db = umr_storage::Db::open_in(&f.root).unwrap();
+    assert_eq!(db.audit_count("admin.run").unwrap(), 0);
+}
+
+#[tokio::test]
+async fn separate_toolchains_folder_is_created_private_and_reported() {
+    let tc = std::env::temp_dir().join(format!("umr-separate-tc-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&tc);
+    let tc_for_seed = tc.clone();
+    let f = Fixture::start_with("toolchains", move |root| {
+        std::fs::write(
+            root.join("config.toml"),
+            format!("[storage]\ntoolchains_dir = '{}'\n", tc_for_seed.display()),
+        )
+        .unwrap();
+    });
+    let mut c = f.client().await;
+    let info: Value = c.call_raw(methods::INFO, Value::Null).await.unwrap();
+    assert_eq!(info["toolchains_root"], tc.display().to_string());
+    assert_ne!(info["data_root"], info["toolchains_root"]);
+    assert!(tc.is_dir(), "created at start");
+    let sddl = umr_platform::secure_file::dir_dacl_sddl(&tc).unwrap();
+    assert!(sddl.starts_with("D:P") && !sddl.contains(";AU)"), "{sddl}");
+    // the doctor checks both folders
+    let doc: Value = c.call_raw(methods::DOCTOR, Value::Null).await.unwrap();
+    let ids: Vec<&str> = doc["checks"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|c| c["id"].as_str())
+        .collect();
+    assert!(
+        ids.contains(&"data.toolchains") && ids.contains(&"data.redirection"),
+        "{ids:?}"
+    );
+    drop(c);
+    drop(f);
+    let _ = std::fs::remove_dir_all(&tc);
+}
+
+#[tokio::test]
 async fn interrupted_install_is_rolled_back_when_the_core_starts() {
     let f = Fixture::start_with("install-recover", |root| {
         let db = umr_storage::Db::open_in(root).unwrap();

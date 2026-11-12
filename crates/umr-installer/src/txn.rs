@@ -364,7 +364,21 @@ pub fn install_sdk_package(
         updated_unix: now_unix(),
     })?;
     progress(Stage::Installing, 0, None);
-    let result = run_android_cli(job, cancel).and_then(|()| {
+    let result = run_android_cli(job, cancel);
+    // INS-007: note the runtime Android CLI downloaded for itself, and drop any metrics spool.
+    if let Some(home) = job.env.get("ANDROID_USER_HOME").map(PathBuf::from) {
+        let _ = crate::manage::record_cli_runtime(db, &home);
+        let purged = crate::manage::purge_cli_metrics(&home);
+        if purged > 0 {
+            let _ = lock(db).audit(
+                now_unix(),
+                None,
+                "android-cli.metrics-purged",
+                Some(&purged.to_string()),
+            );
+        }
+    }
+    let result = result.and_then(|()| {
         if package_present(&dir) {
             Ok(())
         } else {

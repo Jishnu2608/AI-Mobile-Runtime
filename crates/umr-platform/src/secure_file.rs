@@ -62,9 +62,78 @@ pub fn file_dacl_sddl(path: &Path) -> io::Result<String> {
     crate::secure_pipe::dacl_sddl(f.as_raw_handle())
 }
 
+/// DACL for a private folder: full control for the user, SYSTEM and Administrators, inherited
+/// by everything created inside. Other accounts on the PC get no access.
+#[must_use]
+pub fn private_dir_sddl(sid: &str) -> String {
+    format!("D:P(A;OICI;FA;;;{sid})(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)")
+}
+
+/// Creates `path` (parents as usual) with [`private_dir_sddl`]. Returns `false` when it
+/// already existed (its permissions are then left as they are).
+pub fn create_private_dir(path: &Path) -> io::Result<bool> {
+    use windows_sys::Win32::Storage::FileSystem::CreateDirectoryW;
+    if path.exists() {
+        return Ok(false);
+    }
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let sid = crate::identity::current_user_sid()?;
+    let sd = SecurityDescriptor::from_sddl(&private_dir_sddl(&sid))?;
+    let mut attrs = SECURITY_ATTRIBUTES {
+        nLength: u32::try_from(std::mem::size_of::<SECURITY_ATTRIBUTES>()).unwrap_or(0),
+        lpSecurityDescriptor: sd.0,
+        bInheritHandle: 0,
+    };
+    let wide = to_wide(path.as_os_str());
+    // SAFETY: path is NUL-terminated; `attrs` and its descriptor outlive the call.
+    if unsafe { CreateDirectoryW(wide.as_ptr(), &raw mut attrs) } == 0 {
+        return Err(io::Error::last_os_error());
+    }
+    Ok(true)
+}
+
+/// DACL of a folder as SDDL.
+pub fn dir_dacl_sddl(path: &Path) -> io::Result<String> {
+    use std::os::windows::fs::OpenOptionsExt;
+    const FILE_FLAG_BACKUP_SEMANTICS: u32 = 0x0200_0000; // needed to open a folder handle
+    let f = std::fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(FILE_FLAG_BACKUP_SEMANTICS)
+        .open(path)?;
+    crate::secure_pipe::dacl_sddl(f.as_raw_handle())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn private_dir_is_owner_system_admins_only_and_inherited() {
+        let base = std::env::temp_dir().join(format!("umr-private-dir-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let dir = base.join("toolchains");
+        assert!(create_private_dir(&dir).unwrap());
+        assert!(
+            !create_private_dir(&dir).unwrap(),
+            "existing folder is left alone"
+        );
+        let sid = crate::identity::current_user_sid().unwrap();
+        let dacl = dir_dacl_sddl(&dir).unwrap();
+        assert!(dacl.starts_with("D:P"), "{dacl}");
+        assert!(
+            dacl.contains(&sid) && dacl.contains(";SY)") && dacl.contains(";BA)"),
+            "{dacl}"
+        );
+        assert_eq!(dacl.matches("(A;").count(), 3, "{dacl}");
+        // children inherit it
+        let child = dir.join("android-sdk");
+        std::fs::create_dir_all(&child).unwrap();
+        let cd = dir_dacl_sddl(&child).unwrap();
+        assert!(!cd.contains("AU)") && cd.contains(&sid), "{cd}");
+        let _ = std::fs::remove_dir_all(&base);
+    }
 
     #[test]
     fn private_file_has_owner_only_dacl_and_content() {

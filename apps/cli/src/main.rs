@@ -1,6 +1,7 @@
 //! `umr` — command-line interface of the AI Mobile Runtime (CLI-001).
 //!
-//! Commands now: `status`, `start`, `stop`, `doctor`, `plan`, `install`. More (`run`, `device`, `logs`, `mcp`, …)
+//! Commands now: `status`, `start`, `stop`, `doctor`, `plan`, `install`, `components`, `remove`,
+//! `repair`, `clean`, `admin`, `project`, `trust`. More (`run`, `device`, `logs`, `mcp`, …)
 //! arrive with later tasks.
 //!
 //! Exit codes: 0 success · 1 failure / not running (status) / failing checks (doctor) · 2 usage error.
@@ -8,7 +9,9 @@
 mod core_process;
 mod env_print;
 mod install_cmd;
+mod manage_cmd;
 mod plan_print;
+mod project_cmd;
 
 use std::process::ExitCode;
 use std::time::Duration;
@@ -69,6 +72,55 @@ enum Command {
         #[arg(long)]
         yes: bool,
     },
+    /// List installed components, check that they work, and show disk usage.
+    Components {
+        /// Print machine-readable JSON.
+        #[arg(long)]
+        json: bool,
+    },
+    /// Remove one component the product installed (id from `umr components`).
+    Remove {
+        id: String,
+        /// Remove even if other components need it.
+        #[arg(long)]
+        force: bool,
+        /// Do not ask for confirmation.
+        #[arg(long)]
+        yes: bool,
+    },
+    /// Remove broken components; with a project folder, install them again.
+    Repair {
+        path: Option<std::path::PathBuf>,
+        /// Skip the final install confirmation.
+        #[arg(long)]
+        yes: bool,
+    },
+    /// Show what kind of project a folder is, with the evidence, and whether it is trusted.
+    Project {
+        path: Option<std::path::PathBuf>,
+        /// Print machine-readable JSON.
+        #[arg(long)]
+        json: bool,
+    },
+    /// Trust a project folder so its build scripts may run (or `--revoke` the trust).
+    Trust {
+        path: Option<std::path::PathBuf>,
+        #[arg(long)]
+        revoke: bool,
+        /// Do not ask for confirmation.
+        #[arg(long)]
+        yes: bool,
+    },
+    /// Delete the download cache and old logs.
+    Clean,
+    /// Run one administrator action through a Windows UAC prompt:
+    /// `enable-whpx` or `enable-long-paths`.
+    Admin {
+        action: String,
+        /// Do not ask for confirmation (Windows still shows its UAC prompt).
+        #[arg(long)]
+        yes: bool,
+    },
 }
 
 fn main() -> ExitCode {
@@ -95,6 +147,25 @@ fn main() -> ExitCode {
                 Ok(dir) => install_cmd::install(&target, dir, yes).await,
                 Err(e) => fail(&e),
             },
+            Command::Components { json } => manage_cmd::components(&target, json).await,
+            Command::Remove { id, force, yes } => manage_cmd::remove(&target, id, force, yes).await,
+            Command::Repair { path, yes } => {
+                let dir = match path.map(|p| project_dir(Some(p))).transpose() {
+                    Ok(d) => d,
+                    Err(e) => return fail(&e),
+                };
+                manage_cmd::repair(&target, dir, yes).await
+            }
+            Command::Clean => manage_cmd::clean(&target).await,
+            Command::Project { path, json } => match project_dir(path) {
+                Ok(dir) => project_cmd::show(&target, dir, json).await,
+                Err(e) => fail(&e),
+            },
+            Command::Trust { path, revoke, yes } => match project_dir(path) {
+                Ok(dir) => project_cmd::trust(&target, dir, revoke, yes).await,
+                Err(e) => fail(&e),
+            },
+            Command::Admin { action, yes } => manage_cmd::admin(&target, &action, yes).await,
         }
     })
 }
@@ -137,7 +208,7 @@ async fn status(target: &CoreTarget, json: bool) -> ExitCode {
                     "{}",
                     serde_json::json!({
                         "running": true, "version": info.version, "api_version": info.api_version,
-                        "pid": info.pid, "uptime_s": info.uptime_s, "data_root": info.data_root, "pipe": target.pipe
+                        "pid": info.pid, "uptime_s": info.uptime_s, "data_root": info.data_root, "toolchains_root": info.toolchains_root, "pipe": target.pipe
                     })
                 );
             } else {
@@ -146,6 +217,9 @@ async fn status(target: &CoreTarget, json: bool) -> ExitCode {
                 println!("  pid        {}", info.pid);
                 println!("  uptime     {}", format_uptime(info.uptime_s));
                 println!("  data       {}", info.data_root);
+                if !info.toolchains_root.is_empty() && info.toolchains_root != info.data_root {
+                    println!("  toolchains {}", info.toolchains_root);
+                }
             }
             ExitCode::SUCCESS
         }

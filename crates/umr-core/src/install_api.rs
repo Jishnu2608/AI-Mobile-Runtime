@@ -48,7 +48,7 @@ fn plan_and_prepare(
 ) -> Result<(umr_resolver::plan::Plan, Prepared), Result<RpcError, InstallError>> {
     let (_, plan) = build_plan(state, p).map_err(Ok)?;
     let http = Http::new(Policy::official()).map_err(Err)?;
-    let layout = Layout::new(&state.data_root);
+    let layout = Layout::new(&state.toolchains);
     let prepared =
         engine::prepare(&http, &Endpoints::default(), &layout, &plan, &state.db).map_err(Err)?;
     let mut offered = state
@@ -140,7 +140,7 @@ pub fn start(state: &ApiState, id: Id, p: &ProjectPlanParams) -> Response {
     }
 
     let job_id = umr_installer::random_id();
-    let layout = Layout::new(&state.data_root);
+    let layout = Layout::new(&state.toolchains);
     let log = layout.logs().join(format!("install-{job_id}.log"));
     let job = Arc::new(Job::new(&job_id, &prepared, &log));
     {
@@ -160,8 +160,8 @@ pub fn start(state: &ApiState, id: Id, p: &ProjectPlanParams) -> Response {
 
     // Isolated environment for Android CLI (ENV-008/009): managed SDK, Android user home,
     // temp and JVM socket folders under the managed root.
-    let ctx = umr_env::ScanContext::from_system(state.data_root.clone());
-    let dirs = umr_env::recipe::IsolationDirs::under(&state.data_root);
+    let ctx = umr_env::ScanContext::from_system(state.toolchains.clone());
+    let dirs = umr_env::recipe::IsolationDirs::under(&state.toolchains);
     if let Err(e) = dirs.create() {
         return internal(id, &e);
     }

@@ -7,7 +7,8 @@ use std::io;
 
 use windows_sys::Win32::Foundation::{ERROR_FILE_NOT_FOUND, ERROR_MORE_DATA, ERROR_SUCCESS};
 use windows_sys::Win32::System::Registry::{
-    RegGetValueW, HKEY, HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE, RRF_RT_REG_DWORD, RRF_RT_REG_SZ,
+    RegGetValueW, RegSetKeyValueW, HKEY, HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE, REG_DWORD,
+    RRF_RT_REG_DWORD, RRF_RT_REG_SZ,
 };
 
 use crate::wide::{from_wide_buf, to_wide};
@@ -143,9 +144,46 @@ pub fn read_dword(hive: Hive, key: &str, value: &str) -> io::Result<Option<u32>>
     }
 }
 
+/// Writes a `REG_DWORD` value (creates the key if missing). HKLM needs administrator rights;
+/// only the elevated helper (INS-005) calls this for HKLM.
+pub fn write_dword(hive: Hive, key: &str, value: &str, data: u32) -> io::Result<()> {
+    let key_w = to_wide(key);
+    let value_w = to_wide(value);
+    // SAFETY: key/value are NUL-terminated; `data` is 4 bytes, matching the size passed.
+    let rc = unsafe {
+        RegSetKeyValueW(
+            hive.raw(),
+            key_w.as_ptr(),
+            value_w.as_ptr(),
+            REG_DWORD,
+            (&raw const data).cast(),
+            4,
+        )
+    };
+    if rc == ERROR_SUCCESS {
+        Ok(())
+    } else {
+        #[allow(clippy::cast_possible_wrap)]
+        Err(io::Error::from_raw_os_error(rc as i32))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn dword_round_trip_in_hkcu() {
+        let key = r"Software\UMR-test\registry-write";
+        write_dword(Hive::CurrentUser, key, "v", 7).unwrap();
+        assert_eq!(read_dword(Hive::CurrentUser, key, "v").unwrap(), Some(7));
+        write_dword(Hive::CurrentUser, key, "v", 1).unwrap();
+        assert_eq!(read_dword(Hive::CurrentUser, key, "v").unwrap(), Some(1));
+        // clean up the test key
+        let _ = std::process::Command::new("reg")
+            .args(["delete", r"HKCU\Software\UMR-test", "/f"])
+            .output();
+    }
 
     const NT: &str = r"SOFTWARE\Microsoft\Windows NT\CurrentVersion";
 

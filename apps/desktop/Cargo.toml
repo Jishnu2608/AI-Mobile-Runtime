@@ -1,0 +1,33 @@
+[package]
+name = "umr-desktop"
+description = "Desktop app (UI-001/002): Tauri 2 shell that talks to the Runtime Core and runs the onboarding wizard."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "umr-desktop"
+path = "src/main.rs"
+
+[features]
+# Load the built UI (`ui/dist`, embedded in the binary). Without it Tauri loads the Vite dev
+# server (`devUrl`); for UI work run `npm --prefix apps/desktop/ui run dev` and build with
+# `cargo run -p umr-desktop --no-default-features`.
+default = ["custom-protocol"]
+custom-protocol = ["tauri/custom-protocol"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["sync"] }
+umr-api = { path = "../../crates/umr-api" }
+umr-core = { path = "../../crates/umr-core" }
+
+[lints]
+workspace = true

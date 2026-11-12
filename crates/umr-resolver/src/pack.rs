@@ -22,7 +22,7 @@ pub const SCHEMA: u32 = 1;
 /// Public keys whose signatures are accepted (base64, 32 bytes each).
 ///
 /// `dev-2026-11` is the development key; its private half lives outside the repository
-/// (`%USERPROFILE%\.umr\keys\knowledge-pack-dev.key`). A release key must replace it before
+/// (`%USERPROFILE%\.umr-maintainer\keys\knowledge-pack-dev.key`). A release key must replace it before
 /// public release (decision pending: key custody).
 pub const TRUSTED_KEYS: &[(&str, &str)] = &[(
     "dev-2026-11",

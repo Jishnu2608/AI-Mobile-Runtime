@@ -16,6 +16,16 @@ pub const CONFIG_FILE: &str = "config.toml";
 pub struct Config {
     pub core: CoreConfig,
     pub privacy: PrivacyConfig,
+    pub storage: StorageConfig,
+}
+
+/// `[storage]` section.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct StorageConfig {
+    /// Folder for toolchains (JDK, Android SDK, images, AVDs, Node, Flutter, downloads).
+    /// Empty = inside the home folder. Must be an absolute path.
+    pub toolchains_dir: String,
 }
 
 /// `[core]` section.
@@ -69,9 +79,31 @@ log = "info"
 [privacy]
 # Anonymous usage statistics. Off by default.
 telemetry = false
+
+[storage]
+# Where toolchains go (JDK, Android SDK, emulator images, AVDs, Node, Flutter, downloads).
+# Several GB. Empty = inside this folder. Example: toolchains_dir = 'D:\UMR'
+toolchains_dir = ""
 "#;
 
 impl Config {
+    /// Toolchains folder for a home folder (`[storage] toolchains_dir`, else the home itself).
+    /// A relative `toolchains_dir` is rejected (returns an error message).
+    pub fn toolchains_root(&self, home: &Path) -> Result<PathBuf, String> {
+        let t = self.storage.toolchains_dir.trim();
+        if t.is_empty() {
+            return Ok(home.to_path_buf());
+        }
+        let p = PathBuf::from(t);
+        if p.is_absolute() {
+            Ok(p)
+        } else {
+            Err(format!(
+                "[storage] toolchains_dir must be an absolute path, got '{t}'"
+            ))
+        }
+    }
+
     /// Parses TOML text.
     pub fn parse(text: &str) -> Result<Self, String> {
         toml::from_str(text).map_err(|e| e.to_string())
@@ -102,6 +134,22 @@ impl Config {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn toolchains_dir_setting() {
+        let home = Path::new(r"C:\Users\u\.umr");
+        let c = Config::default();
+        assert_eq!(c.toolchains_root(home).unwrap(), home);
+        let c = Config::parse("[storage]\ntoolchains_dir = 'D:\\UMR'\n").unwrap();
+        assert_eq!(c.toolchains_root(home).unwrap(), Path::new(r"D:\UMR"));
+        let c = Config::parse("[storage]\ntoolchains_dir = 'relative'\n").unwrap();
+        assert!(c.toolchains_root(home).is_err());
+        assert!(
+            Config::parse("[storage]\ntoolchain_dir = 'x'\n").is_err(),
+            "typos rejected"
+        );
+        assert_eq!(Config::parse(DEFAULT_TEMPLATE).unwrap(), Config::default());
+    }
 
     #[test]
     fn defaults_are_safe() {

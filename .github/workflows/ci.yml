@@ -1,7 +1,11 @@
 name: CI
 
-# Manual only, to save GitHub Actions minutes. Run scripts/ci-local.ps1 locally before every commit.
+# Runs on every push and pull request (public repo: GitHub-hosted runners are free).
+# scripts/ci-local.ps1 runs the same checks locally; keep running it before every commit.
 on:
+  push:
+    branches: [main]
+  pull_request:
   workflow_dispatch:
 
 permissions:
@@ -27,6 +31,16 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Format
         run: cargo fmt --all -- --check
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: apps/desktop/ui/package-lock.json
+      # The desktop app embeds the built web UI, so it must exist before Rust compiles it.
+      - name: UI build
+        run: |
+          npm --prefix apps/desktop/ui ci --no-audit --no-fund
+          npm --prefix apps/desktop/ui run build
       - name: Clippy
         run: cargo clippy --workspace --all-targets --locked
       - name: Test

@@ -42,6 +42,8 @@ pub struct Route {
     pub ignore_range: bool,
     /// Respond with a redirect to this location instead.
     pub redirect: Option<String>,
+    /// Send the body in chunks of this size with a pause after each (slow server).
+    pub throttle: Option<(usize, std::time::Duration)>,
 }
 
 impl Route {
@@ -51,6 +53,7 @@ impl Route {
             cut_after: None,
             ignore_range: false,
             redirect: None,
+            throttle: None,
         }
     }
 }
@@ -175,7 +178,16 @@ fn handle(
             s.flush()?;
             // drop the connection mid-body
         }
-        _ => s.write_all(body)?,
+        _ => match route.throttle {
+            Some((chunk, pause)) => {
+                for part in body.chunks(chunk.max(1)) {
+                    s.write_all(part)?;
+                    s.flush()?;
+                    std::thread::sleep(pause);
+                }
+            }
+            None => s.write_all(body)?,
+        },
     }
     Ok(())
 }

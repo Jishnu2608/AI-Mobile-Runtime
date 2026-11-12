@@ -22,6 +22,44 @@ pub enum RunOutcome {
     AlreadyRunning { pid: Option<u32> },
 }
 
+/// The toolchains folder from `config.toml` (`[storage] toolchains_dir`), created owner-only
+/// when it is a separate folder (a new folder at a drive root would otherwise inherit
+/// "Authenticated Users: Modify", letting other accounts replace tools the product runs).
+fn toolchains_folder(home: &std::path::Path) -> std::path::PathBuf {
+    let config = umr_storage::config::Config::load_in(home).unwrap_or_default();
+    let dir = match config.toolchains_root(home) {
+        Ok(d) => d,
+        Err(e) => {
+            tracing::error!(error = %e, "invalid toolchains_dir; using the home folder");
+            home.to_path_buf()
+        }
+    };
+    if dir != home {
+        match umr_platform::secure_file::create_private_dir(&dir) {
+            Ok(true) => {
+                tracing::info!(path = %dir.display(), "toolchains folder created (owner-only)");
+            }
+            Ok(false) => {}
+            Err(e) => {
+                tracing::error!(error = %e, path = %dir.display(), "cannot create the toolchains folder");
+            }
+        }
+    }
+    if let Some(pkg) = umr_platform::os::package_full_name() {
+        let appdata = [
+            umr_platform::folders::local_app_data(),
+            umr_platform::folders::roaming_app_data(),
+        ];
+        if [home, dir.as_path()]
+            .iter()
+            .any(|p| appdata.iter().flatten().any(|a| p.starts_with(a)))
+        {
+            tracing::warn!(package = %pkg, "data folder is inside AppData while running in a packaged app: Windows redirects writes (CORE-007)");
+        }
+    }
+    dir
+}
+
 /// Runs the Core until `shutdown` completes.
 pub async fn run<F>(paths: &CorePaths, shutdown: F) -> Result<RunOutcome, LockError>
 where
@@ -55,10 +93,18 @@ where
         let _ = std::fs::remove_file(paths.admin_token_file());
         e
     })?;
-    let state = Arc::new(ApiState::new(paths.root().to_path_buf(), auth, db));
+    let toolchains = toolchains_folder(paths.root());
+    let state = Arc::new(ApiState::with_toolchains(
+        paths.root().to_path_buf(),
+        toolchains,
+        auth,
+        db,
+    ));
     // INS-003: finish or roll back installs a crash interrupted, before any new one starts.
-    match umr_installer::txn::recover(&umr_installer::layout::Layout::new(paths.root()), &state.db)
-    {
+    match umr_installer::txn::recover(
+        &umr_installer::layout::Layout::new(&state.toolchains),
+        &state.db,
+    ) {
         Ok(r) if r.completed.is_empty() && r.rolled_back.is_empty() => {}
         Ok(r) => {
             tracing::warn!(completed = ?r.completed, rolled_back = ?r.rolled_back, "recovered interrupted installs");

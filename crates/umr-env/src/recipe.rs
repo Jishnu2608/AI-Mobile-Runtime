@@ -13,8 +13,13 @@
 //!   "Unable to establish loopback connection" on some machines.
 //! - **No telemetry** from Flutter, Dart, Expo, Android CLI unless the user opts in.
 //!
-//! Gradle, pub and npm caches stay in their usual user locations (shared with the user's other
-//! projects), as decided in the planning document §11.6.
+//! Caches (ENV-008/010, step 1.11): the Gradle cache stays in `%USERPROFILE%\.gradle` (shared
+//! with the user's other projects; not under `AppData`). The pub and npm caches default to
+//! `%LOCALAPPDATA%`, which Windows redirects for processes started from packaged apps such as
+//! Claude Desktop (CORE-007), so they go to `<managed>\cache\{pub,npm}`. Expo's home
+//! (`~/.expo`, login token cache) goes to `<managed>\expo-home`. With
+//! [`Selection::isolate_appdata`] (Flutter adapter, Phase 3) `APPDATA` points to
+//! `<managed>\appdata`, which keeps `.flutter_settings` and Dart's telemetry files there.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -34,6 +39,8 @@ pub struct Selection {
     pub flutter_root: Option<PathBuf>,
     /// Extra folders to put first on PATH.
     pub extra_path: Vec<PathBuf>,
+    /// Point `APPDATA` at `<managed>\appdata` (tools that keep settings there: Flutter, Dart).
+    pub isolate_appdata: bool,
 }
 
 /// Managed folders used by the recipe.
@@ -43,6 +50,10 @@ pub struct IsolationDirs {
     pub avd_home: PathBuf,
     pub tmp: PathBuf,
     pub jvm_tmp: PathBuf,
+    pub pub_cache: PathBuf,
+    pub npm_cache: PathBuf,
+    pub expo_home: PathBuf,
+    pub appdata: PathBuf,
 }
 
 impl IsolationDirs {
@@ -50,9 +61,14 @@ impl IsolationDirs {
     pub fn under(managed_root: &Path) -> Self {
         let android_user_home = managed_root.join("android-user-home");
         let tmp = managed_root.join("tmp");
+        let cache = managed_root.join("cache");
         Self {
             avd_home: android_user_home.join("avd"),
             jvm_tmp: tmp.join("jvm"),
+            pub_cache: cache.join("pub"),
+            npm_cache: cache.join("npm"),
+            expo_home: managed_root.join("expo-home"),
+            appdata: managed_root.join("appdata"),
             android_user_home,
             tmp,
         }
@@ -65,6 +81,10 @@ impl IsolationDirs {
             &self.avd_home,
             &self.tmp,
             &self.jvm_tmp,
+            &self.pub_cache,
+            &self.npm_cache,
+            &self.expo_home,
+            &self.appdata,
         ] {
             std::fs::create_dir_all(d)?;
         }
@@ -98,6 +118,14 @@ pub fn child_env(ctx: &ScanContext, sel: &Selection) -> HashMap<String, String> 
     env.insert("TEMP".into(), s(&dirs.tmp));
     env.insert("TMP".into(), s(&dirs.tmp));
 
+    // Caches and settings that would otherwise land in AppData or ~/.expo (step 1.11)
+    env.insert("PUB_CACHE".into(), s(&dirs.pub_cache));
+    env.insert("npm_config_cache".into(), s(&dirs.npm_cache));
+    env.insert("__UNSAFE_EXPO_HOME_DIRECTORY".into(), s(&dirs.expo_home));
+    if sel.isolate_appdata {
+        env.insert("APPDATA".into(), s(&dirs.appdata));
+    }
+
     // ENV-009: JVM loopback fix, keeping the user's own options
     let fix = format!("{JVM_TMPDIR_PROPERTY}{}", s(&dirs.jvm_tmp));
     let jto = match ctx.var("JAVA_TOOL_OPTIONS") {
@@ -115,6 +143,19 @@ pub fn child_env(ctx: &ScanContext, sel: &Selection) -> HashMap<String, String> 
 
     env.insert("PATH".into(), child_path(ctx, sel));
     env
+}
+
+/// Folders where a running emulator writes its discovery file (`pid_<n>.ini`, holds the gRPC
+/// port and token). With the recipe, `%TEMP%` is the managed `tmp`, so the file appears under
+/// `<managed>\tmp\avd\running`; the default location is checked as a fallback.
+#[must_use]
+pub fn emulator_discovery_dirs(ctx: &ScanContext) -> Vec<PathBuf> {
+    let dirs = IsolationDirs::under(&ctx.managed_root);
+    let mut out = vec![dirs.tmp.join("avd").join("running")];
+    if let Some(local) = &ctx.local_app_data {
+        out.push(local.join("Temp").join("avd").join("running"));
+    }
+    out
 }
 
 /// PATH for children: chosen tool folders first, then the user's PATH minus other Java folders.
@@ -176,6 +217,31 @@ mod tests {
         assert!(
             !env.contains_key("GRADLE_USER_HOME"),
             "Gradle cache stays shared"
+        );
+        // step 1.11: nothing that defaults to AppData or ~/.expo
+        assert_eq!(env["PUB_CACHE"], r"D:\UMR\cache\pub");
+        assert_eq!(env["npm_config_cache"], r"D:\UMR\cache\npm");
+        assert_eq!(env["__UNSAFE_EXPO_HOME_DIRECTORY"], r"D:\UMR\expo-home");
+        assert!(!env.contains_key("APPDATA"), "only with isolate_appdata");
+        let flutter = child_env(
+            &ctx,
+            &Selection {
+                isolate_appdata: true,
+                ..Selection::default()
+            },
+        );
+        assert_eq!(flutter["APPDATA"], r"D:\UMR\appdata");
+    }
+
+    #[test]
+    fn emulator_discovery_looks_in_managed_tmp_first() {
+        let mut ctx = ScanContext::for_test(r"D:\UMR".into(), &[]);
+        ctx.local_app_data = Some(r"C:\Users\u\AppData\Local".into());
+        let d = emulator_discovery_dirs(&ctx);
+        assert_eq!(d[0], PathBuf::from(r"D:\UMR\tmp\avd\running"));
+        assert_eq!(
+            d[1],
+            PathBuf::from(r"C:\Users\u\AppData\Local\Temp\avd\running")
         );
     }
 

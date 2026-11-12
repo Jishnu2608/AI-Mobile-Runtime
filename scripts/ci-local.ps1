@@ -15,6 +15,8 @@ $env:CARGO_TERM_COLOR = 'always'
 $steps = @(
     @{ Name = 'Toolchain'; Cmd = { rustup show active-toolchain; rustc --version; cargo --version } },
     @{ Name = 'Format';    Cmd = { cargo fmt --all -- --check } },
+    # The desktop app embeds the built web UI, so it must exist before Rust compiles it.
+    @{ Name = 'UI build';  Cmd = { npm --prefix apps/desktop/ui ci --no-audit --no-fund; if ($LASTEXITCODE -eq 0) { npm --prefix apps/desktop/ui run build } } },
     @{ Name = 'Clippy';    Cmd = { cargo clippy --workspace --all-targets --locked } },
     @{ Name = 'Test';      Cmd = { cargo test --workspace --locked } }
 )

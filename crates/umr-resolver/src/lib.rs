@@ -11,6 +11,7 @@
 //! Everything here is pure computation over files and the scan report: nothing is downloaded,
 //! installed or changed, and the user's project files are only read.
 
+pub mod detect;
 pub mod pack;
 pub mod plan;
 pub mod project;

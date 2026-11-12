@@ -6,7 +6,8 @@ use std::path::PathBuf;
 use windows_sys::core::GUID;
 use windows_sys::Win32::System::Com::CoTaskMemFree;
 use windows_sys::Win32::UI::Shell::{
-    FOLDERID_LocalAppData, FOLDERID_RoamingAppData, SHGetKnownFolderPath, KF_FLAG_DEFAULT,
+    FOLDERID_LocalAppData, FOLDERID_Profile, FOLDERID_RoamingAppData, SHGetKnownFolderPath,
+    KF_FLAG_DEFAULT,
 };
 
 use crate::wide::from_wide_ptr;
@@ -35,6 +36,11 @@ pub fn local_app_data() -> io::Result<PathBuf> {
     known_folder(&FOLDERID_LocalAppData)
 }
 
+/// The user's profile folder (`%USERPROFILE%`, e.g. `C:\Users\<name>`).
+pub fn profile() -> io::Result<PathBuf> {
+    known_folder(&FOLDERID_Profile)
+}
+
 /// `%APPDATA%` (roaming) of the current user.
 pub fn roaming_app_data() -> io::Result<PathBuf> {
     known_folder(&FOLDERID_RoamingAppData)
@@ -49,6 +55,13 @@ mod tests {
         let p = local_app_data().unwrap();
         assert!(p.is_absolute(), "{}", p.display());
         assert!(p.is_dir(), "{}", p.display());
+    }
+
+    #[test]
+    fn profile_contains_local_app_data() {
+        let p = profile().unwrap();
+        assert!(p.is_dir());
+        assert!(local_app_data().unwrap().starts_with(&p));
     }
 
     #[test]
