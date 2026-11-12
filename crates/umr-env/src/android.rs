@@ -86,8 +86,31 @@ fn inspect(
             .any(|p| p.path.starts_with("cmdline-tools/")),
         packages,
         licenses,
-        adb: check(ctx, &adb, &["version"], child_env),
+        adb: adb_health(&adb),
         emulator: check(ctx, &emulator, &["-version"], child_env),
+    }
+}
+
+/// adb is checked from its files, never run: adb always creates `%USERPROFILE%\.android`
+/// (it asks Windows for the profile folder and ignores `ANDROID_USER_HOME`, `ANDROID_SDK_HOME`
+/// and a redirected `USERPROFILE` / `HOME`; clean-machine run 43262678951). Starting it during
+/// a scan would leak that folder onto machines that never had Android tools.
+fn adb_health(exe: &Path) -> Health {
+    if !exe.is_file() {
+        return Health::Broken("not installed".into());
+    }
+    let Some(dir) = exe.parent() else {
+        return Health::Broken("no platform-tools folder".into());
+    };
+    let props = std::fs::read_to_string(dir.join("source.properties")).unwrap_or_default();
+    let has_version = props.lines().any(|l| l.starts_with("Pkg.Revision="));
+    let dlls = ["AdbWinApi.dll", "AdbWinUsbApi.dll"]
+        .iter()
+        .all(|d| dir.join(d).is_file());
+    match (has_version, dlls) {
+        (true, true) => Health::Ok,
+        (false, _) => Health::Broken("platform-tools/source.properties has no version".into()),
+        (_, false) => Health::Broken("adb support DLLs are missing".into()),
     }
 }
 
@@ -271,6 +294,26 @@ mod tests {
             "no adb.exe in the fake SDK"
         );
         let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn adb_is_checked_from_its_files_without_running_it() {
+        let dir = std::env::temp_dir().join(format!("umr-env-adb-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let adb = dir.join("adb.exe");
+        // not an executable: running it would fail, so Ok proves it was not run
+        std::fs::write(&adb, b"not a program").unwrap();
+        assert!(
+            matches!(adb_health(&adb), Health::Broken(_)),
+            "no version file yet"
+        );
+        std::fs::write(dir.join("source.properties"), "Pkg.Revision=37.0.1\n").unwrap();
+        assert!(matches!(adb_health(&adb), Health::Broken(m) if m.contains("DLL")));
+        std::fs::write(dir.join("AdbWinApi.dll"), b"x").unwrap();
+        std::fs::write(dir.join("AdbWinUsbApi.dll"), b"x").unwrap();
+        assert_eq!(adb_health(&adb), Health::Ok);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
