@@ -32,6 +32,10 @@ VMs, with **no change** to the user's or the system's `PATH`, `JAVA_HOME`, `ANDR
    .\collect.ps1 -Out after.json
    .\compare.ps1 before.json after.json      # fails on any global change or leak
    ```
+   If `%USERPROFILE%\.android` shows up as a leak, `.\leak-probe.ps1 -Toolchains <folder>` runs
+   every tool the environment scan starts, one at a time, and names the one that creates it
+   (with and without a redirected user profile). The clean-machine workflow runs it after the
+   compare step.
 4. Record the result in `results.md` (date, VM image, experiment, pass/fail, notes). Revert the
    snapshot before the next experiment.
 

@@ -83,6 +83,13 @@ jobs:
           ./tests/env-matrix/collect.ps1 -Out after.json
           ./tests/env-matrix/compare.ps1 before.json after.json
 
+      - name: Which probe creates .android (TEST-001 diagnosis, after the compare)
+        if: always()
+        shell: pwsh
+        run: |
+          foreach ($v in 'JAVA_HOME', 'ANDROID_HOME', 'ANDROID_SDK_ROOT') { Remove-Item "Env:$v" -ErrorAction SilentlyContinue }
+          ./tests/env-matrix/leak-probe.ps1 -Toolchains $env:UMR_TOOLCHAINS
+
       - name: Collect logs
         if: always()
         shell: pwsh
