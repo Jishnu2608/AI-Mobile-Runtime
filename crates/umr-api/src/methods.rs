@@ -105,6 +105,37 @@ pub const PROJECT_STATUS: &str = "project.status";
 /// run live on the session's device (start, each reload kind, stop). Scope: control.
 pub const ADAPTER_CHECK: &str = "adapter.check";
 
+// ---- diagnostics (Phase 5) --------------------------------------------------------------------
+// Everything returned is passed through the log sanitiser (DIA-005) first.
+
+/// `diagnostics.list` [`DiagnosticsParams`] → `{ entries, counts, total, cursor, run }`: the
+/// current run's problems, one entry per fingerprint (`category`, `origin`, `severity`, `source`,
+/// `message`, `file`, `line`, `column`, `fingerprint`, `count`, `first_seen_ms`, `last_seen_ms`,
+/// `seq`, `stack_frames`), new or repeated after `since`; `counts` per category. Scope: observe.
+pub const DIAGNOSTICS_LIST: &str = "diagnostics.list";
+/// `diagnostics.get` [`DiagnosticGetParams`] → one entry with its stack. Scope: observe.
+pub const DIAGNOSTICS_GET: &str = "diagnostics.get";
+/// `logs.tail` [`LogsParams`] → `{ lines: [{seq, at_ms, source, level, tag, pid, text}], cursor }`:
+/// the run's tool output (`tool`), progress (`umr`) and the app's device log (`logcat`).
+/// Scope: observe.
+pub const LOGS_TAIL: &str = "logs.tail";
+
+// ---- preview (Phase 4) ------------------------------------------------------------------------
+
+/// `preview.open` [`PreviewOpenParams`] → `{ url, device, profile, state }`: a single-use
+/// `ws://127.0.0.1:<port>/preview?token=…` for a preview window (frames + input, the current
+/// session's device). Scope: interact.
+pub const PREVIEW_OPEN: &str = "preview.open";
+/// `preview.status` → `{ running, port, windows, device, stats }` (NFR-02a pipeline timing).
+/// Scope: observe.
+pub const PREVIEW_STATUS: &str = "preview.status";
+/// `preview.selftest` [`SelfTestParams`] → `{ selftest, pipeline, verdict }`: touch → visible
+/// latency and frame rate on the device, with the NFR-02a/02b/03 verdict (NFR-02c). Taps the
+/// home screen. Scope: interact.
+pub const PREVIEW_SELFTEST: &str = "preview.selftest";
+/// `device.rotate` [`RotateParams`] → `{ serial, rotated }`. Scope: interact.
+pub const DEVICE_ROTATE: &str = "device.rotate";
+
 // ---- install (INS-001…004) -----------------------------------------------------------------
 // Installing changes the machine, so all install calls except status need the admin scope
 // (agents never get it in the MVP). Licences are accepted only through `install.licence.accept`
@@ -153,6 +184,25 @@ pub const AUTH_CLIENT_CREATE: &str = "auth.client.create";
 pub const AUTH_CLIENT_LIST: &str = "auth.client.list";
 /// `auth.client.revoke` [`RevokeClientParams`] → [`RevokeClientResult`]. Scope: admin.
 pub const AUTH_CLIENT_REVOKE: &str = "auth.client.revoke";
+
+// ---- agents (Phase 6) ---------------------------------------------------------------------------
+
+/// `runtime.digest` [`DigestParams`] → [`Digest`]-shaped JSON (≤ 1 KB): session, device, app,
+/// run state, problem counts, up to 3 new problems since `since`, the next cursor. The first
+/// call an agent makes after each change (MCP `runtime_status`). Scope: observe.
+pub const RUNTIME_DIGEST: &str = "runtime.digest";
+/// `approvals.list` → `{ pending: [{id, client, action, detail, created_ms}] }`: requests from
+/// agents waiting for the user (running an ungranted project, switching the device). Scope: admin.
+pub const APPROVALS_LIST: &str = "approvals.list";
+/// `approvals.decide` [`DecideParams`] → `{ id, decision }`. `always` also records a grant so
+/// the same request from that client no longer asks. Scope: admin.
+pub const APPROVALS_DECIDE: &str = "approvals.decide";
+/// `audit.list` [`AuditParams`] → `{ entries: [{at_unix, client_id, action, detail}] }`: what
+/// non-admin clients (agents) called, newest first. Scope: admin.
+pub const AUDIT_LIST: &str = "audit.list";
+/// `auth.client.grants` [`GrantsParams`] → `{ id, grants }`: set a client's grants
+/// (`project:<folder>`, `device:switch`); an empty list removes them. Scope: admin.
+pub const AUTH_CLIENT_GRANTS: &str = "auth.client.grants";
 
 /// Scope names used on the wire.
 pub mod scopes {
@@ -238,6 +288,10 @@ pub struct DeviceRefParams {
 pub struct TargetParams {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub target: Option<String>,
+    /// `device.screenshot` only: scale the image down to at most this width (emulators scale
+    /// on their side; physical devices return full size).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_width: Option<u32>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -317,6 +371,27 @@ pub struct StartSessionParams {
     pub package: Option<String>,
 }
 
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PreviewOpenParams {
+    /// Allow input from the window (default true).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub interact: Option<bool>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SelfTestParams {
+    /// Number of timed taps (default 20).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub taps: Option<u32>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RotateParams {
+    /// `left` (default) or `right`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub direction: Option<String>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RunParams {
     /// Absolute path of the project folder.
@@ -345,6 +420,43 @@ pub struct RunStatusParams {
     pub since: Option<u64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub limit: Option<usize>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DiagnosticsParams {
+    /// Only entries new or repeated after this cursor.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub since: Option<u64>,
+    /// `environment`, `build`, `runtime`, `crash`, `device` or `network`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub category: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub limit: Option<usize>,
+    /// Include stack frames (default: only their number).
+    #[serde(default)]
+    pub stack: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DiagnosticGetParams {
+    pub fingerprint: String,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LogsParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub since: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub limit: Option<usize>,
+    /// `tool`, `umr` or `logcat`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
+    /// Lowest level shown: `V` `D` `I` `W` `E` `F`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub level: Option<String>,
+    /// Case-insensitive text (or tag) filter.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub grep: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -443,6 +555,37 @@ pub struct LoginResult {
     pub scopes: Vec<String>,
 }
 
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DigestParams {
+    /// Cursor from the previous digest (`"<problems>.<events>"`); only changes after it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub since: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DecideParams {
+    pub id: String,
+    /// `allow` or `deny`.
+    pub decision: String,
+    /// With `allow`: remember it (records a grant for the client).
+    #[serde(default)]
+    pub always: bool,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AuditParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub client: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub limit: Option<usize>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GrantsParams {
+    pub id: String,
+    pub grants: Vec<String>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CreateClientParams {
     pub name: String,
@@ -463,6 +606,9 @@ pub struct ClientInfo {
     pub name: String,
     pub scopes: Vec<String>,
     pub created_unix: u64,
+    /// MCP-003 grants (`project:<folder>`, `device:switch`).
+    #[serde(default)]
+    pub grants: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

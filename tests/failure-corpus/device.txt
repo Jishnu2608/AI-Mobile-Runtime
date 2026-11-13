@@ -1,0 +1,61 @@
+=== insufficient storage
+kind: install
+expect: device
+origin: environment
+---
+adb: failed to install C:\p\build\app\outputs\flutter-apk\app-debug.apk: Failure [INSTALL_FAILED_INSUFFICIENT_STORAGE]
+=== signatures do not match
+kind: install
+expect: device
+origin: environment
+---
+Failure [INSTALL_FAILED_UPDATE_INCOMPATIBLE: Existing package com.example.demo signatures do not match newer version; ignoring!]
+=== older sdk
+kind: install
+expect: device
+origin: environment
+---
+Failure [INSTALL_FAILED_OLDER_SDK: Failed parse during installPackageLI: /data/app/vmdl1234.tmp/base.apk (at Binary XML file line #7): Requires newer sdk version #35 (current version is #33)]
+=== no matching abis
+kind: install
+expect: device
+origin: environment
+---
+Failure [INSTALL_FAILED_NO_MATCHING_ABIS: INSTALL_FAILED_NO_MATCHING_ABIS: Failed to extract native libraries, res=-113]
+=== version downgrade
+kind: install
+expect: device
+origin: environment
+---
+Failure [INSTALL_FAILED_VERSION_DOWNGRADE: Downgrade detected: Update version code 3 is older than current 7]
+=== device offline
+kind: message
+source: adb
+expect: device
+origin: environment
+---
+adb: error: device offline
+=== device unauthorized
+kind: message
+source: adb
+expect: device
+origin: environment
+---
+adb: device unauthorized.
+This adb server's $ADB_VENDOR_KEYS is not set
+Try 'adb kill-server' if that seems wrong.
+Otherwise check for a confirmation dialog on your device.
+=== no devices
+kind: message
+source: adb
+expect: device
+origin: environment
+---
+adb: error: no devices/emulators found
+=== serial not found
+kind: message
+source: adb
+expect: device
+origin: environment
+---
+adb: device 'emulator-5556' not found

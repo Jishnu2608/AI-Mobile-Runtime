@@ -1,0 +1,17 @@
+[package]
+name = "umr-diagnostics"
+description = "Diagnostics (Phase 5): crash buffer and ANR collectors (DIA-001, DIA-006), six-category classifier with app-vs-environment origin (DIA-002), fingerprints and dedupe (DIA-003), log sanitiser (DIA-005)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+regex = "1"
+serde = { version = "1", features = ["derive"] }
+umr-adapter = { path = "../../adapters/sdk" }
+umr-device = { path = "../umr-device" }
+
+[lints]
+workspace = true

@@ -18,6 +18,30 @@ pub struct Config {
     pub privacy: PrivacyConfig,
     pub storage: StorageConfig,
     pub device: DeviceConfig,
+    pub update: UpdateConfig,
+}
+
+/// `[update]` section (REL-002).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct UpdateConfig {
+    /// Release manifest (`releases.json`). Empty = no update checks. HTTPS only (plain HTTP
+    /// is accepted for 127.0.0.1 / localhost, for testing).
+    pub manifest_url: String,
+    /// `stable`, or `beta` (also offers stable releases).
+    pub channel: String,
+    /// Refuse an installer without a valid Authenticode signature.
+    pub require_signed: bool,
+}
+
+impl Default for UpdateConfig {
+    fn default() -> Self {
+        Self {
+            manifest_url: String::new(),
+            channel: "stable".into(),
+            require_signed: false,
+        }
+    }
 }
 
 /// `[device]` section.
@@ -104,6 +128,14 @@ toolchains_dir = ""
 [device]
 # Port of the product's own adb server. 5037 (Android Studio / your own adb) is never used.
 adb_port = 5137
+
+[update]
+# Release manifest checked by `umr update`. Empty = no update checks.
+manifest_url = ""
+# stable | beta
+channel = "stable"
+# Only install signed updates.
+require_signed = false
 "#;
 
 impl Config {

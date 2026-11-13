@@ -1,0 +1,155 @@
+=== sdk location not found
+kind: gradle
+expect: environment
+origin: environment
+at: none
+---
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Could not determine the dependencies of task ':app:compileDebugJavaWithJavac'.
+> SDK location not found. Define a valid SDK location with an ANDROID_HOME environment variable or by setting the sdk.dir path in your project's local properties file at 'C:\p\local.properties'.
+=== class file major version
+kind: gradle
+expect: environment
+origin: environment
+---
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Could not open cp_settings generic class cache for settings file 'C:\p\settings.gradle' (C:\Users\alex\.gradle\caches\7.5\scripts\4f2l9ad1x8f1g7v8b0o1a1n2y).
+> BUG! exception in phase 'semantic analysis' in source unit '_BuildScript_' Unsupported class file major version 65
+=== agp requires java 17
+kind: gradle
+expect: environment
+origin: environment
+---
+* What went wrong:
+An exception occurred applying plugin request [id: 'com.android.application']
+> Failed to apply plugin 'com.android.internal.application'.
+   > Android Gradle plugin requires Java 17 to run. You are currently using Java 11.
+      Your current JDK is located in C:\Program Files\Java\jdk-11
+      You can try some of the following options:
+       - changing the IDE settings.
+       - changing the JAVA_HOME environment variable.
+=== licences not accepted
+kind: gradle
+expect: environment
+origin: environment
+---
+* What went wrong:
+Could not determine the dependencies of task ':app:compileDebugJavaWithJavac'.
+> Failed to install the following Android SDK packages as some licences have not been accepted.
+     platforms;android-35 Android SDK Platform 35
+  To build this project, accept the SDK license agreements and install the missing components using the Android Studio SDK Manager.
+=== platform sdk missing (agp 8)
+kind: gradle
+expect: environment
+origin: environment
+---
+* What went wrong:
+Could not determine the dependencies of task ':app:compileDebugJavaWithJavac'.
+> Failed to find Platform SDK with path: platforms;android-35
+=== heap space during dex
+kind: gradle
+expect: environment
+origin: environment
+---
+* What went wrong:
+Execution failed for task ':app:mergeExtDexDebug'.
+> Could not resolve all files for configuration ':app:debugRuntimeClasspath'.
+   > Failed to transform kotlin-stdlib-2.0.0.jar (org.jetbrains.kotlin:kotlin-stdlib:2.0.0) to match attributes {artifactType=android-dex}.
+      > Java heap space
+=== daemon disappeared
+kind: gradle
+expect: environment
+origin: environment
+---
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Gradle build daemon disappeared unexpectedly (it may have been killed or may have crashed)
+=== dart sdk too old
+kind: tool
+source: flutter
+expect: environment
+origin: environment
+---
+The current Dart SDK version is 3.4.0.
+
+Because demo requires SDK version >=3.6.0 <4.0.0, version solving failed.
+=== node engine
+kind: message
+source: npm
+fallback: build
+expect: environment
+origin: environment
+---
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: 'react-native@0.79.0',
+npm warn EBADENGINE   required: { node: '>=18' },
+npm warn EBADENGINE   current: { node: 'v16.20.2', npm: '8.19.4' }
+npm warn EBADENGINE }
+=== metro port busy
+kind: message
+source: metro
+fallback: runtime
+expect: environment
+origin: environment
+---
+error listen EADDRINUSE: address already in use :::8081.
+=== flutter missing
+kind: missing
+expect: environment
+origin: environment
+---
+Flutter SDK not found (expected D:\UMR\flutter\3.32.0\bin\flutter.bat); run `umr install` for this project
+=== ndk without source.properties
+kind: gradle
+expect: environment
+origin: environment
+---
+* What went wrong:
+Execution failed for task ':app:configureCMakeDebug[arm64-v8a]'.
+> [CXX1101] NDK at C:\UMR\android-sdk\ndk\26.1.10909125 did not have a source.properties file
+=== cmake not found
+kind: gradle
+expect: environment
+origin: environment
+---
+* What went wrong:
+Execution failed for task ':app:configureCMakeDebug[x86_64]'.
+> [CXX1300] CMake '3.22.1' was not found in SDK, PATH, or by cmake.dir property.
+=== windows path too long
+kind: gradle
+expect: environment
+origin: environment
+---
+* What went wrong:
+Execution failed for task ':app:mergeDebugNativeLibs'.
+> A failure occurred while executing com.android.build.gradle.internal.tasks.MergeNativeLibsTask$MergeNativeLibsTaskWorkAction
+   > java.io.IOException: The filename or extension is too long
+=== incompatible java and gradle
+kind: gradle
+expect: environment
+origin: environment
+---
+* What went wrong:
+Your build is currently configured to use incompatible Java 21.0.2 and Gradle 8.0. Cannot sync the project.
+We recommend upgrading to Gradle version 8.5.
+=== emulator without acceleration
+kind: message
+source: emulator
+fallback: device
+expect: environment
+origin: environment
+---
+emulator: ERROR: x86_64 emulation currently requires hardware acceleration!
+CPU acceleration status: Android Emulator requires an Intel or AMD processor with virtualization extension support.
+=== untrusted folder
+kind: message
+source: run
+expect: environment
+origin: environment
+---
+'C:\p' is not trusted yet. Building runs the project's own scripts (Gradle, npm, Flutter); trust the folder first (`umr trust`).

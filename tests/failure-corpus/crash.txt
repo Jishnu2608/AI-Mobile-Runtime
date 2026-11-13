@@ -1,0 +1,144 @@
+=== kotlin npe in app code
+kind: crash
+expect: crash
+origin: app
+at: ProfileFragment.kt:57
+---
+11-13 21:02:11.512  5120  5120 E AndroidRuntime: FATAL EXCEPTION: main
+11-13 21:02:11.512  5120  5120 E AndroidRuntime: Process: com.example.demo, PID: 5120
+11-13 21:02:11.512  5120  5120 E AndroidRuntime: java.lang.NullPointerException: Attempt to invoke virtual method 'java.lang.String java.lang.Object.toString()' on a null object reference
+11-13 21:02:11.512  5120  5120 E AndroidRuntime: 	at com.example.demo.ui.ProfileFragment.onViewCreated(ProfileFragment.kt:57)
+11-13 21:02:11.512  5120  5120 E AndroidRuntime: 	at androidx.fragment.app.Fragment.performViewCreated(Fragment.java:3128)
+11-13 21:02:11.512  5120  5120 E AndroidRuntime: 	at androidx.fragment.app.FragmentStateManager.createView(FragmentStateManager.java:552)
+11-13 21:02:11.512  5120  5120 E AndroidRuntime: 	at android.os.Looper.loop(Looper.java:338)
+=== java illegal state in activity
+kind: crash
+expect: crash
+origin: app
+at: MainActivity.java:31
+---
+11-13 21:03:40.004  5300  5300 E AndroidRuntime: FATAL EXCEPTION: main
+11-13 21:03:40.004  5300  5300 E AndroidRuntime: Process: com.example.javademo, PID: 5300
+11-13 21:03:40.004  5300  5300 E AndroidRuntime: java.lang.IllegalStateException: Could not execute method for android:onClick
+11-13 21:03:40.004  5300  5300 E AndroidRuntime: 	at androidx.appcompat.app.AppCompatViewInflater$DeclaredOnClickListener.onClick(AppCompatViewInflater.java:472)
+11-13 21:03:40.004  5300  5300 E AndroidRuntime: 	at android.view.View.performClick(View.java:7659)
+11-13 21:03:40.004  5300  5300 E AndroidRuntime: Caused by: java.lang.reflect.InvocationTargetException
+11-13 21:03:40.004  5300  5300 E AndroidRuntime: 	at java.lang.reflect.Method.invoke(Native Method)
+11-13 21:03:40.004  5300  5300 E AndroidRuntime: 	... 12 more
+11-13 21:03:40.004  5300  5300 E AndroidRuntime: Caused by: java.lang.ArithmeticException: divide by zero
+11-13 21:03:40.004  5300  5300 E AndroidRuntime: 	at com.example.javademo.MainActivity.onDivide(MainActivity.java:31)
+11-13 21:03:40.004  5300  5300 E AndroidRuntime: 	... 14 more
+=== lateinit not initialised
+kind: crash
+expect: crash
+origin: app
+at: ListActivity.kt:40
+---
+11-13 21:05:00.100  5400  5400 E AndroidRuntime: FATAL EXCEPTION: main
+11-13 21:05:00.100  5400  5400 E AndroidRuntime: Process: com.example.demo, PID: 5400
+11-13 21:05:00.100  5400  5400 E AndroidRuntime: java.lang.RuntimeException: Unable to resume activity {com.example.demo/com.example.demo.ListActivity}: kotlin.UninitializedPropertyAccessException: lateinit property adapter has not been initialized
+11-13 21:05:00.100  5400  5400 E AndroidRuntime: 	at android.app.ActivityThread.performResumeActivity(ActivityThread.java:5193)
+11-13 21:05:00.100  5400  5400 E AndroidRuntime: 	at android.app.ActivityThread.handleResumeActivity(ActivityThread.java:5226)
+11-13 21:05:00.100  5400  5400 E AndroidRuntime: Caused by: kotlin.UninitializedPropertyAccessException: lateinit property adapter has not been initialized
+11-13 21:05:00.100  5400  5400 E AndroidRuntime: 	at com.example.demo.ListActivity.onResume(ListActivity.kt:40)
+11-13 21:05:00.100  5400  5400 E AndroidRuntime: 	at android.app.Instrumentation.callActivityOnResume(Instrumentation.java:1601)
+=== activity not found
+kind: crash
+expect: crash
+origin: app
+at: HomeScreen.kt:88
+---
+11-13 21:06:12.000  5500  5500 E AndroidRuntime: FATAL EXCEPTION: main
+11-13 21:06:12.000  5500  5500 E AndroidRuntime: Process: com.example.demo, PID: 5500
+11-13 21:06:12.000  5500  5500 E AndroidRuntime: android.content.ActivityNotFoundException: Unable to find explicit activity class {com.example.demo/com.example.demo.SettingsActivity}; have you declared this activity in your AndroidManifest.xml?
+11-13 21:06:12.000  5500  5500 E AndroidRuntime: 	at android.app.Instrumentation.checkStartActivityResult(Instrumentation.java:2241)
+11-13 21:06:12.000  5500  5500 E AndroidRuntime: 	at android.app.Activity.startActivity(Activity.java:6052)
+11-13 21:06:12.000  5500  5500 E AndroidRuntime: 	at com.example.demo.HomeScreenKt$HomeScreen$1$1.invoke(HomeScreen.kt:88)
+11-13 21:06:12.000  5500  5500 E AndroidRuntime: 	at androidx.compose.foundation.ClickablePointerInputNode$pointerInput$3.invoke-k-4lQ0M(Clickable.kt:987)
+=== network on main thread
+kind: crash
+expect: crash
+origin: app
+at: Api.kt:14
+---
+11-13 21:07:30.000  5600  5600 E AndroidRuntime: FATAL EXCEPTION: main
+11-13 21:07:30.000  5600  5600 E AndroidRuntime: Process: com.example.demo, PID: 5600
+11-13 21:07:30.000  5600  5600 E AndroidRuntime: android.os.NetworkOnMainThreadException
+11-13 21:07:30.000  5600  5600 E AndroidRuntime: 	at android.os.StrictMode$AndroidBlockGuardPolicy.onNetwork(StrictMode.java:1708)
+11-13 21:07:30.000  5600  5600 E AndroidRuntime: 	at java.net.Inet6AddressImpl.lookupHostByName(Inet6AddressImpl.java:115)
+11-13 21:07:30.000  5600  5600 E AndroidRuntime: 	at java.net.URL.openConnection(URL.java:1006)
+11-13 21:07:30.000  5600  5600 E AndroidRuntime: 	at com.example.demo.data.Api.load(Api.kt:14)
+=== out of memory bitmap
+kind: crash
+expect: crash
+origin: app
+at: Gallery.kt:63
+---
+11-13 21:08:00.000  5700  5700 E AndroidRuntime: FATAL EXCEPTION: main
+11-13 21:08:00.000  5700  5700 E AndroidRuntime: Process: com.example.demo, PID: 5700
+11-13 21:08:00.000  5700  5700 E AndroidRuntime: java.lang.OutOfMemoryError: Failed to allocate a 132710412 byte allocation with 25165824 free bytes and 94MB until OOM
+11-13 21:08:00.000  5700  5700 E AndroidRuntime: 	at android.graphics.BitmapFactory.decodeStream(BitmapFactory.java:771)
+11-13 21:08:00.000  5700  5700 E AndroidRuntime: 	at com.example.demo.Gallery.loadFull(Gallery.kt:63)
+=== number format chain
+kind: crash
+expect: crash
+origin: app
+at: Calc.kt:8
+---
+11-13 20:30:00.000   900   900 E AndroidRuntime: FATAL EXCEPTION: main
+11-13 20:30:00.000   900   900 E AndroidRuntime: Process: com.umr.kotlindemo, PID: 900
+11-13 20:30:00.000   900   900 E AndroidRuntime: java.lang.NumberFormatException: For input string: "abc"
+11-13 20:30:00.000   900   900 E AndroidRuntime: 	at java.lang.Integer.parseInt(Integer.java:615)
+11-13 20:30:00.000   900   900 E AndroidRuntime: 	at kotlin.text.StringsKt.toInt(Strings.kt:20)
+11-13 20:30:00.000   900   900 E AndroidRuntime: 	at com.example.umrkotlindemo.Calc.parse(Calc.kt:8)
+=== react native js exception
+kind: crash
+expect: crash
+origin: unknown
+at: none
+---
+11-13 21:10:00.000  5800  5830 E AndroidRuntime: FATAL EXCEPTION: mqt_native_modules
+11-13 21:10:00.000  5800  5830 E AndroidRuntime: Process: com.example.rndemo, PID: 5800
+11-13 21:10:00.000  5800  5830 E AndroidRuntime: com.facebook.react.common.JavascriptException: TypeError: undefined is not a function, js engine: hermes, stack:
+11-13 21:10:00.000  5800  5830 E AndroidRuntime: 	at com.facebook.react.modules.core.ExceptionsManagerModule.reportException(ExceptionsManagerModule.java:65)
+11-13 21:10:00.000  5800  5830 E AndroidRuntime: 	at java.lang.reflect.Method.invoke(Native Method)
+=== native segv in app library
+kind: crash
+expect: crash
+origin: app
+at: none
+---
+11-13 21:11:00.000  6000  6000 F DEBUG   : *** *** *** *** *** *** *** *** *** *** *** *** *** *** *** ***
+11-13 21:11:00.000  6000  6000 F DEBUG   : Build fingerprint: 'google/sdk_gphone64_x86_64/emu64xa:16/BP22.250325.006/13208274:userdebug/dev-keys'
+11-13 21:11:00.000  6000  6000 F DEBUG   : pid: 6000, tid: 6000, name: example.ndkdemo  >>> com.example.ndkdemo <<<
+11-13 21:11:00.000  6000  6000 F DEBUG   : signal 11 (SIGSEGV), code 1 (SEGV_MAPERR), fault addr 0x0000000000000000
+11-13 21:11:00.000  6000  6000 F DEBUG   : backtrace:
+11-13 21:11:00.000  6000  6000 F DEBUG   :       #00 pc 000000000001a2b4  /data/app/~~Zq1==/com.example.ndkdemo-Yb2==/lib/x86_64/libnative-lib.so (Java_com_example_ndkdemo_MainActivity_crash+20)
+11-13 21:11:00.000  6000  6000 F DEBUG   :       #01 pc 0000000000376e7b  /apex/com.android.art/lib64/libart.so (art_quick_generic_jni_trampoline+219)
+=== native abort in libc
+kind: crash
+expect: crash
+origin: unknown
+at: none
+---
+11-13 21:12:00.000  6100  6120 F DEBUG   : *** *** *** *** *** *** *** *** *** *** *** *** *** *** *** ***
+11-13 21:12:00.000  6100  6120 F DEBUG   : pid: 6100, tid: 6120, name: RenderThread  >>> com.example.demo <<<
+11-13 21:12:00.000  6100  6120 F DEBUG   : signal 6 (SIGABRT), code -1 (SI_QUEUE), fault addr --------
+11-13 21:12:00.000  6100  6120 F DEBUG   :       #00 pc 000000000005b6f8  /apex/com.android.runtime/lib64/bionic/libc.so (abort+168)
+11-13 21:12:00.000  6100  6120 F DEBUG   :       #01 pc 0000000000243a10  /system/lib64/libhwui.so
+=== anr input dispatch
+kind: anr
+expect: crash
+origin: unknown
+---
+11-13 21:13:00.000   612   650 E ActivityManager: ANR in com.example.demo (com.example.demo/.MainActivity)
+11-13 21:13:00.000   612   650 E ActivityManager: PID: 6200
+11-13 21:13:00.000   612   650 E ActivityManager: Reason: Input dispatching timed out (ActivityRecord{a1b2c3 u0 com.example.demo/.MainActivity t12} is not responding. Waited 5001ms for MotionEvent)
+=== anr broadcast
+kind: anr
+expect: crash
+origin: unknown
+---
+11-13 21:14:00.000   612   650 E ActivityManager: ANR in com.example.demo
+11-13 21:14:00.000   612   650 E ActivityManager: PID: 6300
+11-13 21:14:00.000   612   650 E ActivityManager: Reason: Broadcast of Intent { act=android.intent.action.BOOT_COMPLETED flg=0x9000010 cmp=com.example.demo/.BootReceiver }

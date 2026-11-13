@@ -10,7 +10,7 @@
 
 use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::{Arc, PoisonError};
 
 use serde_json::{json, Value};
 use umr_adapter::{Adapter, AdapterContext, AdapterError, DeviceTarget, Event, ReloadKind, Sink};
@@ -86,14 +86,64 @@ fn fail(code: i64, msg: impl Into<String>) -> RpcError {
     RpcError::new(code, msg)
 }
 
-fn events_sink(log: &Arc<Mutex<EventLog>>) -> Sink {
-    let log = log.clone();
+/// Adapter events → `project.status` events, and problems / log lines → the run's diagnostics.
+fn events_sink(state: &ApiState) -> Sink {
+    let log = state.run_events.clone();
+    let diag = state.diag.clone();
     Arc::new(move |e: Event| {
-        if let Event::Problem(p) = &e {
-            tracing::info!(file = ?p.file, line = ?p.line, "problem: {}", p.message);
+        {
+            let mut d = diag.lock().unwrap_or_else(PoisonError::into_inner);
+            match &e {
+                Event::Problem(p) => d.problem(umr_diagnostics::from_problem(p)),
+                Event::Log { line } => d.log("tool", 'I', None, None, line),
+                Event::Phase { phase, message } => {
+                    d.log(
+                        "umr",
+                        'I',
+                        Some(format!("{phase:?}").to_lowercase()),
+                        None,
+                        message,
+                    );
+                }
+                Event::AppStarted { package, pid } => {
+                    d.log("umr", 'I', None, *pid, &format!("app started: {package}"));
+                }
+                Event::Reloaded { kind, ms } => {
+                    d.log(
+                        "umr",
+                        'I',
+                        None,
+                        None,
+                        &format!("reloaded ({kind:?}) in {ms} ms"),
+                    );
+                }
+                Event::AppStopped { reason } => {
+                    d.log("umr", 'W', None, None, &format!("app stopped: {reason}"));
+                }
+            }
         }
         log.lock().unwrap_or_else(PoisonError::into_inner).push(&e);
     })
+}
+
+fn record_message(state: &ApiState, message: &str) {
+    state
+        .diag
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .problem(umr_diagnostics::from_message(
+            "run",
+            message,
+            umr_diagnostics::Category::Environment,
+        ));
+}
+
+/// An adapter error's problems that its events did not already report.
+fn record_error(state: &ApiState, e: &AdapterError) {
+    let mut d = state.diag.lock().unwrap_or_else(PoisonError::into_inner);
+    for diag in umr_diagnostics::from_adapter_error(e) {
+        d.problem_once(diag);
+    }
 }
 
 /// JDK and Flutter folders from the project's plan; refuses when something is still missing.
@@ -159,7 +209,7 @@ fn toolchain(state: &ApiState, path: &str) -> Result<Tools, RpcError> {
 }
 
 /// Folders as written by the user may use `/` and relative parts; the Core needs one spelling.
-fn normalise(path: &str) -> String {
+pub(crate) fn normalise(path: &str) -> String {
     let p = Path::new(path);
     std::fs::canonicalize(p).map_or_else(
         |_| path.to_string(),
@@ -210,10 +260,27 @@ fn context(
 
 /// Stops the running app (if any) and its tools.
 pub(crate) fn stop_run(state: &ApiState) -> Option<RunInfo> {
+    let info = stop_app(state);
+    if let Some(i) = &info {
+        state.supervisor.stop_group(&i.group);
+    }
+    info
+}
+
+/// Stops the watcher and the app but keeps the run's background tools (Gradle daemon) warm:
+/// a device switch re-runs the project in the same group (AC-CLI-03).
+pub(crate) fn stop_app(state: &ApiState) -> Option<RunInfo> {
     // the watcher first, so no reload starts while the app stops
     drop(
         state
             .run_watch
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .take(),
+    );
+    drop(
+        state
+            .diag_collector
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
             .take(),
@@ -232,7 +299,6 @@ pub(crate) fn stop_run(state: &ApiState) -> Option<RunInfo> {
         a.stop();
     }
     if let Some(i) = &info {
-        state.supervisor.stop_group(&i.group);
         tracing::info!(adapter = %i.adapter, package = %i.package, "run stopped");
     }
     info
@@ -316,16 +382,42 @@ fn prepare(
 }
 
 pub fn run(state: &ApiState, id: Id, p: &RunParams) -> Response {
-    let path = normalise(&p.path);
+    match run_inner(
+        state,
+        &p.path,
+        p.profile.as_deref(),
+        p.cold,
+        p.watch.unwrap_or(true),
+    ) {
+        Ok(v) => ok(id, &v),
+        Err(e) => Response::err(Some(id), e),
+    }
+}
+
+/// `project.run` (also used when a device switch takes the running project along).
+pub(crate) fn run_inner(
+    state: &ApiState,
+    raw_path: &str,
+    profile: Option<&str>,
+    cold: bool,
+    watch: bool,
+) -> Result<Value, RpcError> {
+    let path = normalise(raw_path);
     stop_run(state);
-    let (adapter, confidence, ctx, mut s) =
-        match prepare(state, &p.path, &path, p.profile.as_deref(), p.cold) {
-            Ok(v) => v,
-            Err(e) => return Response::err(Some(id), e),
-        };
+    state
+        .diag
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .reset();
+    // missing toolchain, untrusted folder, device that does not boot: shown as problems too
+    let (adapter, confidence, ctx, mut s) = prepare(state, raw_path, &path, profile, cold)
+        .inspect_err(|e| record_message(state, &e.message))?;
+    crate::preview_api::refresh_target(state);
+    let since_ms =
+        crate::diag_api::device_now_ms(ctx.device.adb.port, &ctx.device.serial).unwrap_or(0);
     let log = state.run_events.clone();
     *log.lock().unwrap_or_else(PoisonError::into_inner) = EventLog::default();
-    let sink = events_sink(&log);
+    let sink = events_sink(state);
     let _ = session_api::apply(state, &mut s, SessionEvent::Rebuild, Some(adapter.id()));
     let start = std::time::Instant::now();
     tracing::info!(adapter = adapter.id(), project = %path, "run");
@@ -348,7 +440,17 @@ pub fn run(state: &ApiState, id: Id, p: &RunParams) -> Response {
                 group: ctx.group.clone(),
             };
             *state.run_app.lock().unwrap_or_else(PoisonError::into_inner) = Some(app);
-            let watching = if p.watch.unwrap_or(true) {
+            *state
+                .diag_collector
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner) = Some(crate::diag_api::start_collector(
+                state.diag.clone(),
+                ctx.device.adb.port,
+                &ctx.device.serial,
+                &package,
+                since_ms,
+            ));
+            let watching = if watch {
                 match crate::watch::start(state, Path::new(&path), adapter.id()) {
                     Ok(w) => {
                         *state
@@ -369,17 +471,15 @@ pub fn run(state: &ApiState, id: Id, p: &RunParams) -> Response {
                 .run_info
                 .lock()
                 .unwrap_or_else(PoisonError::into_inner) = Some(info.clone());
-            ok(
-                id,
-                &json!({
-                    "status": "running", "adapter": adapter.id(), "confidence": confidence,
-                    "capabilities": adapter.capabilities(), "package": package, "watching": watching,
-                    "serial": info.serial, "seconds": (start.elapsed().as_secs_f64() * 10.0).round() / 10.0,
-                    "session": s,
-                }),
-            )
+            Ok(json!({
+                "status": "running", "adapter": adapter.id(), "confidence": confidence,
+                "capabilities": adapter.capabilities(), "package": package, "watching": watching,
+                "serial": info.serial, "seconds": (start.elapsed().as_secs_f64() * 10.0).round() / 10.0,
+                "session": s,
+            }))
         }
         Err(e) => {
+            record_error(state, &e);
             let (ev, status) = match &e {
                 AdapterError::BuildFailed { .. } => {
                     (Some(SessionEvent::BuildFailed), "build_failed")
@@ -395,13 +495,10 @@ pub fn run(state: &ApiState, id: Id, p: &RunParams) -> Response {
             }
             state.supervisor.stop_group(&ctx.group);
             tracing::warn!(adapter = adapter.id(), error = %e, "run failed");
-            ok(
-                id,
-                &json!({
-                    "status": status, "adapter": adapter.id(), "error": e.to_string(),
-                    "problems": problems_of(&e), "session": s,
-                }),
-            )
+            Ok(json!({
+                "status": status, "adapter": adapter.id(), "error": e.to_string(),
+                "problems": problems_of(&e), "session": s,
+            }))
         }
     }
 }
@@ -429,7 +526,7 @@ pub fn reload(state: &ApiState, id: Id, p: &ReloadParams) -> Response {
 
 /// Runs one reload (API and file watcher); the result describes what happened.
 pub(crate) fn reload_kind(state: &ApiState, kind: ReloadKind) -> Result<Value, RpcError> {
-    let sink = events_sink(&state.run_events);
+    let sink = events_sink(state);
     let mut guard = state.run_app.lock().unwrap_or_else(PoisonError::into_inner);
     let Some(app) = guard.as_mut() else {
         return Err(fail(
@@ -451,6 +548,11 @@ pub(crate) fn reload_kind(state: &ApiState, kind: ReloadKind) -> Result<Value, R
     drop(guard);
     match r {
         Ok(d) => {
+            state
+                .diag
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .build_fixed();
             let ms = u64::try_from(d.as_millis()).unwrap_or(u64::MAX);
             if let Some(s) = s.as_mut() {
                 if full {
@@ -473,6 +575,9 @@ pub(crate) fn reload_kind(state: &ApiState, kind: ReloadKind) -> Result<Value, R
             Ok(json!({ "status": "reloaded", "kind": kind, "ms": ms }))
         }
         Err(e) => {
+            if !matches!(e, AdapterError::Unsupported(_)) {
+                record_error(state, &e);
+            }
             if let Some(s) = s.as_mut() {
                 if full {
                     let _ = session_api::apply(

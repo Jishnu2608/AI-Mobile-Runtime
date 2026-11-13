@@ -1,0 +1,17 @@
+[package]
+name = "umr-mcp"
+description = "MCP server for AI coding agents (Phase 6: MCP-001, MCP-002, MCP-005): the protocol over stdio, the tool catalogue mapped onto the Core API, and the agent instructions. `umr mcp` runs it."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+serde_json = "1"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["rt", "macros"] }
+
+[lints]
+workspace = true

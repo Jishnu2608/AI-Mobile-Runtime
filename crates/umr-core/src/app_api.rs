@@ -117,8 +117,16 @@ pub fn screenshot(state: &ApiState, id: Id, p: &TargetParams) -> Response {
         Err(e) => return Response::err(Some(id), e),
     };
     let start = std::time::Instant::now();
+    let scaled = |g: &Emulator, max: u32| {
+        // a box `max` wide and far taller than any screen: the emulator fits the image into it
+        // keeping the aspect ratio (a width alone is ignored)
+        g.screenshot_png_at(max, max.saturating_mul(4))
+    };
     let (png, source) = match &t.grpc {
-        Some(g) => match g.screenshot_png() {
+        Some(g) => match p
+            .max_width
+            .map_or_else(|| g.screenshot_png(), |m| scaled(g, m))
+        {
             Ok((png, _, _)) => (png, "grpc"),
             Err(e) => return Response::err(Some(id), failed(e)),
         },
@@ -144,14 +152,35 @@ pub fn screenshot(state: &ApiState, id: Id, p: &TargetParams) -> Response {
         return Response::err(Some(id), failed(format!("{}: {e}", path.display())));
     }
     prune(&dir, 50);
-    ok(
-        id,
-        &serde_json::json!({
-            "serial": t.serial, "path": path, "width": width, "height": height,
-            "bytes": png.len(), "source": source,
-            "ms": u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX),
-        }),
-    )
+    let mut v = serde_json::json!({
+        "serial": t.serial, "path": path, "width": width, "height": height,
+        "bytes": png.len(), "source": source,
+        "ms": u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX),
+    });
+    // a scaled image: also the device's own size, in the image's orientation (taps use it)
+    if p.max_width.is_some() {
+        if let Some((dw, dh)) = device_size(state.adb_port, &t.serial) {
+            let (dw, dh) = if (width > height) == (dw > dh) {
+                (dw, dh)
+            } else {
+                (dh, dw)
+            };
+            v["device_width"] = serde_json::json!(dw);
+            v["device_height"] = serde_json::json!(dh);
+        }
+    }
+    ok(id, &v)
+}
+
+/// `wm size`: the override size if set, else the physical one.
+fn device_size(port: u16, serial: &str) -> Option<(u32, u32)> {
+    let out = umr_device::adb::shell(port, serial, "wm size").ok()?;
+    let line = out
+        .lines()
+        .find(|l| l.starts_with("Override size:"))
+        .or_else(|| out.lines().find(|l| l.starts_with("Physical size:")))?;
+    let (w, h) = line.split_once(':')?.1.trim().split_once('x')?;
+    Some((w.trim().parse().ok()?, h.trim().parse().ok()?))
 }
 
 pub fn ui(state: &ApiState, id: Id, p: &TargetParams) -> Response {

@@ -37,3 +37,7 @@ skills-lock.json
 /apps/desktop/gen/
 # Local preview server config (machine-specific)
 /.claude/launch.json
+
+# Release output (scripts/release.ps1)
+/dist/
+/target/release/bundle/

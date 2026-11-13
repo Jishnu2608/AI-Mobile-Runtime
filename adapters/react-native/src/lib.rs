@@ -680,7 +680,6 @@ impl RunningApp for RnApp {
             &self.package,
         );
         self.stop_metro();
-        self.ctx.supervisor.stop_group(&self.ctx.group);
     }
 }
 

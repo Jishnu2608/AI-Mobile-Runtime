@@ -185,7 +185,35 @@ fn dart(line: &str, root: &Path) -> Option<Problem> {
 /// forwarded by Metro (`ERROR  TypeError: ...`).
 fn metro(line: &str, root: &Path) -> Option<Problem> {
     let t = line.trim();
+    // `error: Error: Unable to resolve module ./x from C:\p\App.js: …` (no line in this line)
+    if let Some(at) = t.find("Unable to resolve module ") {
+        let rest = &t[at..];
+        let from = rest.find(" from ")?;
+        let path = rest[from + 6..].trim_end().trim_end_matches(':');
+        let msg = rest[..from].trim();
+        return Some(problem(
+            Severity::Error,
+            msg,
+            Some(relative(path, root)),
+            None,
+            None,
+            "metro",
+        ));
+    }
     let t = t.strip_prefix("ERROR").map_or(t, str::trim_start);
+    // React Native's invariant errors at run time: `ERROR  Invariant Violation: …`
+    if let Some(rest) = t.strip_prefix("Invariant Violation: ") {
+        return line.trim_start().starts_with("ERROR").then(|| {
+            problem(
+                Severity::Error,
+                &format!("Invariant Violation: {rest}"),
+                None,
+                None,
+                None,
+                "react-native",
+            )
+        });
+    }
     let kind_end = t.find(": ")?;
     let kind = &t[..kind_end];
     if !kind.ends_with("Error") || kind.contains(' ') {
@@ -240,6 +268,109 @@ pub fn parse_line(line: &str, root: &Path) -> Option<Problem> {
         .or_else(|| aapt(t, root))
         .or_else(|| dart(t, root))
         .or_else(|| metro(t, root))
+}
+
+/// Packages whose stack frames are never the app's own code.
+const FLUTTER_FRAMEWORK_PACKAGES: &[&str] = &[
+    "flutter",
+    "flutter_test",
+    "flutter_web_plugins",
+    "stack_trace",
+];
+
+/// Strips logcat's `E/flutter ( 4321): ` and flutter's `I/flutter` prefixes.
+fn flutter_line(line: &str) -> &str {
+    let t = line.trim_end();
+    if let Some(at) = t.find("/flutter (") {
+        if let Some(close) = t[at..].find("): ") {
+            return &t[at + close + 3..];
+        }
+    }
+    t
+}
+
+/// `file:///C:/p/lib/main.dart:58:14` or `(package:demo/home.dart:45:22)` in a line → path
+/// relative to the project and line. Framework packages and `dart:` frames are skipped.
+fn dart_location(line: &str, root: &Path) -> Option<(String, u32, Option<u32>)> {
+    if let Some(at) = line.find("file:///") {
+        let rest = line[at + 8..].trim_end_matches(')');
+        let rest = rest.split_whitespace().next()?;
+        let (path, l, c, _) = split_location(&format!("{rest}:"))
+            .map(|(p, l, c, r)| (p.to_string(), l, c, r.to_string()))?;
+        if path.to_ascii_lowercase().ends_with(".dart") {
+            return Some((relative(&path, root), l, c));
+        }
+    }
+    let at = line.find("(package:")?;
+    let inner = line[at + 9..].trim_end().trim_end_matches(')');
+    let (pkg, rest) = inner.split_once('/')?;
+    if FLUTTER_FRAMEWORK_PACKAGES.contains(&pkg) {
+        return None;
+    }
+    let with_colon = format!("{rest}:");
+    let (path, l, c, _) = split_location(&with_colon)?;
+    Some((format!("lib/{path}"), l, c))
+}
+
+/// A Flutter framework error block (`══╡ EXCEPTION CAUGHT BY … ╞══` … closing `════`) or an
+/// unhandled Dart exception (`Unhandled Exception: …` and its `#n` frames) from the app log →
+/// one problem: the header and what was thrown, located at the error-causing widget or the
+/// first stack frame in the app's own package.
+#[must_use]
+pub fn flutter_exception(text: &str, root: &Path) -> Option<Problem> {
+    let lines: Vec<&str> = text.lines().map(flutter_line).collect();
+    let (start, message) =
+        if let Some(i) = lines.iter().position(|l| l.contains("EXCEPTION CAUGHT BY")) {
+            let header = lines[i]
+                .trim_matches(|c: char| !c.is_alphanumeric() && c != ' ')
+                .trim()
+                .to_string();
+            // the first sentence after "The following … was thrown …:"
+            let what = lines[i + 1..]
+                .iter()
+                .skip_while(|l| !l.starts_with("The following"))
+                .nth(1)
+                .map(|l| l.trim())
+                .filter(|l| !l.is_empty());
+            (
+                i,
+                what.map_or_else(|| header.clone(), |w| format!("{header}: {w}")),
+            )
+        } else {
+            let i = lines
+                .iter()
+                .position(|l| l.contains("Unhandled Exception:"))?;
+            let at = lines[i].find("Unhandled Exception:")?;
+            (i, lines[i][at..].trim().to_string())
+        };
+    let tail = &lines[start..];
+    // the widget that caused it, else the first app frame
+    let widget = tail
+        .iter()
+        .position(|l| l.contains("relevant error-causing widget was"))
+        .and_then(|i| {
+            tail[i + 1..]
+                .iter()
+                .take(3)
+                .find_map(|l| dart_location(l, root))
+        });
+    let loc = widget.or_else(|| {
+        tail.iter()
+            .filter(|l| l.trim_start().starts_with('#'))
+            .find_map(|l| dart_location(l, root))
+    });
+    let (file, line, col) = match loc {
+        Some((f, l, c)) => (Some(f), Some(l), c),
+        None => (None, None, None),
+    };
+    Some(problem(
+        Severity::Error,
+        &message,
+        file,
+        line,
+        col,
+        "flutter",
+    ))
 }
 
 /// Follows a growing log file (a tool's stdout/stderr) and hands out complete new lines.

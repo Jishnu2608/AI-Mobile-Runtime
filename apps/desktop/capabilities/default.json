@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "The main window may call the app's own commands only; no file system, shell or network plugins.",
-  "windows": ["main"],
+  "description": "The wizard and preview windows may call the app's own commands only; no file system, shell or network plugins. The preview connects to the Core's localhost preview server (CSP connect-src ws://127.0.0.1).",
+  "windows": ["main", "preview"],
   "permissions": ["core:default"]
 }

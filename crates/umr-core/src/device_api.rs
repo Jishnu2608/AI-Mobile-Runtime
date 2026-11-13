@@ -352,6 +352,23 @@ pub fn stop(state: &ApiState, id: Id, p: &DeviceRefParams) -> Response {
     ok(id, &serde_json::json!({ "avd": name, "stopped": stopped }))
 }
 
+/// Takes the AVD's emulator out of the running set and stops it on a background thread (a device
+/// switch boots the next one meanwhile).
+pub(crate) fn stop_avd_background(state: &ApiState, name: &str) {
+    let inst = state
+        .emulators
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .remove(name);
+    if let Some(i) = inst {
+        let name = name.to_string();
+        std::thread::spawn(move || {
+            i.stop();
+            tracing::info!(avd = %name, "emulator stopped");
+        });
+    }
+}
+
 /// Stops every emulator the product started (Core shutdown).
 pub fn stop_all(state: &ApiState) {
     let all: Vec<_> = state

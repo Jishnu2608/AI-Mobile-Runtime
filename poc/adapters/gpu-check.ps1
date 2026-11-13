@@ -1,7 +1,8 @@
 # POC-006 (throwaway): boot the emulator with a given GPU mode, open Settings, take a host-side gRPC screenshot,
 # and report whether app content is rendered (fraction of non-black pixels).
 param([string]$Gpu = 'host', [switch]$Cold)
-$r = 'D:\UMR-poc'; $adb = "$r\android-sdk\platform-tools\adb.exe"
+if (-not $env:UMR_POC_ROOT) { throw 'Set UMR_POC_ROOT to the PoC managed root (the folder that holds android-sdk, downloads, android-user-home)' }
+$r = $env:UMR_POC_ROOT; $adb = "$r\android-sdk\platform-tools\adb.exe"
 $env:ANDROID_HOME = "$r\android-sdk"; $env:ANDROID_SDK_ROOT = $env:ANDROID_HOME
 $env:ANDROID_USER_HOME = "$r\android-user-home"; $env:ANDROID_AVD_HOME = "$r\android-user-home\avd"
 & $adb emu kill 2>$null | Out-Null; Start-Sleep 8

@@ -1,0 +1,59 @@
+name: Bug report
+description: Something does not work as described
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Security problem? Do not file it here — see SECURITY.md.
+        Output of `umr` commands is sanitised; check raw log files for tokens, keys and personal data before attaching them.
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Output of `umr --version`
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Setup / installing toolchains
+        - Emulator / device
+        - Building or running a project
+        - Preview window
+        - Problems / logs (diagnostics)
+        - Agents (MCP)
+        - Installer / update
+        - Other
+    validations:
+      required: true
+  - type: dropdown
+    id: framework
+    attributes:
+      label: Framework
+      options: [Kotlin / Java (Gradle), Flutter, React Native, Expo, Not project-related]
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: "1. umr run ...\n2. ..."
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected and what happened
+    validations:
+      required: true
+  - type: textarea
+    id: doctor
+    attributes:
+      label: "`umr doctor --json`"
+      render: json
+  - type: textarea
+    id: problems
+    attributes:
+      label: "`umr problems --json` (if relevant)"
+      render: json

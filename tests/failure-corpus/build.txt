@@ -1,0 +1,254 @@
+=== kotlin k2 unresolved reference
+kind: gradle
+expect: build
+origin: app
+at: app/src/main/java/com/example/demo/MainActivity.kt:24
+---
+> Task :app:compileDebugKotlin FAILED
+e: file:///C:/p/app/src/main/java/com/example/demo/MainActivity.kt:24:9 Unresolved reference 'Greting'.
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':app:compileDebugKotlin'.
+> A failure occurred while executing org.jetbrains.kotlin.compilerRunner.GradleCompilerRunnerWithWorkers$GradleKotlinCompilerWorkAction
+   > Compilation error. See log for more details
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+
+BUILD FAILED in 4s
+=== kotlin k2 argument type mismatch
+kind: gradle
+expect: build
+origin: app
+at: app/src/main/java/com/example/demo/ui/Home.kt:51
+---
+> Task :app:compileDebugKotlin FAILED
+e: file:///C:/p/app/src/main/java/com/example/demo/ui/Home.kt:51:23 Argument type mismatch: actual type is 'String', but 'Int' was expected.
+e: file:///C:/p/app/src/main/java/com/example/demo/ui/Home.kt:60:5 Unresolved reference 'count'.
+
+FAILURE: Build failed with an exception.
+=== kotlin old format
+kind: gradle
+expect: build
+origin: app
+at: app/src/main/java/com/example/demo/Util.kt:10
+---
+> Task :app:compileDebugKotlin FAILED
+e: C:\p\app\src\main\java\com\example\demo\Util.kt: (10, 5): Expecting member declaration
+
+FAILURE: Build failed with an exception.
+=== kotlin missing return
+kind: gradle
+expect: build
+origin: app
+at: app/src/main/java/com/example/demo/Repo.kt:33
+---
+e: file:///C:/p/app/src/main/java/com/example/demo/Repo.kt:33:2 Missing return statement.
+=== javac cannot find symbol
+kind: gradle
+expect: build
+origin: app
+at: app/src/main/java/com/example/demo/MainActivity.java:18
+---
+> Task :app:compileDebugJavaWithJavac FAILED
+C:\p\app\src\main\java\com\example\demo\MainActivity.java:18: error: cannot find symbol
+        TextView t = findViewById(R.id.titel);
+                                      ^
+  symbol:   variable titel
+  location: class id
+1 error
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':app:compileDebugJavaWithJavac'.
+> Compilation failed; see the compiler error output for details.
+=== javac incompatible types
+kind: gradle
+expect: build
+origin: app
+at: app/src/main/java/com/example/demo/Calc.java:42
+---
+C:\p\app\src\main\java\com\example\demo\Calc.java:42: error: incompatible types: String cannot be converted to int
+        int total = label;
+                    ^
+1 error
+=== javac missing semicolon
+kind: gradle
+expect: build
+origin: app
+at: app/src/main/java/com/example/demo/Calc.java:9
+---
+C:\p\app\src\main\java\com\example\demo\Calc.java:9: error: ';' expected
+        int a = 1
+                 ^
+=== aapt unknown attribute
+kind: gradle
+expect: build
+origin: app
+at: app/src/main/res/layout/activity_main.xml:12
+---
+> Task :app:processDebugResources FAILED
+ERROR: C:\p\app\src\main\res\layout\activity_main.xml:12: AAPT: error: attribute android:text_size not found.
+
+FAILURE: Build failed with an exception.
+=== aapt missing string
+kind: gradle
+expect: build
+origin: app
+at: app/src/main/res/layout/activity_main.xml:20
+---
+ERROR: C:\p\app\src\main\res\layout\activity_main.xml:20: AAPT: error: resource string/welcome_title (aka com.example.demo:string/welcome_title) not found.
+=== manifest merger exported
+kind: gradle
+expect: build
+at: none
+---
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':app:processDebugMainManifest'.
+> Manifest merger failed : Apps targeting Android 12 and higher are required to specify an explicit value for `android:exported` when the corresponding component has an intent filter defined. See https://developer.android.com/guide/topics/manifest/activity-element#exported for details.
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+=== duplicate classes
+kind: gradle
+expect: build
+at: none
+---
+* What went wrong:
+Execution failed for task ':app:checkDebugDuplicateClasses'.
+> A failure occurred while executing com.android.build.gradle.internal.tasks.CheckDuplicatesRunnable
+   > Duplicate class kotlin.collections.jdk8.CollectionsJDK8Kt found in modules kotlin-stdlib-1.8.22 (org.jetbrains.kotlin:kotlin-stdlib:1.8.22) and kotlin-stdlib-jdk8-1.6.21 (org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.6.21)
+
+* Try:
+=== dependency version does not exist
+kind: gradle
+expect: build
+at: none
+---
+* What went wrong:
+Execution failed for task ':app:checkDebugAarMetadata'.
+> Could not resolve all files for configuration ':app:debugRuntimeClasspath'.
+   > Could not find com.squareup.retrofit2:retrofit:3.9.9.
+     Searched in the following locations:
+       - https://dl.google.com/dl/android/maven2/com/squareup/retrofit2/retrofit/3.9.9/retrofit-3.9.9.pom
+       - https://repo.maven.apache.org/maven2/com/squareup/retrofit2/retrofit/3.9.9/retrofit-3.9.9.pom
+     Required by:
+         project :app
+
+* Try:
+=== build script type mismatch
+kind: gradle
+expect: build
+origin: app
+at: app/build.gradle.kts:27
+---
+e: file:///C:/p/app/build.gradle.kts:27:14: Assignment type mismatch: actual type is 'String', but 'Int' was expected.
+
+FAILURE: Build failed with an exception.
+
+* Where:
+Build file 'C:\p\app\build.gradle.kts' line: 27
+
+* What went wrong:
+Script compilation error:
+
+  Line 27:     minSdk = "24"
+                        ^ Assignment type mismatch: actual type is 'String', but 'Int' was expected.
+=== jvm target inconsistency
+kind: gradle
+expect: build
+at: none
+---
+* What went wrong:
+Execution failed for task ':app:compileDebugKotlin'.
+> Inconsistent JVM-target compatibility detected for tasks 'compileDebugJavaWithJavac' (1.8) and 'compileDebugKotlin' (17).
+
+  Consider using JVM Toolchain: https://kotl.in/gradle/jvm/toolchain
+=== dart getter not defined
+kind: flutter-build
+expect: build
+origin: app
+at: lib/main.dart:42
+---
+Launching lib/main.dart on sdk gphone64 x86 64 in debug mode...
+lib/main.dart:42:11: Error: The getter 'titel' isn't defined for the class 'MyHomePage'.
+ - 'MyHomePage' is from 'package:demo/main.dart' ('lib/main.dart').
+Try correcting the name to the name of an existing getter, or defining a getter or field named 'titel'.
+          titel: Text(widget.title),
+          ^^^^^
+Target kernel_snapshot_program failed: Exception
+=== dart missing semicolon
+kind: flutter-build
+expect: build
+origin: app
+at: lib/src/home.dart:17
+---
+lib/src/home.dart:17:30: Error: Expected ';' after this.
+    final count = widget.start
+                             ^
+=== dart type mismatch
+kind: flutter-build
+expect: build
+origin: app
+at: lib/widgets/counter.dart:8
+---
+lib/widgets/counter.dart:8:25: Error: A value of type 'String' can't be assigned to a variable of type 'int'.
+  int value = '0';
+              ^
+=== dart missing import file
+kind: flutter-build
+expect: build
+origin: app
+at: lib/main.dart:3
+---
+lib/main.dart:3:8: Error: Error when reading 'lib/screens/settngs.dart': The system cannot find the file specified.
+import 'screens/settngs.dart';
+       ^
+=== dart null safety field
+kind: flutter-build
+expect: build
+origin: app
+at: lib/models/user.dart:12
+---
+lib/models/user.dart:12:16: Error: Field 'name' should be initialized because its type 'String' doesn't allow null.
+  final String name;
+               ^^^^
+=== babel syntax tsx
+kind: metro
+expect: build
+origin: app
+at: src/screens/Home.tsx:24
+---
+ ERROR  SyntaxError: C:\p\src\screens\Home.tsx: Unexpected token, expected "," (24:6)
+
+  22 |       <Text>Hello</Text>
+  23 |       <Button title="Go"
+> 24 |       onPress={go} />
+     |       ^
+=== babel unterminated jsx
+kind: metro
+expect: build
+origin: app
+at: App.js:31
+---
+ ERROR  SyntaxError: C:\p\App.js: Unterminated JSX contents. (31:10)
+=== metro module not found
+kind: metro
+expect: build
+origin: app
+at: App.js:3
+---
+error: Error: Unable to resolve module ./components/Headr from C:\p\App.js:
+
+None of these files exist:
+  * components\Headr(.android.js|.native.js|.js|.android.jsx|.native.jsx|.jsx|.android.json|.native.json|.json|.android.ts|.native.ts|.ts|.android.tsx|.native.tsx|.tsx)
+  * components\Headr
+  1 | import React from 'react';
+  2 | import { View } from 'react-native';
+> 3 | import Header from './components/Headr';
+    |                     ^

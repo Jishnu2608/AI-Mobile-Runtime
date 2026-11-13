@@ -8,11 +8,13 @@
 //! lifecycle (CORE-002) and the local JSON-RPC API over a user-only named pipe
 //! (CORE-003). Tokens (CORE-004) and storage (CORE-005) follow.
 
+pub mod agent_api;
 pub mod api_server;
 pub mod app_api;
 pub mod auth;
 pub mod daemon;
 pub mod device_api;
+pub mod diag_api;
 pub mod doctor;
 pub mod install_api;
 pub mod instance;
@@ -20,6 +22,7 @@ pub mod launcher;
 pub mod logging;
 pub mod manage_api;
 pub mod paths;
+pub mod preview_api;
 pub mod project_api;
 pub mod run_api;
 pub mod session_api;

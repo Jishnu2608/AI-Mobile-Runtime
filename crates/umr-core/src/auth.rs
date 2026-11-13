@@ -111,6 +111,9 @@ pub struct ClientRecord {
     pub scopes: Vec<Scope>,
     pub token_sha256: String,
     pub created_unix: u64,
+    /// MCP-003: what this client may do without asking (`project:<folder>`, `device:switch`).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub grants: Vec<String>,
 }
 
 /// Public view of a client (never includes the hash).
@@ -120,6 +123,8 @@ pub struct ClientSummary {
     pub name: String,
     pub scopes: Vec<Scope>,
     pub created_unix: u64,
+    #[serde(default)]
+    pub grants: Vec<String>,
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -197,6 +202,7 @@ impl AuthStore {
             scopes,
             token_sha256: hash_token(&token),
             created_unix: now_unix(),
+            grants: Vec::new(),
         });
         self.save()?;
         Ok((id, token))
@@ -222,8 +228,38 @@ impl AuthStore {
                 name: c.name.clone(),
                 scopes: c.scopes.clone(),
                 created_unix: c.created_unix,
+                grants: c.grants.clone(),
             })
             .collect()
+    }
+
+    /// A client's grants (empty for unknown clients and the admin).
+    #[must_use]
+    pub fn grants(&self, id: &str) -> Vec<String> {
+        self.clients
+            .iter()
+            .find(|c| c.id == id)
+            .map(|c| c.grants.clone())
+            .unwrap_or_default()
+    }
+
+    /// Replaces a client's grants; `false` if there is no such client.
+    pub fn set_grants(&mut self, id: &str, grants: Vec<String>) -> std::io::Result<bool> {
+        let Some(c) = self.clients.iter_mut().find(|c| c.id == id) else {
+            return Ok(false);
+        };
+        c.grants = grants;
+        c.grants.sort();
+        c.grants.dedup();
+        self.save()?;
+        Ok(true)
+    }
+
+    /// Adds one grant.
+    pub fn add_grant(&mut self, id: &str, grant: &str) -> std::io::Result<bool> {
+        let mut g = self.grants(id);
+        g.push(grant.to_string());
+        self.set_grants(id, g)
     }
 
     fn save(&self) -> std::io::Result<()> {

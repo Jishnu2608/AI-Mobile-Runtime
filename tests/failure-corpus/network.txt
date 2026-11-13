@@ -1,0 +1,98 @@
+=== maven 502
+kind: gradle
+expect: network
+origin: environment
+---
+* What went wrong:
+Execution failed for task ':app:checkDebugAarMetadata'.
+> Could not resolve all files for configuration ':app:debugRuntimeClasspath'.
+   > Could not resolve androidx.core:core-ktx:1.13.1.
+     Required by:
+         project :app
+      > Could not resolve androidx.core:core-ktx:1.13.1.
+         > Could not get resource 'https://dl.google.com/dl/android/maven2/androidx/core/core-ktx/1.13.1/core-ktx-1.13.1.pom'.
+            > Could not GET 'https://dl.google.com/dl/android/maven2/androidx/core/core-ktx/1.13.1/core-ktx-1.13.1.pom'. Received status code 502 from server: Bad Gateway
+=== unknown host
+kind: gradle
+expect: network
+origin: environment
+---
+* What went wrong:
+Could not resolve all files for configuration ':app:debugCompileClasspath'.
+> Could not resolve com.squareup.okhttp3:okhttp:4.12.0.
+  Required by:
+      project :app
+   > Could not resolve com.squareup.okhttp3:okhttp:4.12.0.
+      > Could not get resource 'https://repo.maven.apache.org/maven2/com/squareup/okhttp3/okhttp/4.12.0/okhttp-4.12.0.pom'.
+         > Could not GET 'https://repo.maven.apache.org/maven2/com/squareup/okhttp3/okhttp/4.12.0/okhttp-4.12.0.pom'.
+            > repo.maven.apache.org: No such host is known (repo.maven.apache.org)
+=== corporate proxy tls
+kind: gradle
+expect: network
+origin: environment
+---
+* What went wrong:
+Could not resolve all files for configuration ':classpath'.
+> Could not resolve com.android.tools.build:gradle:8.7.2.
+   > Could not get resource 'https://dl.google.com/dl/android/maven2/com/android/tools/build/gradle/8.7.2/gradle-8.7.2.pom'.
+      > Could not GET 'https://dl.google.com/dl/android/maven2/com/android/tools/build/gradle/8.7.2/gradle-8.7.2.pom'.
+         > PKIX path building failed: sun.security.provider.certpath.SunCertPathBuilderException: unable to find valid certification path to requested target
+=== wrapper download timeout
+kind: message
+source: gradle
+fallback: build
+expect: network
+origin: environment
+---
+Downloading https://services.gradle.org/distributions/gradle-8.9-bin.zip
+
+Exception in thread "main" java.net.SocketTimeoutException: Connect timed out
+	at java.base/sun.nio.ch.NioSocketImpl.timedFinishConnect(NioSocketImpl.java:546)
+=== pub get offline
+kind: tool
+source: flutter
+expect: network
+origin: environment
+---
+Resolving dependencies...
+Got socket error trying to find package http at https://pub.dev.
+Failed to update packages.
+=== npm enotfound
+kind: message
+source: npm
+fallback: build
+expect: network
+origin: environment
+---
+npm error code ENOTFOUND
+npm error syscall getaddrinfo
+npm error errno ENOTFOUND
+npm error network request to https://registry.npmjs.org/react-native failed, reason: getaddrinfo ENOTFOUND registry.npmjs.org
+=== red box no dev server
+kind: message
+source: react-native
+fallback: runtime
+expect: network
+origin: environment
+---
+Could not connect to development server.
+
+Ensure the following:
+- Node server is running and available on the same network - run 'npm start' from react-native root
+- Node server URL is correctly set in AppDelegate
+URL: http://10.0.2.2:8081/index.bundle?platform=android&dev=true&minify=false
+=== flutter host lookup
+kind: tool
+source: flutter
+expect: network
+origin: environment
+---
+Oops; flutter has exited unexpectedly: "SocketException: Failed host lookup: 'storage.googleapis.com' (OS Error: No such host is known. , errno = 11001)".
+=== expo unable to load script
+kind: message
+source: react-native
+fallback: runtime
+expect: network
+origin: environment
+---
+Unable to load script. Make sure you're either running Metro (run 'npx react-native start') or that your bundle 'index.android.bundle' is packaged correctly for release.

@@ -98,6 +98,79 @@ pub struct EmulatorStatus {
 #[derive(Clone, PartialEq, prost::Message)]
 pub struct Empty {}
 
+#[derive(Clone, PartialEq, prost::Message)]
+pub struct WheelEvent {
+    #[prost(int32, tag = "1")]
+    pub dx: i32,
+    #[prost(int32, tag = "2")]
+    pub dy: i32,
+    #[prost(int32, tag = "3")]
+    pub display: i32,
+}
+
+/// `InputEvent`: the proto's `oneof` as optional fields (same wire format; set exactly one).
+#[derive(Clone, PartialEq, prost::Message)]
+pub struct InputEvent {
+    #[prost(message, optional, tag = "1")]
+    pub key_event: Option<KeyboardEvent>,
+    #[prost(message, optional, tag = "2")]
+    pub touch_event: Option<TouchEvent>,
+    #[prost(message, optional, tag = "6")]
+    pub wheel_event: Option<WheelEvent>,
+}
+
+impl InputEvent {
+    #[must_use]
+    pub fn touch(x: i32, y: i32, pressure: i32, identifier: i32) -> Self {
+        Self {
+            touch_event: Some(TouchEvent {
+                touches: vec![Touch {
+                    x,
+                    y,
+                    identifier,
+                    pressure,
+                }],
+                display: 0,
+            }),
+            ..Self::default()
+        }
+    }
+
+    /// A W3C key (`GoBack`, `GoHome`, `AppSwitch`, `Enter`, `a`, ...); `event_type` 0 down,
+    /// 1 up, 2 press.
+    #[must_use]
+    pub fn key(key: &str, event_type: i32) -> Self {
+        Self {
+            key_event: Some(KeyboardEvent {
+                event_type,
+                key: key.to_string(),
+                ..KeyboardEvent::default()
+            }),
+            ..Self::default()
+        }
+    }
+
+    #[must_use]
+    pub fn text(text: &str) -> Self {
+        Self {
+            key_event: Some(KeyboardEvent {
+                event_type: 2,
+                text: text.to_string(),
+                ..KeyboardEvent::default()
+            }),
+            ..Self::default()
+        }
+    }
+
+    #[must_use]
+    pub fn wheel(dx: i32, dy: i32) -> Self {
+        Self {
+            wheel_event: Some(WheelEvent { dx, dy, display: 0 }),
+            ..Self::default()
+        }
+    }
+}
+
 /// Runs a future to completion from blocking code (inside or outside a Tokio runtime).
 fn block<F: Future>(f: F) -> F::Output {
     match tokio::runtime::Handle::try_current() {
@@ -156,9 +229,94 @@ impl Emulator {
             .map_err(|s| format!("emulator gRPC {method}: {}", s.message()))
     }
 
+    /// A channel for long-lived streams (no per-request timeout).
+    async fn stream_channel(&self) -> Res<Channel> {
+        Endpoint::from_shared(format!("http://127.0.0.1:{}", self.port))
+            .map_err(|e| e.to_string())?
+            .connect_timeout(Duration::from_secs(3))
+            .tcp_nodelay(true)
+            .connect()
+            .await
+            .map_err(|e| format!("emulator gRPC on port {}: {e}", self.port))
+    }
+
+    fn authorize<T>(&self, mut req: tonic::Request<T>) -> Res<tonic::Request<T>> {
+        if let Some(t) = &self.token {
+            let v = MetadataValue::try_from(format!("Bearer {t}")).map_err(|e| e.to_string())?;
+            req.metadata_mut().insert("authorization", v);
+        }
+        Ok(req)
+    }
+
+    /// PRV-008: `streamScreenshot` at `width` x `height` (0 = device size; the emulator scales on
+    /// its side, so smaller windows cost less). `rgb`: RGB888 (3 bytes per pixel, 25 % less to
+    /// move) instead of RGBA8888. Async: the Core's preview server drives it.
+    pub async fn stream_screenshots(
+        &self,
+        rgb: bool,
+        width: u32,
+        height: u32,
+    ) -> Res<tonic::Streaming<Image>> {
+        let ch = self.stream_channel().await?;
+        let mut g = tonic::client::Grpc::new(ch).max_decoding_message_size(64 << 20);
+        g.ready().await.map_err(|e| e.to_string())?;
+        let path: http::uri::PathAndQuery = format!("{SVC}streamScreenshot")
+            .parse()
+            .map_err(|e: http::uri::InvalidUri| e.to_string())?;
+        let req = self.authorize(tonic::Request::new(ImageFormat {
+            format: if rgb { 2 } else { 1 },
+            width,
+            height,
+            display: 0,
+        }))?;
+        g.server_streaming(req, path, ProstCodec::<ImageFormat, Image>::default())
+            .await
+            .map(tonic::Response::into_inner)
+            .map_err(|s| format!("emulator gRPC streamScreenshot: {}", s.message()))
+    }
+
+    /// PRV-010: `streamInputEvent` (client stream). Events sent into the returned channel reach
+    /// the emulator without a round trip per event.
+    pub async fn input_stream(&self) -> Res<tokio::sync::mpsc::Sender<InputEvent>> {
+        let ch = self.stream_channel().await?;
+        let mut g = tonic::client::Grpc::new(ch);
+        g.ready().await.map_err(|e| e.to_string())?;
+        let path: http::uri::PathAndQuery = format!("{SVC}streamInputEvent")
+            .parse()
+            .map_err(|e: http::uri::InvalidUri| e.to_string())?;
+        let (tx, rx) = tokio::sync::mpsc::channel::<InputEvent>(512);
+        let req = self.authorize(tonic::Request::new(
+            tokio_stream::wrappers::ReceiverStream::new(rx),
+        ))?;
+        tokio::spawn(async move {
+            let _ = g
+                .client_streaming(req, path, ProstCodec::<InputEvent, Empty>::default())
+                .await;
+        });
+        Ok(tx)
+    }
+
     /// `getStatus`: emulator version, uptime (ms), booted.
     pub fn status(&self) -> Res<EmulatorStatus> {
         block(self.unary::<Empty, EmulatorStatus>("getStatus", Empty {}))
+    }
+
+    /// `getScreenshot` as PNG scaled by the emulator to `width` x `height` (0 = device size).
+    pub fn screenshot_png_at(&self, width: u32, height: u32) -> Res<(Vec<u8>, u32, u32)> {
+        let img: Image = block(self.unary(
+            "getScreenshot",
+            ImageFormat {
+                format: 0,
+                width,
+                height,
+                display: 0,
+            },
+        ))?;
+        let (w, h) = img.format.map_or((0, 0), |f| (f.width, f.height));
+        if img.image.is_empty() {
+            return Err("the emulator returned an empty screenshot".into());
+        }
+        Ok((img.image, w, h))
     }
 
     /// `getScreenshot` as PNG; returns (png, width, height).
@@ -286,6 +444,11 @@ mod tests {
             ..KeyboardEvent::default()
         };
         assert_eq!(k.encode_to_vec(), [0x10, 2, 0x2a, 2, b'h', b'i']);
+        // InputEvent.touch_event is field 2, wheel_event field 6
+        let t = InputEvent::touch(5, 7, 1, 0).encode_to_vec();
+        assert_eq!(t[0], 0x12);
+        assert_eq!(InputEvent::wheel(0, -120).encode_to_vec()[0], 0x32);
+        assert_eq!(InputEvent::key("GoBack", 2).encode_to_vec()[0], 0x0a);
     }
 
     #[test]

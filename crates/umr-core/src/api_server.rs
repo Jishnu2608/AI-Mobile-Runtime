@@ -18,12 +18,14 @@ use tokio::sync::{watch, Notify};
 
 use umr_api::frame::{read_frame, write_frame, ReadFrame};
 use umr_api::methods::{
-    self, AcceptLicenceParams, AdapterCheckParams, AdminRunParams, AppParams, BootDeviceParams,
-    ClientInfo, CoreInfo, CreateClientParams, CreateClientResult, CreateDeviceParams,
-    DeviceRefParams, InputParams, InstallAppParams, JobParams, LoginParams, LoginResult, Pong,
-    PostureParams, ProfilesParams, ProjectPathParams, ProjectPlanParams, ReloadParams,
-    RemoveComponentParams, RevokeClientParams, RevokeClientResult, RunParams, RunStatusParams,
-    ShutdownAccepted, StartSessionParams, TargetParams, TrustParams,
+    self, AcceptLicenceParams, AdapterCheckParams, AdminRunParams, AppParams, AuditParams,
+    BootDeviceParams, ClientInfo, CoreInfo, CreateClientParams, CreateClientResult,
+    CreateDeviceParams, DecideParams, DeviceRefParams, DiagnosticGetParams, DiagnosticsParams,
+    DigestParams, GrantsParams, InputParams, InstallAppParams, JobParams, LoginParams, LoginResult,
+    LogsParams, Pong, PostureParams, PreviewOpenParams, ProfilesParams, ProjectPathParams,
+    ProjectPlanParams, ReloadParams, RemoveComponentParams, RevokeClientParams, RevokeClientResult,
+    RotateParams, RunParams, RunStatusParams, SelfTestParams, ShutdownAccepted, StartSessionParams,
+    TargetParams, TrustParams,
 };
 use umr_api::rpc::{codes, parse_request, Id, Request, Response, RpcError};
 use umr_api::{API_VERSION, MAX_MESSAGE_BYTES};
@@ -69,6 +71,13 @@ pub struct ApiState {
     pub run_events: Arc<Mutex<crate::run_api::EventLog>>,
     /// ADP-006: file watcher of the current run.
     pub run_watch: Mutex<Option<crate::watch::Watch>>,
+    /// DIA-004: the run's problems and log lines, and the device collector feeding them.
+    pub diag: Arc<Mutex<crate::diag_api::DiagStore>>,
+    pub diag_collector: Mutex<Option<crate::diag_api::Collector>>,
+    /// MCP-003: agent requests waiting for the user's approval.
+    pub approvals: crate::agent_api::Approvals,
+    /// Phase 4: the preview server, started on first `preview.open`.
+    pub preview: std::sync::OnceLock<umr_stream::PreviewServer>,
     /// The `Arc` this state lives in (set at start), for background threads such as the watcher.
     pub self_ref: std::sync::OnceLock<std::sync::Weak<ApiState>>,
 }
@@ -115,7 +124,11 @@ impl ApiState {
             run_info: Mutex::new(None),
             run_events: Arc::default(),
             run_watch: Mutex::new(None),
+            diag: Arc::default(),
+            diag_collector: Mutex::new(None),
+            approvals: crate::agent_api::Approvals::default(),
             self_ref: std::sync::OnceLock::new(),
+            preview: std::sync::OnceLock::new(),
         }
     }
 }
@@ -146,7 +159,11 @@ pub fn required_scope(method: &str) -> Option<Scope> {
         | methods::PROJECT_RELOAD
         | methods::PROJECT_STOP
         | methods::ADAPTER_CHECK => Some(Scope::Control),
-        methods::DEVICE_INPUT | methods::DEVICE_POSTURE => Some(Scope::Interact),
+        methods::DEVICE_INPUT
+        | methods::DEVICE_POSTURE
+        | methods::DEVICE_ROTATE
+        | methods::PREVIEW_OPEN
+        | methods::PREVIEW_SELFTEST => Some(Scope::Interact),
         methods::PING | methods::AUTH_LOGIN => None,
         methods::SHUTDOWN
         | methods::PROJECT_TRUST
@@ -160,7 +177,11 @@ pub fn required_scope(method: &str) -> Option<Scope> {
         | methods::INSTALL_CANCEL
         | methods::AUTH_CLIENT_CREATE
         | methods::AUTH_CLIENT_LIST
-        | methods::AUTH_CLIENT_REVOKE => Some(Scope::Admin),
+        | methods::AUTH_CLIENT_REVOKE
+        | methods::AUTH_CLIENT_GRANTS
+        | methods::APPROVALS_LIST
+        | methods::APPROVALS_DECIDE
+        | methods::AUDIT_LIST => Some(Scope::Admin),
         // core.info, core.doctor and unknown methods
         _ => Some(Scope::Observe),
     }
@@ -231,14 +252,27 @@ fn is_slow(method: &str) -> bool {
             | methods::PROJECT_STOP
             | methods::PROJECT_STATUS
             | methods::ADAPTER_CHECK
+            | methods::PREVIEW_OPEN
+            | methods::PREVIEW_STATUS
+            | methods::PREVIEW_SELFTEST
+            | methods::DEVICE_ROTATE
     )
 }
 
 /// Handles one request on a connection (blocking; env.scan takes seconds — the server runs it
 /// on a blocking thread).
-#[allow(clippy::too_many_lines)] // one flat match over all API methods
 pub fn dispatch(state: &ApiState, conn: &mut Connection, req: &Request) -> Response {
+    let resp = dispatch_checked(state, conn, req);
+    crate::agent_api::audit(state, conn.principal.as_ref(), req, &resp);
+    resp
+}
+
+#[allow(clippy::too_many_lines)] // one flat match over all API methods
+fn dispatch_checked(state: &ApiState, conn: &mut Connection, req: &Request) -> Response {
     if let Some(denied) = authorize(conn, req) {
+        return denied;
+    }
+    if let Some(denied) = crate::agent_api::gate(state, conn.principal.as_ref(), req) {
         return denied;
     }
     let id = req.id.clone();
@@ -311,6 +345,38 @@ pub fn dispatch(state: &ApiState, conn: &mut Connection, req: &Request) -> Respo
             crate::run_api::reload(state, id, &p)
         }),
         methods::PROJECT_STOP => crate::run_api::stop(state, id),
+        methods::PREVIEW_OPEN => with_target(id, &req.params, |id, p: PreviewOpenParams| {
+            crate::preview_api::open(state, id, &p)
+        }),
+        methods::PREVIEW_STATUS => crate::preview_api::status(state, id),
+        methods::PREVIEW_SELFTEST => with_target(id, &req.params, |id, p: SelfTestParams| {
+            crate::preview_api::selftest(state, id, &p)
+        }),
+        methods::DEVICE_ROTATE => with_target(id, &req.params, |id, p: RotateParams| {
+            crate::preview_api::rotate(state, id, &p)
+        }),
+        methods::RUNTIME_DIGEST => with_target(id, &req.params, |id, p: DigestParams| {
+            crate::agent_api::digest(state, id, &p)
+        }),
+        methods::APPROVALS_LIST => crate::agent_api::approvals_list(state, id),
+        methods::APPROVALS_DECIDE => with_params(id, &req.params, |id, p: DecideParams| {
+            crate::agent_api::approvals_decide(state, id, &p)
+        }),
+        methods::AUDIT_LIST => with_target(id, &req.params, |id, p: AuditParams| {
+            crate::agent_api::audit_list(state, id, &p)
+        }),
+        methods::AUTH_CLIENT_GRANTS => with_params(id, &req.params, |id, p: GrantsParams| {
+            crate::agent_api::set_grants(state, id, &p)
+        }),
+        methods::DIAGNOSTICS_LIST => with_target(id, &req.params, |id, p: DiagnosticsParams| {
+            crate::diag_api::list(state, id, &p)
+        }),
+        methods::DIAGNOSTICS_GET => with_params(id, &req.params, |id, p: DiagnosticGetParams| {
+            crate::diag_api::get(state, id, &p)
+        }),
+        methods::LOGS_TAIL => with_target(id, &req.params, |id, p: LogsParams| {
+            crate::diag_api::logs(state, id, &p)
+        }),
         methods::PROJECT_STATUS => with_target(id, &req.params, |id, p: RunStatusParams| {
             crate::run_api::status(state, id, &p)
         }),
@@ -397,6 +463,7 @@ pub fn dispatch(state: &ApiState, conn: &mut Connection, req: &Request) -> Respo
                     name: c.name,
                     scopes: scope_names(&c.scopes),
                     created_unix: c.created_unix,
+                    grants: c.grants,
                 })
                 .collect();
             ok(id, &list)
@@ -802,6 +869,108 @@ mod tests {
         params: Value,
     ) -> Result<Value, RpcError> {
         dispatch(s, c, &Request::new(1, method, params)).into_result()
+    }
+
+    #[test]
+    #[allow(clippy::many_single_char_names)]
+    fn agent_calls_are_gated_audited_and_digested() {
+        let tmp = TempRoot::new("api-agent");
+        let s = state(&tmp);
+        let mut admin = Connection::default();
+        call(
+            &s,
+            &mut admin,
+            methods::AUTH_LOGIN,
+            json!({"token": "umr_admin"}),
+        )
+        .unwrap();
+        let created = call(
+            &s,
+            &mut admin,
+            methods::AUTH_CLIENT_CREATE,
+            json!({"name": "claude-code", "scopes": ["observe", "control"]}),
+        )
+        .unwrap();
+        let (cid, token) = (
+            created["id"].as_str().unwrap().to_string(),
+            created["token"].as_str().unwrap().to_string(),
+        );
+        let mut agent = Connection::default();
+        call(&s, &mut agent, methods::AUTH_LOGIN, json!({"token": token})).unwrap();
+        // the digest is small and works with nothing running
+        let d = call(&s, &mut agent, methods::RUNTIME_DIGEST, json!({})).unwrap();
+        assert!(d.to_string().len() <= 1024, "{d}");
+        assert_eq!(d["hint"], "nothing runs: use run_project");
+        // admin-only agent methods are refused
+        assert_eq!(
+            call(&s, &mut agent, methods::APPROVALS_LIST, Value::Null)
+                .unwrap_err()
+                .code,
+            codes::FORBIDDEN
+        );
+        // running an ungranted folder waits for the user; the admin denies it
+        let req = Request::new(7, methods::PROJECT_RUN, json!({"path": "C:/nowhere/app"}));
+        let p = agent.principal.clone();
+        std::thread::scope(|sc| {
+            let st = &s;
+            let h = sc.spawn(move || {
+                crate::agent_api::gate_with(st, p.as_ref(), &req, std::time::Duration::from_secs(5))
+            });
+            let id = loop {
+                let l = call(&s, &mut admin, methods::APPROVALS_LIST, Value::Null).unwrap();
+                if let Some(id) = l["pending"][0]["id"].as_str() {
+                    assert_eq!(l["pending"][0]["action"], "run project");
+                    break id.to_string();
+                }
+                std::thread::sleep(std::time::Duration::from_millis(5));
+            };
+            call(
+                &s,
+                &mut admin,
+                methods::APPROVALS_DECIDE,
+                json!({"id": id, "decision": "deny"}),
+            )
+            .unwrap();
+            let denied = h.join().unwrap().expect("denied");
+            assert_eq!(denied.into_result().unwrap_err().code, codes::FORBIDDEN);
+        });
+        // a grant lets it through without asking
+        call(
+            &s,
+            &mut admin,
+            methods::AUTH_CLIENT_GRANTS,
+            json!({"id": cid, "grants": ["project:C:/nowhere", "device:switch"]}),
+        )
+        .unwrap();
+        let req = Request::new(8, methods::PROJECT_RUN, json!({"path": "C:/nowhere/app"}));
+        assert!(crate::agent_api::gate_with(
+            &s,
+            agent.principal.as_ref(),
+            &req,
+            std::time::Duration::from_millis(10)
+        )
+        .is_none());
+        // admin calls are never gated nor audited; the agent's are audited
+        let audit = call(&s, &mut admin, methods::AUDIT_LIST, json!({"client": cid})).unwrap();
+        let actions: Vec<&str> = audit["entries"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|e| e["action"].as_str().unwrap())
+            .collect();
+        assert!(
+            actions.contains(&methods::RUNTIME_DIGEST)
+                && actions.contains(&methods::APPROVALS_LIST),
+            "{actions:?}"
+        );
+        assert!(
+            audit["entries"].to_string().contains("error"),
+            "outcome recorded"
+        );
+        assert!(
+            !audit["entries"].to_string().contains(&token),
+            "tokens are never logged"
+        );
     }
 
     #[test]

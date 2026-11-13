@@ -104,6 +104,15 @@ pub fn check(path: &Path, expected: &Checksum) -> Result<(), InstallError> {
 
 /// A path inside the archive that is safe to create below the target folder.
 fn safe_relative(name: &str, enclosed: Option<PathBuf>) -> Result<PathBuf, InstallError> {
+    // the raw name first: archive libraries may "repair" absolute or drive paths silently
+    if name.starts_with(['/', '\\'])
+        || name.contains(':')
+        || name.split(['/', '\\']).any(|seg| seg == "..")
+    {
+        return Err(InstallError::Extract(format!(
+            "unsafe path in archive: {name}"
+        )));
+    }
     let rel =
         enclosed.ok_or_else(|| InstallError::Extract(format!("unsafe path in archive: {name}")))?;
     for c in rel.components() {
@@ -140,14 +149,17 @@ pub fn extract_zip(
         .map_err(|e| InstallError::Extract(e.to_string()))?;
 
     // Pass 1: validate every entry before writing anything.
-    let mut entries: Vec<(usize, PathBuf, bool)> = Vec::with_capacity(zip.len());
+    let mut entries: Vec<(usize, PathBuf, bool, u64)> = Vec::with_capacity(zip.len());
     let mut total: u64 = 0;
     let mut top: Option<std::ffi::OsString> = None;
     for i in 0..zip.len() {
         let e = zip
             .by_index_raw(i)
             .map_err(|e| InstallError::Extract(e.to_string()))?;
-        let name = e.name().to_string();
+        let name = e
+            .name()
+            .map_err(|e| InstallError::Extract(e.to_string()))?
+            .to_string();
         if e.is_symlink() {
             return Err(InstallError::Extract(format!(
                 "archive contains a link: {name}"
@@ -175,12 +187,12 @@ pub fn extract_zip(
                 }
             }
         }
-        entries.push((i, rel, e.is_dir()));
+        entries.push((i, rel, e.is_dir(), e.size()));
     }
 
     std::fs::create_dir_all(dest)?;
     let mut written = 0u64;
-    for (i, rel, is_dir) in entries {
+    for (i, rel, is_dir, declared) in entries {
         if cancel.load(Ordering::Relaxed) {
             return Err(InstallError::Cancelled);
         }
@@ -204,8 +216,18 @@ pub fn extract_zip(
             .by_index(i)
             .map_err(|e| InstallError::Extract(e.to_string()))?;
         let mut f = File::create(&out)?;
-        written += std::io::copy(&mut entry, &mut f)
+        // never trust the declared size: stop one byte past it (zip bombs, cloaked entries)
+        let n = std::io::copy(&mut (&mut entry).take(declared.saturating_add(1)), &mut f)
             .map_err(|e| InstallError::Extract(format!("{}: {e}", rel.display())))?;
+        if n > declared {
+            drop(f);
+            let _ = std::fs::remove_file(&out);
+            return Err(InstallError::Extract(format!(
+                "{}: entry is larger than the archive says",
+                rel.display()
+            )));
+        }
+        written += n;
     }
     Ok(written)
 }

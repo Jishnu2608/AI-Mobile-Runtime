@@ -22,6 +22,7 @@ pub mod http;
 pub mod layout;
 pub mod licence;
 pub mod manage;
+pub mod self_update;
 pub mod txn;
 pub mod verify;
 

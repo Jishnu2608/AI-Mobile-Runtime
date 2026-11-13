@@ -1,8 +1,9 @@
 # POC-012 sweep (throwaway): emulator gRPC streamScreenshot -> grpcbridge -> Tauri viewer, several stream sizes.
 # Emulator must run with: -gpu host -grpc 8554 -grpc-use-token
 param([string[]]$Sizes = @('540x1200', '720x1600', '1080x2400'))
+if (-not $env:UMR_POC_ROOT) { throw 'Set UMR_POC_ROOT to the PoC managed root (the folder that holds android-sdk, downloads, android-user-home)' }
 $p = $PSScriptRoot
-$adb = 'D:\UMR-poc\android-sdk\platform-tools\adb.exe'
+$adb = "$env:UMR_POC_ROOT\android-sdk\platform-tools\adb.exe"
 $ini = Get-ChildItem "$env:LOCALAPPDATA\Temp\avd\running" -Filter 'pid_*.ini' | Sort-Object LastWriteTime -Descending | Select-Object -First 1
 $env:GRPC_TOKEN = ((Get-Content $ini.FullName | Select-String '^grpc.token=').Line -replace '^grpc.token=', '')
 $env:GRPC = 'http://127.0.0.1:8554'

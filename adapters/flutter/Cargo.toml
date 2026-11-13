@@ -9,6 +9,7 @@ publish.workspace = true
 
 [dependencies]
 serde_json = "1"
+sha2 = "0.10"
 umr-adapter = { path = "../sdk" }
 umr-device = { path = "../../crates/umr-device" }
 umr-supervisor = { path = "../../crates/umr-supervisor" }

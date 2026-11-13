@@ -124,6 +124,8 @@ pub enum Event {
     Restart,
     Recover,
     CoreRestarted,
+    /// The session moves to another device profile (PRV-007): same session, new emulator.
+    SwitchDevice,
     Stop,
 }
 
@@ -148,6 +150,7 @@ impl Event {
             Self::Restart => "restart",
             Self::Recover => "recover",
             Self::CoreRestarted => "core_restarted",
+            Self::SwitchDevice => "switch_device",
             Self::Stop => "stop",
         }
     }
@@ -178,6 +181,7 @@ pub fn next(s: State, e: Event) -> Option<State> {
         (S::DeviceError, E::Recover) => S::Booting,
         (s, E::DeviceFailed) if s.has_device() || s == S::Booting => S::DeviceError,
         (s, E::CoreRestarted) if s.is_active() => S::DeviceError,
+        (s, E::SwitchDevice) if s.has_device() || s == S::DeviceError => S::Booting,
         (s, E::Stop) if s.is_active() => S::Stopped,
         _ => return None,
     })
@@ -301,6 +305,14 @@ impl Session {
         }
     }
 
+    /// Moves the session to another device profile (with [`Event::SwitchDevice`]).
+    pub fn set_device(&mut self, db: &Db, profile: &str, avd: &str) -> Result<(), SessionError> {
+        db.set_session_device(&self.id, profile, avd)?;
+        self.profile = profile.to_string();
+        self.avd = avd.to_string();
+        Ok(())
+    }
+
     /// Binds the project this session runs.
     pub fn set_project(&mut self, db: &Db, project: &str) -> Result<(), SessionError> {
         db.set_session_project(&self.id, project)?;
@@ -405,6 +417,9 @@ mod tests {
         assert_eq!(next(S::Building, E::BuildFailed), Some(S::BuildFailed));
         assert_eq!(next(S::BuildFailed, E::Rebuild), Some(S::Building));
         assert_eq!(next(S::Launching, E::LaunchFailed), Some(S::LaunchFailed));
+        assert_eq!(next(S::Running, E::SwitchDevice), Some(S::Booting));
+        assert_eq!(next(S::Crashed, E::SwitchDevice), Some(S::Booting));
+        assert_eq!(next(S::Idle, E::SwitchDevice), None);
     }
 
     #[test]

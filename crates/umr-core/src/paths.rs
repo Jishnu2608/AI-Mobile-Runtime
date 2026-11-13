@@ -120,6 +120,12 @@ impl CorePaths {
         self.root.join("clients.json")
     }
 
+    /// Agent client tokens written by `umr agent add` (`<name>.token`, owner-only files).
+    #[must_use]
+    pub fn agent_tokens_dir(&self) -> PathBuf {
+        self.root.join("agents")
+    }
+
     /// Whether the root was set explicitly rather than the per-user default.
     #[must_use]
     pub fn is_custom_root(&self) -> bool {

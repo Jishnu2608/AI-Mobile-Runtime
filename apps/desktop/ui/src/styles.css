@@ -89,3 +89,61 @@ pre.licence { max-height: 260px; overflow: auto; white-space: pre-wrap; backgrou
 .nav { display: flex; justify-content: space-between; margin-top: 20px; }
 .problem { padding: 12px 14px; border-radius: 8px; border: 1px solid var(--bad); color: var(--bad); display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 10px; }
 .busy { color: var(--muted); padding: 24px; }
+
+/* ---- preview window (Phase 4) ---------------------------------------------------------- */
+.pv { display: flex; flex-direction: column; height: 100vh; background: #101216; color: #e6e9ef; user-select: none; }
+.pv-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 3px; padding: 5px 6px; background: #181b21; border-bottom: 1px solid #262b34; flex: none; }
+.pv-bar button { min-width: 26px; height: 26px; border: 1px solid #2d333d; border-radius: 6px; background: #20242c; color: #e6e9ef; font-size: 14px; cursor: pointer; padding: 0 6px; }
+.pv-bar button:hover:not(:disabled) { background: #2a303a; }
+.pv-bar button:disabled { opacity: 0.5; cursor: default; }
+.pv-select { height: 26px; max-width: 92px; border: 1px solid #2d333d; border-radius: 6px; background: #20242c; color: #e6e9ef; padding: 0 4px; }
+.pv-fps { margin-left: auto; font-size: 12px; color: #9aa4b2; white-space: nowrap; }
+.pv-stage { position: relative; flex: 1; min-height: 0; }
+.pv-canvas { width: 100%; height: 100%; display: block; outline: none; touch-action: none; cursor: default; }
+.pv-overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; text-align: center; padding: 24px; color: #9aa4b2; font-size: 14px; pointer-events: none; }
+.pv-note { flex: none; padding: 6px 10px; font-size: 12px; background: #181b21; border-top: 1px solid #262b34; color: #c8cfda; cursor: pointer; overflow-wrap: anywhere; }
+
+/* DIA-004: Problems and Logs */
+.pv-problems.has { background: #4a2a1c !important; border-color: #8a4b2c !important; color: #ffcf9e !important; }
+.dg { flex: 0 0 42%; min-height: 140px; display: flex; flex-direction: column; background: #14161b; border-top: 1px solid #262b34; user-select: text; }
+.dg-tabs { display: flex; gap: 2px; padding: 4px 6px 0; border-bottom: 1px solid #262b34; flex: none; }
+.dg-tabs button { border: 0; background: transparent; color: #9aa4b2; padding: 4px 8px; font-size: 12px; cursor: pointer; border-bottom: 2px solid transparent; }
+.dg-tabs button.on { color: #e6e9ef; border-bottom-color: #5b8cff; }
+.dg-tabs .dg-close { margin-left: auto; }
+.dg-list, .dg-lines { flex: 1; min-height: 0; overflow: auto; font-size: 12px; }
+.dg-empty { padding: 14px; color: #7d8696; font-size: 12px; }
+.dg-cat { position: sticky; top: 0; padding: 4px 8px; background: #181b21; color: #9aa4b2; font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; }
+.dg-row { padding: 5px 8px; border-bottom: 1px solid #1d2128; cursor: pointer; }
+.dg-row:hover { background: #191c22; }
+.dg-head { display: flex; align-items: baseline; gap: 6px; }
+.dg-row.error .dg-msg { color: #ffb4a8; }
+.dg-row.warning .dg-msg { color: #f2d48a; }
+.dg-msg { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.dg-origin { flex: none; font-size: 10px; padding: 0 4px; border-radius: 4px; background: #262b34; color: #9aa4b2; }
+.dg-origin.app { background: #23324d; color: #9fc0ff; }
+.dg-count { flex: none; color: #9aa4b2; }
+.dg-copy { flex: none; border: 0; background: transparent; color: #7d8696; cursor: pointer; font-size: 12px; }
+.dg-copy:hover { color: #e6e9ef; }
+.dg-where { color: #7d8696; font-size: 11px; margin-top: 2px; overflow-wrap: anywhere; }
+.dg-stack { margin: 4px 0 0; padding: 6px; background: #0d0f12; border-radius: 4px; color: #c8cfda; font-size: 11px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.dg-logs { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.dg-filters { display: flex; gap: 4px; padding: 4px 6px; flex: none; }
+.dg-filters input { flex: 1; min-width: 0; height: 22px; border: 1px solid #2d333d; border-radius: 5px; background: #20242c; color: #e6e9ef; padding: 0 6px; font-size: 12px; }
+.dg-filters select, .dg-filters button { height: 22px; border: 1px solid #2d333d; border-radius: 5px; background: #20242c; color: #e6e9ef; font-size: 11px; cursor: pointer; }
+.dg-lines { font-family: ui-monospace, Consolas, monospace; font-size: 11px; padding: 2px 0 6px; }
+.dg-line { padding: 0 8px; white-space: pre-wrap; overflow-wrap: anywhere; color: #c8cfda; }
+.dg-line.lv-W { color: #f2d48a; }
+.dg-line.lv-E, .dg-line.lv-F { color: #ffb4a8; }
+.dg-line.lv-V, .dg-line.lv-D { color: #7d8696; }
+.dg-lv { display: inline-block; width: 12px; color: #7d8696; }
+.dg-tag { color: #8fb3ff; margin-right: 6px; }
+
+/* MCP-003: agent approvals */
+.ap { flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 7px 8px; background: #2a2440; border-bottom: 1px solid #4a3f73; color: #e6e9ef; font-size: 12px; user-select: text; }
+.ap-text { flex: 1 1 180px; min-width: 0; overflow-wrap: anywhere; }
+.ap-detail { color: #cfc6ff; }
+.ap-more { color: #9aa4b2; }
+.ap-actions { display: flex; gap: 4px; }
+.ap-actions button { height: 24px; padding: 0 8px; border: 1px solid #5b4fa0; border-radius: 5px; background: #3a3260; color: #e6e9ef; cursor: pointer; font-size: 12px; }
+.ap-actions button:hover:not(:disabled) { background: #4a4080; }
+.ap-actions .ap-deny { border-color: #6a3b3b; background: #3a2424; }

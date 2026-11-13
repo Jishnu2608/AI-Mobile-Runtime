@@ -105,6 +105,24 @@ impl Db {
     }
 
     /// Binds a project folder to a session (a device session that starts running a project).
+    /// Moves a session to another device profile (PRV-007 device switch).
+    pub fn set_session_device(
+        &self,
+        id: &str,
+        profile: &str,
+        avd: &str,
+    ) -> Result<(), StorageError> {
+        let n = self.conn().execute(
+            "UPDATE sessions SET profile = ?2, avd = ?3, serial = NULL, app = NULL WHERE id = ?1",
+            params![id, profile, avd],
+        )?;
+        if n == 1 {
+            Ok(())
+        } else {
+            Err(StorageError::Invalid(format!("no session {id}")))
+        }
+    }
+
     pub fn set_session_project(&self, id: &str, project: &str) -> Result<(), StorageError> {
         let n = self.conn().execute(
             "UPDATE sessions SET project = ?2 WHERE id = ?1",

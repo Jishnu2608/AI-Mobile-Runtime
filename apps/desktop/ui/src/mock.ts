@@ -1,8 +1,9 @@
 // Sample answers for UI development in a plain browser (shapes match the real Core API).
 const licenceText =
-  "Terms and Conditions\n\nThis is the Android Software Development Kit License Agreement\n\n1. Introduction\n\n1.1 The Android Software Development Kit (referred to in the License Agreement as the \"SDK\") is licensed to you subject to the terms of the License Agreement. (Sample text: the real app shows Google's full text.)";
+  "(Sample licence text for UI development. The real app shows the publisher's full licence, fetched from the official source.)";
 
 let accepted = false;
+let approvalAnswered = false;
 let polls = 0;
 
 const plan = {
@@ -21,6 +22,12 @@ const plan = {
   disk_free_bytes: 290000000000,
   disk_ok: true,
 };
+
+const sampleProblems = [
+  { fingerprint: "a1b2c3d4e5f60718", category: "build", origin: "app", severity: "error", source: "dart", message: "Expected ';' after this.", file: "lib/main.dart", line: 30, count: 2, seq: 1, first_seen_ms: 1, stack_frames: 0 },
+  { fingerprint: "b1b2c3d4e5f60718", category: "crash", origin: "app", severity: "error", source: "logcat", message: "java.lang.NumberFormatException: For input string: \"abc\"", file: "Calc.kt", line: 8, count: 3, seq: 2, first_seen_ms: 2, stack_frames: 3 },
+  { fingerprint: "c1b2c3d4e5f60718", category: "network", origin: "environment", severity: "error", source: "gradle", message: "Could not GET 'https://dl.google.com/dl/android/maven2/x.pom'. Received status code 502", count: 1, seq: 3, first_seen_ms: 3, stack_frames: 0 },
+];
 
 export async function mockCall(method: string, _params: unknown): Promise<any> {
   await new Promise((r) => setTimeout(r, 250));
@@ -97,6 +104,36 @@ export async function mockCall(method: string, _params: unknown): Promise<any> {
       };
     case "admin.run":
       return { action: "enable-whpx", status: "already-on", message: "Windows Hypervisor Platform is on and usable" };
+    case "preview.open":
+      return { url: "", profile: "standard" };
+    case "device.profiles":
+      return { profiles: [{ profile: { id: "standard", class: "phone" } }] };
+    case "diagnostics.list":
+      return {
+        entries: (_params as any)?.since ? [] : sampleProblems,
+        counts: { build: 1, crash: 1, network: 1 },
+        total: sampleProblems.length,
+        cursor: 3,
+        run: { project: "C:\work\demo" },
+      };
+    case "diagnostics.get":
+      return { ...sampleProblems[1], stack: ["at java.lang.Integer.parseInt(Integer.java:615)", "at com.example.demo.Calc.parse(Calc.kt:8)", "at com.example.demo.MainScreenKt.MainScreen(MainScreen.kt:94)"] };
+    case "logs.tail":
+      if ((_params as any)?.since) return { lines: [], cursor: 4 };
+      return {
+        lines: [
+          { seq: 1, source: "umr", level: "I", tag: "building", text: "lib/main.dart" },
+          { seq: 2, source: "tool", level: "I", text: "Launching lib/main.dart on sdk gphone64 x86 64 in debug mode..." },
+          { seq: 3, source: "logcat", level: "W", tag: "flutter", pid: 4321, text: "A RenderFlex overflowed by 42 pixels on the bottom." },
+          { seq: 4, source: "logcat", level: "E", tag: "AndroidRuntime", pid: 4321, text: "FATAL EXCEPTION: main" },
+        ],
+        cursor: 4,
+      };
+    case "approvals.list":
+      return { pending: approvalAnswered ? [] : [{ id: "a1", client: "claude-code", client_id: "c_1", action: "run project", detail: "C:/work/demo", created_ms: 1 }] };
+    case "approvals.decide":
+      approvalAnswered = true;
+      return { id: "a1", decision: "allow" };
     default:
       throw new Error(`mock: no sample for ${method}`);
   }

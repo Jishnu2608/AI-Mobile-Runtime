@@ -1,26 +1,38 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "AI Mobile Runtime",
-  "version": "0.1.0",
+  "mainBinaryName": "umr-desktop",
   "identifier": "dev.umr.desktop",
   "build": {
     "frontendDist": "ui/dist",
     "devUrl": "http://127.0.0.1:27300"
   },
   "app": {
-    "windows": [
-      {
-        "label": "main",
-        "title": "AI Mobile Runtime — Setup",
-        "width": 960,
-        "height": 720,
-        "minWidth": 720,
-        "minHeight": 560
-      }
-    ],
+    "windows": [],
     "security": {
-      "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src ipc: http://ipc.localhost"
+      "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src ipc: http://ipc.localhost ws://127.0.0.1:*"
     }
   },
-  "bundle": { "active": false, "icon": ["icons/icon.ico"] }
+  "bundle": {
+    "active": true,
+    "targets": ["nsis"],
+    "icon": ["icons/icon.ico"],
+    "shortDescription": "See and test your Android app beside your AI coding agent.",
+    "longDescription": "AI Mobile Runtime prepares the Android toolchain, runs an emulator, shows the running app beside your coding agent and gives the agent the screen, the errors and the controls (CLI and MCP).",
+    "category": "DeveloperTool",
+    "resources": {
+      "../../target/release/umr.exe": "umr.exe",
+      "../../target/release/umr-core.exe": "umr-core.exe",
+      "../../target/release/umr-elevate.exe": "umr-elevate.exe",
+      "../../THIRD_PARTY_NOTICES.md": "THIRD_PARTY_NOTICES.md"
+    },
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser",
+        "compression": "lzma",
+        "displayLanguageSelector": false,
+        "installerHooks": "windows/hooks.nsh"
+      }
+    }
+  }
 }

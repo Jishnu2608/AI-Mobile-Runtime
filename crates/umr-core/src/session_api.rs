@@ -107,9 +107,31 @@ pub fn start(state: &ApiState, id: Id, p: &StartSessionParams) -> Response {
             RpcError::new(codes::BUSY, "a session is already starting"),
         );
     }
-    let _busy = Busy(state);
-    match start_inner(state, p) {
-        Ok(v) => ok(id, &v),
+    // a project running on the old device follows the switch (AC-CLI-03)
+    let follow = state
+        .run_info
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .clone();
+    let busy = Busy(state);
+    let r = start_inner(state, p);
+    drop(busy);
+    crate::preview_api::refresh_target(state);
+    match r {
+        Ok(v) => {
+            let switched = follow
+                .as_ref()
+                .filter(|_| p.apk.is_none() && p.package.is_none());
+            if let Some(run) = switched {
+                let rerun =
+                    crate::run_api::run_inner(state, &run.project, Some(&p.profile), false, true);
+                return ok(
+                    id,
+                    &serde_json::json!({ "session": v["session"], "boot": v["boot"], "run": rerun.unwrap_or_else(|e| serde_json::json!({ "status": "failed", "error": e.message })) }),
+                );
+            }
+            ok(id, &v)
+        }
         Err(e) => Response::err(Some(id), e),
     }
 }
@@ -126,10 +148,12 @@ fn start_inner(state: &ApiState, p: &StartSessionParams) -> Result<serde_json::V
     }
     let avd = device_api::resolve_avd(state, &p.profile, p.api.as_deref())?;
     let mut s = match refresh(state) {
-        // the same device is already up and nothing new to launch
+        // the same device is already up and nothing new to launch (whatever the app's state:
+        // a crashed or failed app does not mean the device has to go)
         Some(s)
             if s.avd == avd.name
-                && s.state == State::Running
+                && s.state.has_device()
+                && device_api::running(state).iter().any(|r| r.avd == s.avd)
                 && p.apk.is_none()
                 && p.package.is_none() =>
         {
@@ -142,6 +166,31 @@ fn start_inner(state: &ApiState, p: &StartSessionParams) -> Result<serde_json::V
         Some(mut s) if s.avd == avd.name && s.state == State::DeviceError => {
             apply(state, &mut s, Event::Recover, Some("recovering"))?;
             s
+        }
+        // PRV-007: a device switch keeps the session (same id, journal continues)
+        Some(mut old)
+            if old.avd != avd.name
+                && (old.state.has_device() || old.state == State::DeviceError) =>
+        {
+            // the app stops; the run's Gradle daemon stays warm for the re-run on the new device,
+            // and the old emulator shuts down while the new one boots
+            crate::run_api::stop_app(state);
+            device_api::stop_avd_background(state, &old.avd);
+            apply(
+                state,
+                &mut old,
+                Event::SwitchDevice,
+                Some(&format!("switch to {}", p.profile)),
+            )?;
+            {
+                let db = state.db.lock().unwrap_or_else(PoisonError::into_inner);
+                old.set_device(&db, &p.profile, &avd.name)
+                    .map_err(|e| journal_error(&e))?;
+            }
+            old.serial = None;
+            old.app = None; // the app is not on the new device (yet)
+            *state.session.lock().unwrap_or_else(PoisonError::into_inner) = Some(old.clone());
+            old
         }
         other => {
             if let Some(mut old) = other.filter(|o| o.state.is_active()) {

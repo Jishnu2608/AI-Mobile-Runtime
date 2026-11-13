@@ -1,0 +1,29 @@
+name: Diagnostics miss
+description: A failure the runtime classified wrongly, located wrongly, or did not report
+labels: [diagnostics]
+body:
+  - type: markdown
+    attributes:
+      value: These become cases in tests/failure-corpus. Paste the tool's real output (remove secrets and personal paths).
+  - type: dropdown
+    id: expected
+    attributes:
+      label: Expected category
+      options: [build, runtime, crash, environment, device, network]
+    validations:
+      required: true
+  - type: input
+    id: at
+    attributes:
+      label: Expected file:line (if any)
+  - type: textarea
+    id: got
+    attributes:
+      label: What `umr problems` showed
+  - type: textarea
+    id: output
+    attributes:
+      label: Tool output
+      render: text
+    validations:
+      required: true

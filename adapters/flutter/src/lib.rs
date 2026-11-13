@@ -11,6 +11,12 @@
 //!   `{"code":0,"message":"Reloaded 1 of 640 libraries in 312ms."}` (non-zero = compile error).
 //! * Full reload = stop the tool and run again (native changes, new plugins).
 //!
+//! Fast start (PRV-012 / AC-CLI-01): when nothing native changed since the last debug APK was
+//! built, `flutter run --use-application-binary` reuses it (no Gradle). When the device even has
+//! that exact APK installed (same size and SHA-256), the adapter skips the install too: it starts
+//! `flutter attach`, launches the app and lets the tool connect and sync the current Dart code.
+//! If attaching fails, it falls back to `flutter run`.
+//!
 //! Environment: the isolated recipe with `FLUTTER_ROOT`, `PUB_CACHE` and `APPDATA` in the managed
 //! folder (Flutter keeps `.flutter_settings` in `APPDATA`, POC-006 finding 10).
 
@@ -22,7 +28,7 @@ use std::sync::{Arc, Condvar, Mutex, PoisonError};
 use std::time::{Duration, Instant};
 
 use serde_json::{json, Value};
-use umr_adapter::problems::parse_line;
+use umr_adapter::problems::{flutter_exception, parse_line};
 use umr_adapter::{
     Adapter, AdapterContext, AdapterError, Capabilities, Event, Framework, Issue, Phase, Problem,
     ReloadKind, RunningApp, Severity, Sink,
@@ -94,6 +100,50 @@ pub fn stop_request(id: u64, app_id: &str) -> String {
     json!([{ "id": id, "method": "app.stop", "params": { "appId": app_id } }]).to_string()
 }
 
+/// Newest modification time under `dir` (skipping build output and tool state).
+fn newest(dir: &Path, depth: usize) -> Option<std::time::SystemTime> {
+    let mut best = std::fs::metadata(dir).and_then(|m| m.modified()).ok();
+    if depth == 0 {
+        return best;
+    }
+    for e in std::fs::read_dir(dir).ok()?.flatten() {
+        let name = e.file_name().to_string_lossy().into_owned();
+        if matches!(
+            name.as_str(),
+            "build" | ".gradle" | ".cxx" | ".kotlin" | "local.properties"
+        ) {
+            continue;
+        }
+        let p = e.path();
+        let t = if p.is_dir() {
+            newest(&p, depth - 1)
+        } else {
+            e.metadata().and_then(|m| m.modified()).ok()
+        };
+        if t > best {
+            best = t;
+        }
+    }
+    best
+}
+
+/// The last debug APK, if nothing native changed after it was built (pubspec, `android/`).
+#[must_use]
+pub fn reusable_apk(root: &Path) -> Option<PathBuf> {
+    let apk = root.join("build/app/outputs/flutter-apk/app-debug.apk");
+    let built = std::fs::metadata(&apk).and_then(|m| m.modified()).ok()?;
+    let inputs = [
+        std::fs::metadata(root.join("pubspec.yaml"))
+            .and_then(|m| m.modified())
+            .ok(),
+        std::fs::metadata(root.join("pubspec.lock"))
+            .and_then(|m| m.modified())
+            .ok(),
+        newest(&root.join("android"), 6),
+    ];
+    inputs.iter().flatten().all(|t| *t <= built).then_some(apk)
+}
+
 /// `applicationId` from `android/app/build.gradle(.kts)`.
 #[must_use]
 pub fn application_id(root: &Path) -> Option<String> {
@@ -119,42 +169,90 @@ pub fn application_id(root: &Path) -> Option<String> {
 
 #[derive(Debug, Default)]
 struct Shared {
+    /// Any output from the tool yet (attach: the tool is listening).
+    seen: bool,
     app_id: Option<String>,
     started: bool,
     stopped: Option<String>,
     replies: HashMap<u64, (Option<Value>, Option<Value>)>,
     problems: Vec<Problem>,
     eof: bool,
+    /// Lines of a Flutter exception being printed (one `app.log` event per line).
+    exc: Vec<String>,
 }
 
 type State = Arc<(Mutex<Shared>, Condvar)>;
 
+fn add_problem(p: Problem, sink: &Sink, st: &mut Shared) {
+    if !st.problems.contains(&p) {
+        sink(Event::Problem(p.clone()));
+        st.problems.push(p);
+    }
+}
+
+/// Reports the buffered exception block (if any) as one problem.
+fn flush_exception(root: &Path, sink: &Sink, st: &mut Shared) {
+    if st.exc.is_empty() {
+        return;
+    }
+    let text = std::mem::take(&mut st.exc).join(
+        "
+",
+    );
+    if let Some(p) = flutter_exception(&text, root) {
+        add_problem(p, sink, st);
+    }
+}
+
+/// `E/flutter ( 4321): x` → `x`.
+fn log_text(line: &str) -> &str {
+    match line
+        .find("/flutter (")
+        .and_then(|a| line[a..].find("): ").map(|b| a + b + 3))
+    {
+        Some(at) => &line[at..],
+        None => line,
+    }
+}
+
+/// Compiler errors line by line; Flutter exceptions as whole blocks: a framework error runs to
+/// its closing `════` line, an unhandled exception to its first app frame (or the first line
+/// after its stack).
 fn problem_from_log(text: &str, root: &Path, sink: &Sink, st: &mut Shared) {
     for line in text.lines() {
         if let Some(p) = parse_line(line, root) {
-            if !st.problems.contains(&p) {
-                sink(Event::Problem(p.clone()));
-                st.problems.push(p);
-            }
+            add_problem(p, sink, st);
         }
-    }
-    if text.contains("EXCEPTION CAUGHT BY") {
-        let p = Problem {
-            severity: Severity::Error,
-            message: text
-                .lines()
-                .find(|l| l.contains("EXCEPTION CAUGHT BY"))
-                .unwrap_or(text)
-                .trim_matches(|c: char| !c.is_alphanumeric() && c != ' ')
-                .trim()
-                .to_string(),
-            file: None,
-            line: None,
-            column: None,
-            source: "flutter".into(),
-        };
-        sink(Event::Problem(p.clone()));
-        st.problems.push(p);
+        let t = log_text(line).trim();
+        if t.contains("EXCEPTION CAUGHT BY") || t.contains("Unhandled Exception:") {
+            flush_exception(root, sink, st);
+            st.exc.push(line.to_string());
+            continue;
+        }
+        if st.exc.is_empty() {
+            continue;
+        }
+        let framework_block = st.exc[0].contains("EXCEPTION CAUGHT BY");
+        let frame = t.starts_with('#');
+        let had_frames = st.exc.iter().any(|l| log_text(l).trim().starts_with('#'));
+        if !framework_block && had_frames && !frame {
+            flush_exception(root, sink, st);
+            continue;
+        }
+        st.exc.push(line.to_string());
+        let located = !framework_block
+            && frame
+            && flutter_exception(
+                &st.exc.join(
+                    "
+",
+                ),
+                root,
+            )
+            .is_some_and(|p| p.file.is_some());
+        if (framework_block && t.starts_with("════")) || located || st.exc.len() >= 80 {
+            flush_exception(root, sink, st);
+        }
     }
 }
 
@@ -190,6 +288,7 @@ fn handle(msg: Message, root: &Path, sink: &Sink, st: &mut Shared) {
                 problem_from_log(text, root, sink, st);
             }
             "app.stop" => {
+                flush_exception(root, sink, st);
                 let why = params["error"]
                     .as_str()
                     .unwrap_or("the app stopped")
@@ -218,6 +317,7 @@ fn reader(out: ChildStdout, root: PathBuf, sink: Sink, state: State) {
         let Ok(line) = line else { break };
         let (lock, cv) = &*state;
         let mut st = lock.lock().unwrap_or_else(PoisonError::into_inner);
+        st.seen = true;
         for m in decode(&line) {
             handle(m, &root, &sink, &mut st);
         }
@@ -264,7 +364,154 @@ struct Session {
     next_id: u64,
 }
 
-fn launch_tool(ctx: &AdapterContext, sink: &Sink) -> Result<Session, AdapterError> {
+/// SHA-256 of a file as lower-case hex.
+fn sha256_file(path: &Path) -> Option<String> {
+    use sha2::{Digest, Sha256};
+    use std::io::Read;
+    let mut f = std::fs::File::open(path).ok()?;
+    let mut h = Sha256::new();
+    let mut buf = vec![0u8; 1 << 20];
+    loop {
+        let n = f.read(&mut buf).ok()?;
+        if n == 0 {
+            break;
+        }
+        h.update(&buf[..n]);
+    }
+    Some(
+        h.finalize()
+            .iter()
+            .fold(String::with_capacity(64), |mut s, b| {
+                use std::fmt::Write as _;
+                let _ = write!(s, "{b:02x}");
+                s
+            }),
+    )
+}
+
+/// The local APK's hash, cached next to it (keyed by size and modification time).
+fn apk_hash(apk: &Path) -> Option<String> {
+    let m = std::fs::metadata(apk).ok()?;
+    let mtime = m
+        .modified()
+        .ok()?
+        .duration_since(std::time::UNIX_EPOCH)
+        .ok()?
+        .as_millis();
+    let key = format!("{} {}", m.len(), mtime);
+    let cache = apk.with_extension("apk.umr-sha256");
+    if let Ok(t) = std::fs::read_to_string(&cache) {
+        if let Some((k, h)) = t.trim().rsplit_once(' ') {
+            if k == key {
+                return Some(h.to_string());
+            }
+        }
+    }
+    let h = sha256_file(apk)?;
+    let _ = std::fs::write(&cache, format!("{key} {h}"));
+    Some(h)
+}
+
+/// Whether the device has exactly this APK installed for `package`: one adb round trip instead
+/// of three (pm path / stat / sha256sum), since each costs seconds under host load (PRV-012),
+/// so the fast path stays fast only if it asks the device once.
+fn installed_same(ctx: &AdapterContext, package: &str, apk: &Path) -> bool {
+    let (port, serial) = (ctx.device.adb.port, ctx.device.serial.as_str());
+    let local = std::fs::metadata(apk).map_or(0, |m| m.len());
+    let Some(hash) = apk_hash(apk) else {
+        return false;
+    };
+    let cmd = format!(
+        "p=$(pm path {package} 2>/dev/null | sed -n 's/^package://p' | grep base.apk | head -n1); \
+         [ -n \"$p\" ] && stat -c %s \"$p\" && sha256sum \"$p\""
+    );
+    let Ok(out) = umr_device::adb::shell(port, serial, &cmd) else {
+        return false;
+    };
+    let mut lines = out.lines();
+    let Some(size) = lines.next().and_then(|v| v.trim().parse::<u64>().ok()) else {
+        return false;
+    };
+    if size != local {
+        return false;
+    }
+    let remote = lines
+        .next()
+        .and_then(|v| v.split_whitespace().next())
+        .map(str::to_lowercase);
+    remote.as_deref() == Some(hash.as_str())
+}
+
+/// Caches the launcher component resolved for an APK (`pkg/.MainActivity`), keyed like
+/// [`apk_hash`]: avoids a `cmd package resolve-activity` round trip on every attach.
+fn cached_component(apk: &Path, resolve: impl FnOnce() -> Option<String>) -> Option<String> {
+    let m = std::fs::metadata(apk).ok()?;
+    let mtime = m
+        .modified()
+        .ok()?
+        .duration_since(std::time::UNIX_EPOCH)
+        .ok()?
+        .as_millis();
+    let key = format!("{} {}", m.len(), mtime);
+    let cache = apk.with_extension("apk.umr-activity");
+    if let Ok(t) = std::fs::read_to_string(&cache) {
+        if let Some((k, c)) = t.trim().rsplit_once(' ') {
+            if k == key {
+                return Some(c.to_string());
+            }
+        }
+    }
+    let c = resolve()?;
+    let _ = std::fs::write(&cache, format!("{key} {c}"));
+    Some(c)
+}
+
+/// Dependencies are resolved (`.dart_tool/package_config.json` newer than the pubspec files):
+/// `flutter run --no-pub` skips `pub get`.
+fn pub_resolved(root: &Path) -> bool {
+    let t = |p: &str| {
+        std::fs::metadata(root.join(p))
+            .and_then(|m| m.modified())
+            .ok()
+    };
+    match t(".dart_tool/package_config.json") {
+        Some(cfg) => [t("pubspec.yaml"), t("pubspec.lock")]
+            .iter()
+            .flatten()
+            .all(|x| *x <= cfg),
+        None => false,
+    }
+}
+
+/// `dart.exe` + arguments that run the Flutter tool snapshot directly, when the SDK has prepared
+/// it (`bin/cache/flutter_tools.stamp` is written after the snapshot is built).
+#[must_use]
+pub fn direct_tool(root: &Path) -> Option<(PathBuf, Vec<String>)> {
+    let cache = root.join("bin").join("cache");
+    let dart = cache.join("dart-sdk").join("bin").join("dart.exe");
+    let snapshot = cache.join("flutter_tools.snapshot");
+    let packages = root
+        .join("packages")
+        .join("flutter_tools")
+        .join(".dart_tool")
+        .join("package_config.json");
+    let stamp = cache.join("flutter_tools.stamp");
+    (dart.is_file() && packages.is_file() && stamp.is_file() && snapshot.is_file()).then(|| {
+        (
+            dart,
+            vec![
+                format!("--packages={}", packages.display()),
+                snapshot.display().to_string(),
+            ],
+        )
+    })
+}
+
+fn launch_tool(
+    ctx: &AdapterContext,
+    sink: &Sink,
+    attach: Option<(&str, &str)>,
+) -> Result<Session, AdapterError> {
     let flutter = ctx
         .flutter_root
         .as_ref()
@@ -277,13 +524,58 @@ fn launch_tool(ctx: &AdapterContext, sink: &Sink) -> Result<Session, AdapterErro
     let log = ctx
         .log_dir
         .join(format!("flutter-{}.log", ctx.group.replace(':', "-")));
-    let mut spec = ProcessSpec::new(&name, flutter, &log).args([
-        "run",
-        "--machine",
-        "--debug",
-        "-d",
-        ctx.device.serial.as_str(),
-    ]);
+    let mut args: Vec<String> = match attach {
+        // (package, VM service URL on the host)
+        Some((pkg, url)) => [
+            "attach",
+            "--machine",
+            "-d",
+            ctx.device.serial.as_str(),
+            "--app-id",
+            pkg,
+            "--debug-url",
+            url,
+        ]
+        .iter()
+        .map(ToString::to_string)
+        .collect(),
+        None => [
+            "run",
+            "--machine",
+            "--debug",
+            "-d",
+            ctx.device.serial.as_str(),
+        ]
+        .iter()
+        .map(ToString::to_string)
+        .collect(),
+    };
+    if attach.is_none() && pub_resolved(&ctx.project) {
+        args.push("--no-pub".into());
+    }
+    // AC-CLI-01: no native change since the last build → install that APK and sync the current
+    // Dart code into it, instead of a Gradle build on every start
+    if let Some(apk) = reusable_apk(&ctx.project).filter(|_| attach.is_none()) {
+        sink(Event::Phase {
+            phase: Phase::Building,
+            message: format!(
+                "reusing {} (no native changes since it was built)",
+                apk.display()
+            ),
+        });
+        args.push("--use-application-binary".into());
+        args.push(apk.display().to_string());
+    }
+    // the prepared tool snapshot starts ~1.5 s faster than flutter.bat (which first checks
+    // whether the snapshot is stale); the batch file stays the path when it is not prepared
+    let (program, args) = match ctx.flutter_root.as_deref().and_then(direct_tool) {
+        Some((dart, mut pre)) => {
+            pre.extend(args);
+            (dart, pre)
+        }
+        None => (flutter, args),
+    };
+    let mut spec = ProcessSpec::new(&name, program, &log).args(args);
     spec.env.clone_from(&ctx.env);
     if let Some(j) = &ctx.jdk_home {
         spec.env.insert("JAVA_HOME".into(), j.display().to_string());
@@ -296,7 +588,11 @@ fn launch_tool(ctx: &AdapterContext, sink: &Sink) -> Result<Session, AdapterErro
     spec.group = Some(ctx.group.clone());
     sink(Event::Phase {
         phase: Phase::Building,
-        message: format!("flutter run --machine -d {}", ctx.device.serial),
+        message: format!(
+            "flutter {} --machine -d {}",
+            if attach.is_some() { "attach" } else { "run" },
+            ctx.device.serial
+        ),
     });
     let (_pid, stdin, stdout) = ctx
         .supervisor
@@ -317,9 +613,97 @@ fn launch_tool(ctx: &AdapterContext, sink: &Sink) -> Result<Session, AdapterErro
     })
 }
 
-/// Starts the tool and waits for `app.started`.
-fn run_app(ctx: &AdapterContext, sink: &Sink) -> Result<Session, AdapterError> {
-    let s = launch_tool(ctx, sink)?;
+/// The app's VM service URL from its log line
+/// `The Dart VM service is listening on http://127.0.0.1:41931/MnsHt2taLio=/` → (port, path).
+#[must_use]
+pub fn vm_service(line: &str) -> Option<(u16, String)> {
+    let at = line.find("http://127.0.0.1:")? + "http://127.0.0.1:".len();
+    let rest = &line[at..];
+    let end = rest.find('/')?;
+    let port = rest[..end].parse().ok()?;
+    let path = rest[end..].split_whitespace().next()?.to_string();
+    path.chars()
+        .all(|c| c.is_ascii_alphanumeric() || "/=_-".contains(c))
+        .then_some((port, path))
+}
+
+/// Fast path: the device has the exact APK → launch it, find its VM service in the log and attach
+/// the tool to that address (no install, no discovery race).
+fn attach_app(ctx: &AdapterContext, sink: &Sink, package: &str) -> Option<Session> {
+    let apk = reusable_apk(&ctx.project)?;
+    if !installed_same(ctx, package, &apk) {
+        return None;
+    }
+    sink(Event::Phase {
+        phase: Phase::Launching,
+        message: format!("{package} on the device matches the last build — attaching (no install)"),
+    });
+    let (port, serial) = (ctx.device.adb.port, ctx.device.serial.as_str());
+    let component = cached_component(&apk, || {
+        umr_device::app::launcher_activity(port, serial, package).ok()
+    })?;
+    sink(Event::Phase {
+        phase: Phase::Launching,
+        message: package.to_string(),
+    });
+    // one round trip for force-stop + the launch instead of three (resolve-activity, force-stop,
+    // am start): PRV-012, each round trip costs seconds under host load
+    let out = umr_device::adb::shell(
+        port,
+        serial,
+        &format!("am force-stop {package}; am start -W -n {component}"),
+    )
+    .ok()?;
+    let (ok, ..) = umr_device::app::parse_am_start(&out);
+    if !ok {
+        return None;
+    }
+    // the app logs its VM service address right after start
+    let start = Instant::now();
+    let (dev_port, path) = loop {
+        if start.elapsed() > Duration::from_secs(15) {
+            sink(Event::Phase {
+                phase: Phase::Building,
+                message: "the app did not announce its VM service; running it instead".into(),
+            });
+            return None;
+        }
+        std::thread::sleep(Duration::from_millis(250));
+        let Some(pid) = umr_device::app::pid(port, serial, package) else {
+            continue;
+        };
+        let log =
+            umr_device::adb::shell(port, serial, &format!("logcat -d --pid={pid} -s flutter:I"))
+                .unwrap_or_default();
+        if let Some(found) = log.lines().rev().find_map(vm_service) {
+            break found;
+        }
+    };
+    // the device-side address: `flutter attach` forwards the port itself
+    let url = format!("http://127.0.0.1:{dev_port}{path}");
+    let s = launch_tool(ctx, sink, Some((package, &url))).ok()?;
+    if wait(&s.state, Duration::from_secs(60), |st| {
+        st.started.then_some(())
+    })
+    .is_err()
+    {
+        sink(Event::Phase {
+            phase: Phase::Building,
+            message: "attach did not connect; running the app instead".into(),
+        });
+        ctx.supervisor.stop(&s.name);
+        let _ = ctx.supervisor.wait_exit(&s.name, Duration::from_secs(5));
+        return None;
+    }
+    Some(s)
+}
+
+/// Starts the tool and waits for `app.started` ([`attach_app`] first, [`launch_tool`] otherwise).
+fn run_app(ctx: &AdapterContext, sink: &Sink, package: &str) -> Result<Session, AdapterError> {
+    if let Some(s) = attach_app(ctx, sink, package) {
+        return Ok(s);
+    }
+    let s = launch_tool(ctx, sink, None)?;
     let r = wait(&s.state, START_TIMEOUT, |st| st.started.then_some(()));
     if let Err(why) = r {
         let mut problems = s
@@ -434,7 +818,7 @@ impl Adapter for Flutter {
         let package = application_id(&ctx.project).ok_or_else(|| {
             AdapterError::Missing("applicationId in android/app/build.gradle(.kts)".into())
         })?;
-        let s = run_app(ctx, &sink)?;
+        let s = run_app(ctx, &sink, &package)?;
         let pid = umr_device::app::pid(ctx.device.adb.port, &ctx.device.serial, &package);
         sink(Event::AppStarted {
             package: package.clone(),
@@ -506,7 +890,7 @@ impl RunningApp for FlutterApp {
                 message: "full rebuild (flutter run again)".into(),
             });
             self.end_tool();
-            self.session = Some(run_app(&self.ctx, sink)?);
+            self.session = Some(run_app(&self.ctx, sink, &self.package)?);
         } else {
             let full = kind == ReloadKind::Restart;
             let (id, app_id, state) = {
@@ -613,7 +997,6 @@ impl RunningApp for FlutterApp {
             &self.ctx.device.serial,
             &self.package,
         );
-        self.ctx.supervisor.stop_group(&self.ctx.group);
     }
 }
 
@@ -665,6 +1048,15 @@ mod tests {
             "lib/main.dart:12:5: Error: Expected ';' after this.",
             r#"[{"event":"app.started","params":{"appId":"a1"}}]"#,
             r#"[{"event":"app.log","params":{"appId":"a1","log":"══╡ EXCEPTION CAUGHT BY WIDGETS LIBRARY ╞══"}}]"#,
+            r#"[{"event":"app.log","params":{"appId":"a1","log":"The following assertion was thrown building Home:"}}]"#,
+            r#"[{"event":"app.log","params":{"appId":"a1","log":"boom"}}]"#,
+            r#"[{"event":"app.log","params":{"appId":"a1","log":"The relevant error-causing widget was:"}}]"#,
+            r#"[{"event":"app.log","params":{"appId":"a1","log":"  Home Home:file:///C:/p/lib/home.dart:9:3"}}]"#,
+            r#"[{"event":"app.log","params":{"appId":"a1","log":"════════════════"}}]"#,
+            r#"[{"event":"app.log","params":{"appId":"a1","log":"[ERROR:flutter/runtime/dart_vm_initializer.cc(40)] Unhandled Exception: Bad state: No element"}}]"#,
+            r##"[{"event":"app.log","params":{"appId":"a1","log":"#0      List.first (dart:core-patch/growable_array.dart:343:5)"}}]"##,
+            r##"[{"event":"app.log","params":{"appId":"a1","log":"#1      load (package:demo/data.dart:12:9)"}}]"##,
+            r##"[{"event":"app.log","params":{"appId":"a1","log":"#2      main (package:demo/main.dart:5:3)"}}]"##,
             r#"[{"id":1,"result":{"code":0,"message":"ok"}}]"#,
             r#"[{"event":"app.stop","params":{"appId":"a1"}}]"#,
         ] {
@@ -674,11 +1066,26 @@ mod tests {
         }
         assert_eq!(st.app_id.as_deref(), Some("a1"));
         assert!(st.started);
-        assert_eq!(st.problems.len(), 2, "{:?}", st.problems);
+        assert_eq!(st.problems.len(), 3, "{:?}", st.problems);
         assert_eq!(st.problems[0].file.as_deref(), Some("lib/main.dart"));
-        assert!(st.problems[1]
-            .message
-            .contains("EXCEPTION CAUGHT BY WIDGETS LIBRARY"));
+        assert_eq!(
+            st.problems[1].message, "EXCEPTION CAUGHT BY WIDGETS LIBRARY: boom",
+            "one problem per block, with what was thrown"
+        );
+        assert_eq!(
+            (st.problems[1].file.as_deref(), st.problems[1].line),
+            (Some("lib/home.dart"), Some(9)),
+            "the error-causing widget, relative to the project"
+        );
+        assert_eq!(
+            st.problems[2].message,
+            "Unhandled Exception: Bad state: No element"
+        );
+        assert_eq!(
+            (st.problems[2].file.as_deref(), st.problems[2].line),
+            (Some("lib/data.dart"), Some(12)),
+            "the first app frame, not dart:core"
+        );
         assert!(st.replies.contains_key(&1));
         assert!(st.stopped.is_some());
         let ev = seen.lock().unwrap();
@@ -690,6 +1097,95 @@ mod tests {
             }
         )));
         assert!(ev.iter().any(|e| matches!(e, Event::AppStopped { .. })));
+    }
+
+    #[test]
+    fn apk_is_reused_only_without_native_changes() {
+        let d = std::env::temp_dir().join(format!("umr-flutter-apk-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(d.join("android/app")).unwrap();
+        std::fs::write(d.join("pubspec.yaml"), "name: x").unwrap();
+        std::fs::write(d.join("android/app/build.gradle.kts"), "").unwrap();
+        assert!(reusable_apk(&d).is_none(), "nothing built yet");
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        std::fs::create_dir_all(d.join("build/app/outputs/flutter-apk")).unwrap();
+        std::fs::write(d.join("build/app/outputs/flutter-apk/app-debug.apk"), "apk").unwrap();
+        assert!(reusable_apk(&d).is_some());
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        std::fs::write(d.join("android/app/build.gradle.kts"), "changed").unwrap();
+        assert!(reusable_apk(&d).is_none(), "native change → rebuild");
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn component_is_cached_and_invalidated_with_the_apk() {
+        let d = std::env::temp_dir().join(format!("umr-flutter-activity-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(&d).unwrap();
+        let apk = d.join("app.apk");
+        std::fs::write(&apk, "v1").unwrap();
+        let calls = std::sync::atomic::AtomicU32::new(0);
+        let resolve = || {
+            calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            Some("com.x/.MainActivity".to_string())
+        };
+        assert_eq!(
+            cached_component(&apk, resolve),
+            Some("com.x/.MainActivity".into())
+        );
+        assert_eq!(calls.load(std::sync::atomic::Ordering::SeqCst), 1);
+        // same apk (size + mtime unchanged): no device round trip
+        assert_eq!(
+            cached_component(&apk, resolve),
+            Some("com.x/.MainActivity".into())
+        );
+        assert_eq!(
+            calls.load(std::sync::atomic::Ordering::SeqCst),
+            1,
+            "cache hit"
+        );
+        // a rebuilt apk invalidates the cache
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        std::fs::write(&apk, "v2, longer").unwrap();
+        cached_component(&apk, resolve);
+        assert_eq!(calls.load(std::sync::atomic::Ordering::SeqCst), 2);
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn direct_tool_only_when_prepared() {
+        let d = std::env::temp_dir().join(format!("umr-flutter-direct-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        let cache = d.join("bin/cache");
+        std::fs::create_dir_all(cache.join("dart-sdk/bin")).unwrap();
+        std::fs::create_dir_all(d.join("packages/flutter_tools/.dart_tool")).unwrap();
+        std::fs::write(cache.join("dart-sdk/bin/dart.exe"), "").unwrap();
+        std::fs::write(cache.join("flutter_tools.snapshot"), "").unwrap();
+        std::fs::write(
+            d.join("packages/flutter_tools/.dart_tool/package_config.json"),
+            "{}",
+        )
+        .unwrap();
+        assert!(
+            direct_tool(&d).is_none(),
+            "no stamp: the snapshot may be stale"
+        );
+        std::fs::write(cache.join("flutter_tools.stamp"), "rev").unwrap();
+        let (dart, pre) = direct_tool(&d).unwrap();
+        assert!(dart.ends_with("dart.exe"));
+        assert!(pre[0].starts_with("--packages=") && pre[1].ends_with("flutter_tools.snapshot"));
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn vm_service_from_log_line() {
+        let l = "11-13 15:15:21.844  6760  6806 I flutter : The Dart VM service is listening on http://127.0.0.1:41931/MnsHt2taLio=/";
+        assert_eq!(vm_service(l), Some((41931, "/MnsHt2taLio=/".into())));
+        assert_eq!(vm_service("I flutter : hello"), None);
+        assert_eq!(
+            vm_service("listening on http://127.0.0.1:41931/a;rm=/"),
+            None
+        );
     }
 
     #[test]

@@ -1,0 +1,79 @@
+=== flutter renderflex overflow
+kind: flutter-log
+expect: runtime
+origin: app
+at: lib/main.dart:58
+---
+══╡ EXCEPTION CAUGHT BY RENDERING LIBRARY ╞═════════════════════════════════════════════════════════
+The following assertion was thrown during layout:
+A RenderFlex overflowed by 42 pixels on the bottom.
+
+The relevant error-causing widget was:
+  Column Column:file:///C:/p/lib/main.dart:58:14
+
+To inspect this widget in Flutter DevTools, visit:
+http://127.0.0.1:9101/#/inspector?uri=http%3A%2F%2F127.0.0.1%3A44213%2F&inspectorRef=inspector-0
+════════════════════════════════════════════════════════════════════════════════════════════════════
+=== flutter null check unhandled
+kind: flutter-log
+expect: runtime
+origin: app
+at: lib/home.dart:45
+---
+[ERROR:flutter/runtime/dart_vm_initializer.cc(40)] Unhandled Exception: Null check operator used on a null value
+#0      _HomeState.load (package:demo/home.dart:45:22)
+#1      _HomeState.initState.<anonymous closure> (package:demo/home.dart:30:5)
+#2      _rootRunUnary (dart:async/zone.dart:1422:47)
+=== flutter setstate after dispose
+kind: flutter-log
+expect: runtime
+origin: app
+at: lib/screens/timer.dart:22
+---
+══╡ EXCEPTION CAUGHT BY WIDGETS LIBRARY ╞═══════════════════════════════════════════════════════════
+The following assertion was thrown while finalizing the widget tree:
+setState() called after dispose(): _TimerState#3f2a1(lifecycle state: defunct, not mounted)
+
+When the exception was thrown, this was the stack:
+#0      State.setState.<anonymous closure> (package:flutter/src/widgets/framework.dart:1167:9)
+#1      State.setState (package:flutter/src/widgets/framework.dart:1202:6)
+#2      _TimerState._tick (package:demo/screens/timer.dart:22:5)
+#3      _rootRun (dart:async/zone.dart:1399:13)
+════════════════════════════════════════════════════════════════════════════════════════════════════
+=== flutter format exception
+kind: flutter-log
+expect: runtime
+origin: app
+at: lib/util.dart:7
+---
+E/flutter ( 4321): [ERROR:flutter/runtime/dart_vm_initializer.cc(40)] Unhandled Exception: FormatException: Invalid radix-10 number (at character 1)
+E/flutter ( 4321): abc
+E/flutter ( 4321): ^
+E/flutter ( 4321):
+E/flutter ( 4321): #0      int._throwFormatException (dart:core-patch/integers_patch.dart:202:5)
+E/flutter ( 4321): #1      int.parse (dart:core-patch/integers_patch.dart:52:24)
+E/flutter ( 4321): #2      parseAge (package:demo/util.dart:7:14)
+=== js cannot read property
+kind: metro
+expect: runtime
+at: none
+---
+ ERROR  TypeError: Cannot read property 'map' of undefined
+
+This error is located at:
+    in ProductList (created by App)
+    in RCTView (created by View)
+=== js property does not exist
+kind: metro
+expect: runtime
+at: none
+---
+ ERROR  ReferenceError: Property 'fetchUser' doesn't exist, js engine: hermes
+=== app not registered
+kind: metro
+expect: runtime
+at: none
+---
+ ERROR  Invariant Violation: "main" has not been registered. This can happen if:
+* Metro (the local dev server) is run from the wrong folder. Check if Metro is running, stop it and restart it in the current project.
+* A module failed to load due to an error and `AppRegistry.registerComponent` wasn't called., js engine: hermes

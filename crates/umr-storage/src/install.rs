@@ -18,6 +18,9 @@ pub enum TxnState {
     RolledBack,
 }
 
+/// `(at_unix, client_id, action, detail)` of one audit entry.
+pub type AuditRow = (i64, Option<String>, String, Option<String>);
+
 impl TxnState {
     #[must_use]
     pub fn as_str(self) -> &'static str {
@@ -182,6 +185,23 @@ impl Db {
         Ok(())
     }
 
+    /// Newest audit entries first.
+    pub fn audit_recent(
+        &self,
+        client: Option<&str>,
+        limit: usize,
+    ) -> Result<Vec<AuditRow>, StorageError> {
+        let conn = self.conn();
+        let mut st = conn.prepare(
+            "SELECT at_unix, client_id, action, detail FROM audit_log              WHERE ?1 IS NULL OR client_id = ?1 ORDER BY id DESC LIMIT ?2",
+        )?;
+        let rows = st.query_map(
+            params![client, i64::try_from(limit).unwrap_or(i64::MAX)],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
+        )?;
+        Ok(rows.collect::<Result<Vec<_>, _>>()?)
+    }
+
     /// Number of audit entries with this action.
     pub fn audit_count(&self, action: &str) -> Result<i64, StorageError> {
         Ok(self.conn().query_row(
@@ -261,5 +281,9 @@ mod tests {
         )
         .unwrap();
         assert_eq!(db.audit_count("licence.accept").unwrap(), 1);
+        let recent = db.audit_recent(None, 10).unwrap();
+        assert_eq!(recent.len(), 1);
+        assert_eq!(recent[0].2, "licence.accept");
+        assert_eq!(db.audit_recent(Some("nobody"), 10).unwrap().len(), 0);
     }
 }

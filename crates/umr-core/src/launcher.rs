@@ -43,17 +43,46 @@ impl CoreTarget {
 
     /// Connects and logs in, or reports that the Core is not running.
     pub async fn connect(&self) -> Result<Option<Client>, String> {
+        self.connect_inner(None).await
+    }
+
+    async fn connect_inner(&self, token: Option<&str>) -> Result<Option<Client>, String> {
         let mut client = match Client::connect(&self.pipe).await {
             Ok(c) => c,
             Err(ClientError::NotRunning) => return Ok(None),
             Err(e) => return Err(e.to_string()),
         };
-        let token = self.admin_token()?;
+        let token = match token {
+            Some(t) => t.to_string(),
+            None => self.admin_token()?,
+        };
         client
             .login(&token)
             .await
             .map_err(|e| format!("login to the Runtime Core failed: {e}"))?;
         Ok(Some(client))
+    }
+
+    /// Connects with a client token (an agent's), starting the Core first if needed.
+    pub async fn connect_or_start_as(&self, token: &str) -> Result<Client, String> {
+        if let Some(c) = self.connect_inner(Some(token)).await? {
+            return Ok(c);
+        }
+        spawn_core(&self.paths)?;
+        let deadline = Instant::now() + START_TIMEOUT;
+        loop {
+            if let Ok(Some(c)) = self.connect_inner(Some(token)).await {
+                return Ok(c);
+            }
+            if Instant::now() > deadline {
+                return Err(format!(
+                    "the Runtime Core did not start within {} s; see logs in {}",
+                    START_TIMEOUT.as_secs(),
+                    self.paths.logs_dir().display()
+                ));
+            }
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
     }
 
     /// Connects, starting the Core first if needed. Returns the client and whether it was started.

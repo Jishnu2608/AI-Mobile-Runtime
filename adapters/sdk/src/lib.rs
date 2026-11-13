@@ -264,7 +264,9 @@ pub trait RunningApp: Send + std::fmt::Debug {
     fn reload(&mut self, kind: ReloadKind, sink: &Sink) -> Result<Duration, AdapterError>;
     /// Whether the app (and the adapter's tool, if it needs one) still runs.
     fn is_alive(&mut self) -> bool;
-    /// Stops the app and the adapter's tools.
+    /// Stops the app and the adapter's own tool (Flutter tool, Metro). Background helpers in
+    /// the run's Supervisor group (Gradle daemon) stay warm until the Core ends the run, so a
+    /// device switch or a restart does not pay their start-up again.
     fn stop(self: Box<Self>);
 }
 

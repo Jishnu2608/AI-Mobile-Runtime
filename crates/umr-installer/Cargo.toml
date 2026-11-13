@@ -14,7 +14,7 @@ serde_json = "1"
 # TLS-inspecting proxies with a company root CA work like in the browser.
 reqwest = { version = "0.12", default-features = false, features = ["blocking", "native-tls"] }
 # Archive extraction (deflate only: all official archives we use are deflate zips).
-zip = { version = "2", default-features = false, features = ["deflate"] }
+zip = { version = "9", default-features = false, features = ["deflate"] }
 # Read-only XML parsing for the Android SDK repository manifests.
 roxmltree = "0.20"
 # Checksums: SHA-256 (Adoptium, Node, Flutter) and SHA-1 (Google SDK repository).

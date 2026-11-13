@@ -14,10 +14,12 @@ path = "src/main.rs"
 [dependencies]
 umr-core = { path = "../../crates/umr-core" }
 umr-api = { path = "../../crates/umr-api" }
+umr-mcp = { path = "../../crates/umr-mcp" }
 umr-platform = { path = "../../crates/umr-platform" }
 umr-env = { path = "../../crates/umr-env" }
 umr-resolver = { path = "../../crates/umr-resolver" }
 umr-installer = { path = "../../crates/umr-installer" }
+umr-storage = { path = "../../crates/umr-storage" }
 umr-elevate = { path = "../../helpers/elevated-helper" }
 # Command-line parsing (subcommands, --help, --version).
 clap = { version = "4", features = ["derive"] }

@@ -213,6 +213,7 @@ pub fn build(ctx: &AdapterContext, module: &str, sink: &Sink) -> Result<PathBuf,
 ///
 /// # Errors
 /// The build failed (with the problems found) or could not start.
+#[allow(clippy::too_many_lines)] // start, follow the log, judge the result
 pub fn build_with(
     ctx: &AdapterContext,
     module: &str,
@@ -225,9 +226,15 @@ pub fn build_with(
         .log_dir
         .join(format!("gradle-{}.log", ctx.group.replace(':', "-")));
     let mut spec = ProcessSpec::new(&name, root.join("gradlew.bat"), &log).args(
-        [format!(":{module}:assembleDebug"), "--console=plain".into()]
-            .into_iter()
-            .chain(extra.iter().cloned()),
+        [
+            format!(":{module}:assembleDebug"),
+            "--console=plain".into(),
+            // reuse the configured task graph: a no-change build skips ~10 s of configuration
+            "--configuration-cache".into(),
+            "--configuration-cache-problems=warn".into(),
+        ]
+        .into_iter()
+        .chain(extra.iter().cloned()),
     );
     spec.env.clone_from(&ctx.env);
     if let Some(j) = &ctx.jdk_home {
@@ -408,8 +415,6 @@ impl RunningApp for GradleApp {
             &self.ctx.device.serial,
             &self.package,
         );
-        // the Gradle daemon of this run ends too
-        self.ctx.supervisor.stop_group(&self.ctx.group);
     }
 }
 

@@ -1,9 +1,10 @@
 # POC-013 sweep (throwaway): latency A/B for render path (2d vs gl) and input path (unary vs stream).
 # Emulator must run with: -gpu host -grpc 8554 -grpc-use-token
 param([string[]]$Variants = @('720x1600|2d|unary', '720x1600|gl|unary', '720x1600|2d|stream', '720x1600|gl|stream', '540x1200|gl|stream'),
+if (-not $env:UMR_POC_ROOT) { throw 'Set UMR_POC_ROOT to the PoC managed root (the folder that holds android-sdk, downloads, android-user-home)' }
       [int]$Repeat = 1)
 $p = $PSScriptRoot
-$adb = 'D:\UMR-poc\android-sdk\platform-tools\adb.exe'
+$adb = "$env:UMR_POC_ROOT\android-sdk\platform-tools\adb.exe"
 $ini = Get-ChildItem "$env:LOCALAPPDATA\Temp\avd\running" -Filter 'pid_*.ini' | Sort-Object LastWriteTime -Descending | Select-Object -First 1
 $env:GRPC_TOKEN = ((Get-Content $ini.FullName | Select-String '^grpc.token=').Line -replace '^grpc.token=', '')
 $env:GRPC = 'http://127.0.0.1:8554'

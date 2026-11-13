@@ -2,138 +2,97 @@
 
 A local desktop runtime that lets you **see and test your Android app while an AI coding agent writes it**.
 
-You open a mobile project in Claude Code, Codex or another coding agent, run one command, and a phone preview opens beside your agent. The runtime prepares the Android toolchain for you, boots an emulator, builds and launches the app, and keeps it updated as the agent changes code. Build errors, crashes and screenshots are made available to the agent, so it can see what you see.
+Open a mobile project, run one command, and a phone preview docks beside your coding agent. The runtime prepares the Android toolchain, boots an emulator, builds and launches the app, and keeps it updated as the code changes. Your agent (Claude Code, Codex or any MCP client) gets the same view you have: the screen, the errors with file and line, and the controls.
 
-> **Status: Phase 0 (research and proof-of-concept) complete — Phase 1 (foundation) starting.**
-> There is no installable product yet. This repository currently contains throwaway experiments and their measured results; product code starts in Phase 1.
-
----
-
-## What it is — and what it is not
-
-**It is**
-- a mobile **runtime orchestrator**: environment setup, emulator management, build/launch/reload;
-- a **live preview** of the real running app (not a mock rendering), with mouse and keyboard input;
-- a **diagnostics** collector that separates app errors from environment errors;
-- an **agent integration layer** (CLI and MCP) that works with any coding agent.
-
-**It is not**
-- an IDE or code editor;
-- an AI coding agent or chatbot;
-- a replacement for Android Studio, VS Code, Claude Code or Codex;
-- a custom emulator (it uses Google's official emulator and tools).
-
-## Planned user experience
-
-```bash
-# inside your Kotlin / Java / Flutter / React Native project
-umr run
-```
-
-1. Detects the framework and the versions your project needs.
-2. Checks your machine and shows a single install plan (JDK, Android SDK, emulator, Flutter, Node — only what is missing), with licences for you to accept.
-3. Installs into an isolated, app-managed folder. Your system `PATH`, `JAVA_HOME` and `ANDROID_HOME` are never changed.
-4. Boots a phone of the size you choose (compact, standard, large, foldable, flip, tablet).
-5. Builds and launches the app, and opens the preview window docked beside your coding agent.
-6. Hot reload (Flutter, React Native) or automatic rebuild (Kotlin, Java) as the agent edits code.
-
-## Scope
-
-| Area | Initial release |
-|---|---|
-| Host OS | Windows 11 x64 only (Windows 10 not supported; macOS and Linux hosts later) |
-| Target | Android emulator (physical devices later) |
-| Frameworks | Kotlin, Java, Flutter (Dart), React Native, Expo |
-| Agents | Claude Code, Codex (any MCP-capable agent later) |
-| iOS | **Out of scope** — requires macOS, Xcode and Apple licences |
-
-## Architecture (planned)
-
-```
- coding agent ──(umr CLI / MCP)──┐
-                                 ▼
- desktop preview window ◀──▶ Runtime Core (Rust background service)
- (Tauri 2 + React)           • environment detection and installer
-                             • session, process and device management
-                             • diagnostics and video streaming
-                                 │
-               framework adapters (Flutter · React Native · Gradle)
-               device provider (Android emulator via Android CLI, adb)
-```
-
-- **Runtime Core** owns all state and keeps sessions alive when the agent or window closes.
-- **CLI, desktop app and MCP server** are thin clients over a local, user-only named pipe.
-- **Emulator preview** uses the emulator's own host-side gRPC frame stream, sized to the preview window (no in-emulator video encoding).
-- **SDKs are never bundled**; official packages are downloaded on demand and verified.
-- Everything runs **locally**. No source code, logs or app data leave your machine.
-
-## Proof-of-concept results so far
-
-| Experiment | Result | Report |
-|---|---|---|
-| POC-000 — existing SDK inventory | Done | [`poc/reports/POC-000-sdk-inventory.md`](poc/reports/POC-000-sdk-inventory.md) |
-| POC-001 — isolated JDK + Android SDK provisioning, emulator boot | Done (part A). Cold boot 39 s, snapshot boot 5 s. `sdkmanager` is deprecated; Android CLI is the SDK backend | [`poc/reports/POC-001-provisioning.md`](poc/reports/POC-001-provisioning.md) |
-| POC-003 — live preview in a Tauri window (scrcpy → Rust → WebSocket → WebCodecs) | Works. p95 latency 149 ms at 1280 px. Frame rate limited by the emulator's software video encoder | [`poc/reports/POC-003-preview.md`](poc/reports/POC-003-preview.md) |
-| POC-012 — host-side emulator frame stream (gRPC `streamScreenshot`) in the same window | 44–51 fps at window-sized streams; p95 latency 172 ms best | [`poc/reports/POC-012-preview-grpc.md`](poc/reports/POC-012-preview-grpc.md) |
-
-| POC-013 — preview latency breakdown | Our pipeline adds only ~2–15 ms. **Corrected** on a healthy render session: end-to-end p50 52–68 ms, p95 75–107 ms | [`poc/reports/POC-013-preview-latency.md`](poc/reports/POC-013-preview-latency.md) |
-| POC-006 — framework adapters | Kotlin edit→running 7.1–7.6 s; Flutter hot reload ~0.3 s; Expo Fast Refresh 0.24–0.32 s; all from an isolated toolchain | [`poc/reports/POC-006-adapters.md`](poc/reports/POC-006-adapters.md) |
-
-| POC-009 — Phase 0 go/no-go | **GO** recommended: all gating experiments passed | [`poc/reports/POC-009-phase0-go-no-go.md`](poc/reports/POC-009-phase0-go-no-go.md) |
-
-Next: Phase 1 (Runtime Core, CLI, environment provisioning) (Flutter hot reload, Metro/Expo), diagnostics extraction, MCP loop with Claude Code and Codex.
-
-## Repository layout
-
-```
-Cargo.toml        Rust workspace (product code)
-crates/umr-core   Runtime Core (skeleton)
-apps/cli          umr command (skeleton: --version, --help)
-.github/workflows CI: format, lint, test, build on Windows
-poc/
-  preview/        POC-003 throwaway code (Rust bridge, Tauri 2 viewer, WebCodecs page, sweep script)
-  reports/        Measured results of each experiment, licence texts reviewed during POC-001
-```
-
-Product code (Phase 1 onwards) will follow this layout:
-
-```
-apps/desktop      Tauri desktop shell + React UI
-apps/cli          umr command (incl. umr mcp)
-crates/           Rust Runtime Core components
-adapters/         flutter, react-native, gradle-android
-providers/        android-emulator
-helpers/          gradle-probe, elevated-helper
-knowledge-pack/   version compatibility rules
-tests/            fixtures, failure corpus, environment matrix, performance
-```
-
-## Running the preview proof-of-concept (developers)
-
-Requirements: Windows 11, Rust (MSVC toolchain + Visual Studio Build Tools), an Android SDK with a booted emulator, and `scrcpy-server` v5.0.1.
+> **Status: 1.0 release candidate** (Phases 1–6 and 8 built; see [Status](#status)). Windows 11 x64 and Android only.
 
 ```powershell
-cd poc/preview
-cargo build --release
-
-# emulator must already be running, e.g.
-#   emulator -avd <name> -no-window -no-audio -no-boot-anim -gpu host
-
-$env:ADB = "<path>\platform-tools\adb.exe"
-$env:SCRCPY_SERVER = "<path>\scrcpy-server-v5.0.1"
-$env:WEB_DIR = "$PWD\web"
-.\target\release\bridge.exe          # terminal 1
-.\target\release\viewer.exe          # terminal 2 (add --auto to run the latency/fps measurement)
+umr trust .                      # once per project folder
+umr run                          # toolchain check → emulator → build → app in the docked preview
+umr agent setup claude-code      # or codex: connect your agent (shows the changes, asks first)
 ```
 
-This code is an experiment, not the product. It will be replaced by the Runtime Core in Phase 1.
+## What it does
+- **Zero-config toolchain** — detects what your project needs (JDK, Android SDK packages, emulator image, Flutter, Node) and installs only that, from the official publishers, verified, into its own folder. Your `PATH`, `JAVA_HOME`, `ANDROID_HOME` and Android Studio are never touched.
+- **Live preview beside your agent** — the real app on a real emulator, 40+ fps, mouse and keyboard input, phone / foldable / tablet sizes, hot reload for Flutter and React Native, rebuilds for Kotlin/Java.
+- **Diagnostics an agent can use** — build errors, crashes, ANRs and runtime exceptions, classified (build, runtime, crash, environment, device, network), deduplicated, located at file and line, and marked as *your code* or *environment*.
+- **Agent integration** — an MCP server with 16 tools (status digest, problems, logs, screenshot, UI tree, input, reload, run) plus a CLI; per-agent permissions, approvals for new folders and device switches, an audit log, and sanitised output.
+
+It is **not** an IDE, an AI agent or an emulator of its own: it orchestrates Google's official tools and the frameworks' own CLIs.
+
+## Install
+Download the installer (`AI-Mobile-Runtime_<version>_x64-setup.exe`), check its SHA-256, and run it — per user, no administrator rights. A portable ZIP and a CLI-only ZIP are also published. Requirements and the full walk-through: **[docs/user](docs/user/README.md)**.
+
+| Guide | |
+|---|---|
+| [Getting started](docs/user/getting-started.md) | install → setup wizard → first app → connect an agent |
+| [Requirements](docs/user/requirements.md) | Windows 11 x64, virtualization, 16 GB RAM recommended, 8–15 GB disk |
+| [Agents](docs/user/agents.md) | Claude Code, Codex, other MCP clients; tools and permissions |
+| [Troubleshooting](docs/user/troubleshooting.md) · [Privacy and security](docs/user/privacy-and-security.md) · [Uninstall](docs/user/uninstall-and-data.md) · [Command reference](docs/user/cli-reference.md) | |
+
+## Scope
+| Area | 1.0 |
+|---|---|
+| Host | Windows 11 x64 (macOS / Linux later) |
+| Target | Android emulator (physical devices later) |
+| Frameworks | Kotlin, Java, Flutter, React Native, Expo |
+| Agents | Claude Code, Codex, any MCP client |
+| iOS | Out of scope (needs macOS, Xcode and Apple's licences) |
+
+## Architecture
+```
+ coding agent ──(MCP: umr mcp · CLI: umr)──┐
+                                           ▼
+ desktop preview window ◀──────▶ Runtime Core (Rust background service, per user)
+ (Tauri 2 + React, WebGL2)       • environment scan, install plans, verified installer
+                                 • devices, sessions, supervised processes
+                                 • framework adapters: Gradle · Flutter · React Native/Expo
+                                 • diagnostics (classifier, dedupe, sanitiser)
+                                 • preview stream (emulator gRPC frames → WebSocket)
+                                 • agent permissions, approvals, audit
+```
+The CLI, the desktop app and the MCP server are thin clients of the Core over a user-only named pipe. Sessions survive closing the window or the agent. Everything runs locally; nothing about your code or app leaves your machine.
+
+## Status
+| Phase | | |
+|---|---|---|
+| 1 Foundation + provisioning | ✅ | environment scan, Knowledge Pack, plans, verified transactional installer, setup wizard |
+| 2 Android runtime | ✅ | private adb server, device catalogue, emulator boot + health, supervisor, sessions |
+| 3 Framework adapters | ✅ | Kotlin/Java (Gradle), Flutter, React Native / Expo, file watching |
+| 4 Preview | ✅ | docked window, 40–42 fps, our pipeline 12–17 ms p95 |
+| 5 Diagnostics | ✅ | 76-case failure corpus: category 100 %, file:line 96.6 % |
+| 6 Agents | ✅ | MCP server; Claude Code fixed a seeded bug through it on its own |
+| 8 Release readiness | ✅ except signing and licence | per-user installer (6 MB), updates, security review, docs |
+| 9 Website + distribution | planned | |
+
+Open before a public 1.0: the product licence, a code-signing certificate, and the Codex live check.
+
+## Building from source
+Windows 11, Rust (MSVC; the version is pinned in `rust-toolchain.toml`), Visual Studio Build Tools, Node.js 20+.
+
+```powershell
+cargo build --release                         # Core, CLI, desktop app, helpers
+powershell -File scripts\ci-local.ps1         # the same checks as CI: fmt, clippy, tests, release build
+powershell -File scripts\release.ps1          # installer, portable ZIP, CLI ZIP, SHA256SUMS, releases.json → dist\
+```
+
+| Folder | |
+|---|---|
+| `crates/` | Runtime Core and its parts (`umr-core`, `-api`, `-storage`, `-env`, `-resolver`, `-installer`, `-supervisor`, `-device`, `-session`, `-stream`, `-diagnostics`, `-mcp`, `-platform`) |
+| `adapters/` | adapter contract (`sdk`) and the Gradle, Flutter and React Native adapters |
+| `apps/` | `cli` (`umr`), `desktop` (Tauri app + React UI) |
+| `helpers/` | `elevated-helper` (the two administrator actions) |
+| `knowledge-pack/` | version compatibility rules |
+| `tests/` | failure corpus, environment matrix |
+| `docs/` | user guide, security review |
+| `poc/` | Phase 0 experiments and their measured reports (frozen) |
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) to contribute and [SECURITY.md](SECURITY.md) to report a vulnerability.
 
 ## Third-party components
+Shipped: the Rust crates and npm packages listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Downloaded at the user's request and never redistributed: Android SDK components, the emulator and Android CLI (Google, Android SDK License Agreement — <https://developer.android.com/studio/terms>, shown in the app for acceptance), Eclipse Temurin JDK (GPLv2 + Classpath Exception), Flutter (BSD-3-Clause), Node.js (MIT).
 
-- [scrcpy](https://github.com/Genymobile/scrcpy) server (Apache-2.0) — downloaded at a pinned version with SHA-256 verification, not vendored.
-- Android SDK components, emulator and Android CLI — downloaded from Google under the Android SDK License Agreement, which the user must accept. Not redistributed.
-- Eclipse Temurin JDK (GPLv2 + Classpath Exception) — downloaded on demand.
+Android is a trademark of Google LLC. This project is not affiliated with or endorsed by Google.
 
 ## Licence
-
-Not yet decided. All rights reserved until a licence is added.
+Not decided yet. All rights reserved until a licence is added.

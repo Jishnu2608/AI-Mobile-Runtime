@@ -1,8 +1,9 @@
 # POC-003 sweep (throwaway): run bridge + Tauri viewer auto-measure at several resolutions.
 param([string[]]$Sizes = @('720','1024','1280'))
+if (-not $env:UMR_POC_ROOT) { throw 'Set UMR_POC_ROOT to the PoC managed root (the folder that holds android-sdk, downloads, android-user-home)' }
 $p = $PSScriptRoot
-$env:ADB = 'D:\UMR-poc\android-sdk\platform-tools\adb.exe'
-$env:SCRCPY_SERVER = 'D:\UMR-poc\downloads\scrcpy-server-v5.0.1'
+$env:ADB = "$env:UMR_POC_ROOT\android-sdk\platform-tools\adb.exe"
+$env:SCRCPY_SERVER = "$env:UMR_POC_ROOT\downloads\scrcpy-server-v5.0.1"
 $env:WEB_DIR = "$p\web"
 foreach ($s in $Sizes) {
   Get-Process viewer, bridge -ErrorAction SilentlyContinue | Stop-Process -Force
