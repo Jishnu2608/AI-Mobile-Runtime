@@ -5,7 +5,7 @@ import { Status } from "@/components/ui/Status";
 import { Workflow } from "./Workflow";
 import { Architecture } from "./Architecture";
 import { stages } from "./workflow-data";
-import { pendingDecisions } from "@/lib/site";
+import { pendingDecisions, site } from "@/lib/site";
 
 function SectionHead({ id, eyebrow, title, lead }: { id: string; eyebrow: string; title: string; lead?: string }) {
   return (
@@ -62,7 +62,7 @@ export function Pillars() {
         <ul className="mt-14 grid gap-px overflow-hidden rounded-lg border border-line bg-line sm:grid-cols-2">
           {pillars.map((p) => (
             <li key={p.title} data-reveal className="flex flex-col bg-surface p-6 sm:p-8">
-              <p.icon aria-hidden className="size-6 text-pine dark:text-jade" strokeWidth={1.75} />
+              <p.icon aria-hidden className="size-6 text-icon" strokeWidth={1.75} />
               <h3 className="t-sub mt-5">{p.title}</h3>
               <p className="t-body mt-3 flex-1">{p.body}</p>
               <p className="mt-6 border-t border-line pt-4 text-sm font-medium text-ink">{p.fact}</p>
@@ -196,15 +196,15 @@ export function Agents({ tools }: { tools: ToolLite[] }) {
       <Reveal className="wrap grid gap-12 lg:grid-cols-12 lg:gap-10">
         <div className="lg:col-span-5">
           <h2 id="agents-title" className="t-section" data-reveal>
-            Claude Code and Codex, connected over MCP
+            Your coding agent, connected over MCP
           </h2>
           <p className="t-lead mt-5" data-reveal>
-            One command writes the agent&apos;s MCP entry and a short skill file. It shows you the exact change first and keeps your other
-            servers.
+            One command writes the agent&apos;s MCP entry and its instructions, for Claude Code, Codex, Cursor, Claude Desktop or VS
+            Code. It shows you the exact change first, keeps your other servers, and undoes itself with --remove.
           </p>
           <div className="mt-8 grid gap-3" data-reveal>
-            {["umr agent setup claude-code", "umr agent setup codex"].map((c) => (
-              <pre key={c} className="overflow-x-auto rounded-md border border-band-line bg-band-sunken px-4 py-3 font-mono text-sm text-mint">
+            {["umr agent setup claude-code", "umr agent setup cursor", "umr agent doctor"].map((c) => (
+              <pre key={c} className="overflow-x-auto rounded-md border border-band-line bg-band-sunken px-4 py-3 font-mono text-sm text-band-ink">
                 {c}
               </pre>
             ))}
@@ -286,7 +286,7 @@ export function Privacy() {
         <ul className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
           {privacy.map((p) => (
             <li key={p.title} data-reveal>
-              <p.icon aria-hidden className="size-5 text-pine dark:text-jade" strokeWidth={1.75} />
+              <p.icon aria-hidden className="size-5 text-icon" strokeWidth={1.75} />
               <h3 className="mt-4 font-semibold text-ink">{p.title}</h3>
               <p className="t-desc mt-2">{p.body}</p>
             </li>
@@ -312,7 +312,7 @@ export function OpenSource() {
             id="oss-title"
             eyebrow="Open source"
             title="The licence is not chosen yet"
-            lead="The source repository stays private until the product licence is decided. The third-party licences the runtime ships with are already listed."
+            lead="The source is public on GitHub. Until a licence is chosen it is all rights reserved: you can read it, but not reuse it. The third-party licences the runtime ships with are already listed."
           />
         </div>
         <ul className="grid content-start gap-3 lg:col-span-5 lg:col-start-8" data-reveal>
@@ -325,6 +325,10 @@ export function OpenSource() {
               </li>
             ))}
           <li className="pt-3">
+            <a href={site.repository} className="link font-medium" rel="noreferrer">
+              Source on GitHub
+            </a>
+            <span className="text-ink-2"> · </span>
             <Link href="/open-source/#open-decisions" className="link font-medium">
               See every open decision
             </Link>
@@ -344,7 +348,7 @@ export function OpenSource() {
 const faq = [
   { q: "Does it replace Android Studio?", a: "No. It runs next to it. It uses its own adb server and its own SDK folder, so Android Studio and your existing SDKs keep working as before." },
   { q: "Can it run iOS apps?", a: "No. The iOS Simulator needs macOS and Xcode. This runtime is for Windows 11 x64 and Android today." },
-  { q: "Which coding agents does it work with?", a: "Claude Code and Codex have one-command setup. Any agent that speaks MCP over stdio can use the umr mcp server by hand." },
+  { q: "Which coding agents does it work with?", a: "Claude Code, Codex, Cursor, Claude Desktop and VS Code each connect with one command, umr agent setup, and umr agent doctor checks the connection. Any other MCP client can start umr mcp by hand. The claude.ai website and mobile app cannot reach a program on your PC." },
   { q: "Does my code leave my machine?", a: "No. The runtime has no cloud service. It downloads tools from their official publishers and nothing else, unless you run umr update." },
   { q: "What does it need from my PC?", a: "Windows 11 x64, virtualisation turned on in the firmware, and room for the toolchain and one phone image. The requirements page lists each level." },
   { q: "How do I remove it?", a: "Uninstall it from Windows Settings. The uninstall guide lists every folder it created and how to remove the downloaded tools too." },

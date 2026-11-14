@@ -18,7 +18,7 @@ export function SiteHeader({ hasRelease }: { hasRelease: boolean }) {
   const path = usePathname() ?? "/";
   const cta = hasRelease ? "Download for Windows" : "See downloads";
   return (
-    <header className="sticky top-0 z-50 border-b border-line bg-bg/95 backdrop-blur-md supports-[backdrop-filter]:bg-bg/90">
+    <header className="sticky top-0 z-50 border-b border-line bg-header/95 backdrop-blur-md supports-[backdrop-filter]:bg-header/90">
       <div className="wrap flex h-[var(--header-h)] items-center gap-6">
         <Link href="/" className="shrink-0 rounded-sm" aria-label="Home">
           <Wordmark />

@@ -116,7 +116,7 @@ function SearchDialog({ ref }: { ref: React.RefObject<HTMLDialogElement | null> 
     <dialog
       ref={ref}
       aria-label="Search"
-      className="m-auto mt-[12vh] w-[min(40rem,calc(100vw-2rem))] rounded-md border border-line bg-surface p-0 text-ink shadow-2 backdrop:bg-[rgb(16_27_22/0.45)] backdrop:backdrop-blur-[2px]"
+      className="m-auto mt-[12vh] w-[min(40rem,calc(100vw-2rem))] rounded-md border border-line bg-surface p-0 text-ink shadow-2 backdrop:bg-[rgb(21_23_22/0.5)] backdrop:backdrop-blur-[2px]"
       onClick={(e) => e.target === e.currentTarget && ref.current?.close()}
     >
       <div className="flex items-center gap-3 border-b border-line px-4">

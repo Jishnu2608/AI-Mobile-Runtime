@@ -64,7 +64,7 @@ pub async fn run(target: &CoreTarget, client: &str) -> ExitCode {
         Ok(t) => t.trim().to_string(),
         Err(_) => {
             return fail(&format!(
-                "no agent client '{client}' ({} missing); create it with `umr agent setup claude-code|codex` or `umr agent add {client}`",
+                "no agent client '{client}' ({} missing); connect the agent with `umr agent setup <agent>` (see `umr agent clients`) or create it with `umr agent add {client}`",
                 path.display()
             ))
         }

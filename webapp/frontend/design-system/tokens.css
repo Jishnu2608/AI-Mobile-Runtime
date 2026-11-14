@@ -1,25 +1,19 @@
 /*
- * Design tokens — green-only design language (Phase 9 directive §2).
- * Brand colours are raw values; components use only the semantic tokens below.
- * Light theme on :root; dark theme designed separately, applied by [data-theme="dark"] and,
- * before any script runs, by prefers-color-scheme (no flash of the wrong theme).
+ * Design tokens — Graphite & Lime (owner-approved 2026-11-14, replaces the green-only palette).
+ * Neutral greys, charcoal, silver and off-white; electric lime is the one signature accent
+ * (download CTA, active states, small diagram highlights). Components use only the semantic
+ * tokens below, never raw hex. Status colours keep their meaning and always come with an icon
+ * and a word.
+ * Light theme on :root; the dark theme is designed separately and applied by
+ * [data-theme="dark"] and, before any script runs, by prefers-color-scheme (no flash).
  */
 
 :root {
-  /* brand — primary */
-  --forest: #163d32;
-  --pine: #216b50;
-  --emerald: #31966a;
-  --jade: #64b98a;
-  /* brand — secondary */
-  --sage: #a5cdb2;
-  --mint: #d1e8d7;
-  --pale-mint: #e9f4e9;
-  --soft-green: #eff6ef;
-  /* signature highlight */
+  /* signature accent — electric lime (unchanged CTA colour) */
   --lime: #b9e769;
-  --lime-deep: #91c94d;
-  --lime-pale: #e7f4ce;
+  --lime-deep: #a7d957;
+  --lime-light: #c9ee8b;
+  --lime-pale: #eaf5d4;
 
   /* type, spacing, shape (theme independent) */
   --ff-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
@@ -36,159 +30,185 @@
   --dur-fast: 160ms;
   --dur-base: 280ms;
 
-  /* ---- light theme (semantic) ---- */
+  /* ---- light theme (semantic): warm off-white canvas, white surfaces, silver lines ---- */
   color-scheme: light;
-  --bg: #f7faf6;
-  --bg-alt: #edf4ec;
+  --bg: #f5f5f3;
+  --bg-alt: #ebece9;
   --surface: #ffffff;
-  --surface-sunken: #eff6ef;
-  --ink: #1b3025;
-  --ink-2: #586b5d;
-  /* --ink-3 is the owner's muted grey; small text uses --ink-2 for AA contrast */
-  --ink-3: #819184;
-  --line: #dce7db;
-  --line-strong: #c3d6c4;
-  --link: #216b50;
-  --link-hover: #163d32;
-  --accent: #31966a;
-  --accent-soft: #d1e8d7;
+  --surface-sunken: #f0f1ee;
+  --header-bg: #ffffff;
+  --ink: #202321;
+  --ink-2: #626862;
+  /* --ink-3 is the approved muted grey; small text uses --ink-2 for AA contrast */
+  --ink-3: #858b85;
+  --line: #d8dbd6;
+  --line-strong: #c9cdc7;
+  --link: #202321;
+  --link-hover: #000000;
+  --link-line: #a7d957;          /* underline colour; the underline, not the colour, marks a link */
+  --icon: #3b403c;               /* feature and section icons */
+  --accent: #858b85;             /* rules, dashes, neutral markers */
+  --accent-soft: #ebece9;
   --highlight: #b9e769;
-  --highlight-ink: #163d32;
-  --focus: #216b50;
-  --band-bg: #163d32;          /* deep feature bands */
-  --band-ink: #edf5ed;
-  --band-ink-2: #b1c5b4;
-  --band-line: #2c5a49;
+  --highlight-ink: #202321;
+  /* lime note: small highlighted annotations (diagram problem pill, "Required" badges) */
+  --note-bg: #eaf5d4;
+  --note-line: #a7d957;
+  --note-ink: #2c3a12;
+  --focus: #202321;
+  --glow: rgb(255 255 255 / 0.9);  /* soft radial light behind the hero */
+  /* graphite band: the one inverted surface in light mode */
+  --band-bg: #1d211f;
+  --band-ink: #f0f1ed;
+  --band-ink-2: #a8aea8;
+  --band-ink-3: #8b928c;
+  --band-line: #343a36;
   --band-accent: #b9e769;
-  --band-surface: #1f4a3d;
-  --band-sunken: #0f2b23;
-  --band-ink-3: #8fb39d;
-  --code-bg: #f1f7f0;
-  --code-ink: #1b3025;
-  --sh-1: 0 1px 2px rgb(22 61 50 / 0.06), 0 4px 16px rgb(22 61 50 / 0.06);
-  --sh-2: 0 2px 4px rgb(22 61 50 / 0.06), 0 16px 40px rgb(22 61 50 / 0.10);
+  --band-surface: #272c29;
+  --band-sunken: #151716;
+  --code-bg: #f0f1ee;
+  --code-ink: #202321;
+  --sh-1: 0 1px 2px rgb(32 35 33 / 0.05), 0 4px 14px rgb(32 35 33 / 0.05);
+  --sh-2: 0 2px 4px rgb(32 35 33 / 0.05), 0 16px 40px rgb(32 35 33 / 0.09);
 
-  /* functional status (§2.7: never green alone; always with an icon and a word) */
-  --ok: #216b50;
-  --ok-bg: #e2f1e5;
-  --warn: #8a5a00;
-  --warn-bg: #fbf1d9;
+  /* functional status — semantic only, never decoration */
+  --ok: #2d6a3a;
+  --ok-bg: #e4efe4;
+  --warn: #85560a;
+  --warn-bg: #f7eedb;
   --err: #a8261b;
   --err-bg: #fbe7e4;
-  --info: #335c4d;
-  --info-bg: #e6efe9;
+  --info: #474d48;
+  --info-bg: #e7e8e5;
 
-  /* syntax (code blocks, shiki css-variables theme) */
-  --shiki-foreground: #1b3025;
+  /* syntax (shiki css-variables theme): monochrome with a lime-olive string colour */
+  --shiki-foreground: #202321;
   --shiki-background: transparent;
-  --shiki-token-keyword: #216b50;
-  --shiki-token-string: #4c7a2a;
-  --shiki-token-comment: #58695c;
-  --shiki-token-constant: #1f7a55;
-  --shiki-token-function: #163d32;
-  --shiki-token-parameter: #586b5d;
-  --shiki-token-punctuation: #586b5d;
-  --shiki-token-link: #216b50;
-  --shiki-token-string-expression: #4c7a2a;
+  --shiki-token-keyword: #202321;
+  --shiki-token-string: #4d6419;
+  --shiki-token-comment: #626862;
+  --shiki-token-constant: #3b403c;
+  --shiki-token-function: #000000;
+  --shiki-token-parameter: #4f5550;
+  --shiki-token-punctuation: #626862;
+  --shiki-token-link: #202321;
+  --shiki-token-string-expression: #4d6419;
 }
 
-/* dark theme — deep forest surfaces, not inverted light */
+/* dark theme — graphite and charcoal layers, designed separately (not inverted light) */
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --bg: #101b16;
-  --bg-alt: #192820;
-  --surface: #25392d;
-  --surface-sunken: #14221b;
-  --ink: #edf5ed;
-  --ink-2: #b1c5b4;
-  --ink-3: #819786;
-  --line: #354b3b;
-  --line-strong: #47614d;
-  --link: #8fd1a8;
-  --link-hover: #b9e769;
-  --accent: #64b98a;
-  --accent-soft: #1f3a2c;
+  --bg: #151716;
+  --bg-alt: #1d211f;
+  --surface: #272c29;
+  --surface-sunken: #1a1d1b;
+  --header-bg: #1a1d1b;
+  --ink: #f0f1ed;
+  --ink-2: #a8aea8;
+  --ink-3: #858d86;
+  --line: #343a36;
+  --line-strong: #414943;
+  --link: #f0f1ed;
+  --link-hover: #c9ee8b;
+  --link-line: #8b928c;
+  --icon: #c9cdc7;
+  --accent: #858d86;
+  --accent-soft: #2a2f2c;
   --highlight: #b9e769;
-  --highlight-ink: #163d32;
+  --highlight-ink: #202321;
+  --note-bg: #273019;
+  --note-line: #5f7a2c;
+  --note-ink: #c9ee8b;
   --focus: #b9e769;
-  --band-bg: #0b1410;
-  --band-ink: #edf5ed;
-  --band-ink-2: #b1c5b4;
-  --band-line: #2a3f32;
+  --glow: rgb(255 255 255 / 0.035);
+  --band-bg: #1d211f;
+  --band-ink: #f0f1ed;
+  --band-ink-2: #a8aea8;
+  --band-ink-3: #8b928c;
+  --band-line: #343a36;
   --band-accent: #b9e769;
-  --band-surface: #1d3027;
-  --band-sunken: #0e1813;
-  --band-ink-3: #819786;
-  --code-bg: #14221b;
-  --code-ink: #edf5ed;
-  --sh-1: 0 1px 2px rgb(0 0 0 / 0.3);
-  --sh-2: 0 2px 6px rgb(0 0 0 / 0.35), 0 20px 48px rgb(0 0 0 / 0.35);
-
-  --ok: #8fd1a8;
-  --ok-bg: #1d3a2b;
-  --warn: #f0c46b;
-  --warn-bg: #3a2f14;
+  --band-surface: #272c29;
+  --band-sunken: #151716;
+  --code-bg: #1d211f;
+  --code-ink: #f0f1ed;
+  --sh-1: 0 1px 2px rgb(0 0 0 / 0.35), 0 0 0 1px rgb(255 255 255 / 0.02);
+  --sh-2: 0 2px 6px rgb(0 0 0 / 0.4), 0 20px 48px rgb(0 0 0 / 0.4);
+  --ok: #94cf9d;
+  --ok-bg: #1f2c22;
+  --warn: #e9c06e;
+  --warn-bg: #352c17;
   --err: #f4978e;
-  --err-bg: #3d1d1a;
-  --info: #b1c5b4;
-  --info-bg: #1f3027;
-
-  --shiki-foreground: #edf5ed;
-  --shiki-token-keyword: #8fd1a8;
-  --shiki-token-string: #c6e889;
-  --shiki-token-comment: #819786;
+  --err-bg: #3a1f1c;
+  --info: #c9cdc7;
+  --info-bg: #2a2f2c;
+  --shiki-foreground: #f0f1ed;
+  --shiki-token-keyword: #f0f1ed;
+  --shiki-token-string: #c9ee8b;
+  --shiki-token-comment: #8b928c;
   --shiki-token-constant: #b9e769;
-  --shiki-token-function: #d1e8d7;
-  --shiki-token-parameter: #b1c5b4;
-  --shiki-token-punctuation: #b1c5b4;
-  --shiki-token-link: #8fd1a8;
-  --shiki-token-string-expression: #c6e889;
+  --shiki-token-function: #ffffff;
+  --shiki-token-parameter: #c9cdc7;
+  --shiki-token-punctuation: #a8aea8;
+  --shiki-token-link: #f0f1ed;
+  --shiki-token-string-expression: #c9ee8b;
 }
 
 /* no script yet (or disabled): follow the system */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme]) {
     color-scheme: dark;
-    --bg: #101b16;
-    --bg-alt: #192820;
-    --surface: #25392d;
-    --surface-sunken: #14221b;
-    --ink: #edf5ed;
-    --ink-2: #b1c5b4;
-    --ink-3: #819786;
-    --line: #354b3b;
-    --line-strong: #47614d;
-    --link: #8fd1a8;
-    --link-hover: #b9e769;
-    --accent: #64b98a;
-    --accent-soft: #1f3a2c;
+    --bg: #151716;
+    --bg-alt: #1d211f;
+    --surface: #272c29;
+    --surface-sunken: #1a1d1b;
+    --header-bg: #1a1d1b;
+    --ink: #f0f1ed;
+    --ink-2: #a8aea8;
+    --ink-3: #858d86;
+    --line: #343a36;
+    --line-strong: #414943;
+    --link: #f0f1ed;
+    --link-hover: #c9ee8b;
+    --link-line: #8b928c;
+    --icon: #c9cdc7;
+    --accent: #858d86;
+    --accent-soft: #2a2f2c;
+    --highlight: #b9e769;
+    --highlight-ink: #202321;
+    --note-bg: #273019;
+    --note-line: #5f7a2c;
+    --note-ink: #c9ee8b;
     --focus: #b9e769;
-    --band-bg: #0b1410;
-    --band-line: #2a3f32;
-    --band-surface: #1d3027;
-    --band-sunken: #0e1813;
-    --band-ink-3: #819786;
-    --code-bg: #14221b;
-    --code-ink: #edf5ed;
-    --sh-1: 0 1px 2px rgb(0 0 0 / 0.3);
-    --sh-2: 0 2px 6px rgb(0 0 0 / 0.35), 0 20px 48px rgb(0 0 0 / 0.35);
-    --ok: #8fd1a8;
-    --ok-bg: #1d3a2b;
-    --warn: #f0c46b;
-    --warn-bg: #3a2f14;
+    --glow: rgb(255 255 255 / 0.035);
+    --band-bg: #1d211f;
+    --band-ink: #f0f1ed;
+    --band-ink-2: #a8aea8;
+    --band-ink-3: #8b928c;
+    --band-line: #343a36;
+    --band-accent: #b9e769;
+    --band-surface: #272c29;
+    --band-sunken: #151716;
+    --code-bg: #1d211f;
+    --code-ink: #f0f1ed;
+    --sh-1: 0 1px 2px rgb(0 0 0 / 0.35), 0 0 0 1px rgb(255 255 255 / 0.02);
+    --sh-2: 0 2px 6px rgb(0 0 0 / 0.4), 0 20px 48px rgb(0 0 0 / 0.4);
+    --ok: #94cf9d;
+    --ok-bg: #1f2c22;
+    --warn: #e9c06e;
+    --warn-bg: #352c17;
     --err: #f4978e;
-    --err-bg: #3d1d1a;
-    --info: #b1c5b4;
-    --info-bg: #1f3027;
-    --shiki-foreground: #edf5ed;
-    --shiki-token-keyword: #8fd1a8;
-    --shiki-token-string: #c6e889;
-    --shiki-token-comment: #819786;
+    --err-bg: #3a1f1c;
+    --info: #c9cdc7;
+    --info-bg: #2a2f2c;
+    --shiki-foreground: #f0f1ed;
+    --shiki-token-keyword: #f0f1ed;
+    --shiki-token-string: #c9ee8b;
+    --shiki-token-comment: #8b928c;
     --shiki-token-constant: #b9e769;
-    --shiki-token-function: #d1e8d7;
-    --shiki-token-parameter: #b1c5b4;
-    --shiki-token-punctuation: #b1c5b4;
-    --shiki-token-link: #8fd1a8;
-    --shiki-token-string-expression: #c6e889;
+    --shiki-token-function: #ffffff;
+    --shiki-token-parameter: #c9cdc7;
+    --shiki-token-punctuation: #a8aea8;
+    --shiki-token-link: #f0f1ed;
+    --shiki-token-string-expression: #c9ee8b;
   }
 }

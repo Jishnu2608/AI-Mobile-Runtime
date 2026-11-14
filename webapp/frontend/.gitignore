@@ -42,3 +42,9 @@ next-env.d.ts
 
 # copies of repository documents, made by scripts/sync-content.mjs before dev and build
 /content/generated/
+
+# local design screenshots (validation evidence, not shipped)
+/.screenshots/
+
+# guide screenshots copied from docs/user/images by scripts/sync-content.mjs
+/public/docs-images/

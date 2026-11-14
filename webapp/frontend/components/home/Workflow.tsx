@@ -85,7 +85,7 @@ export function Workflow() {
                 aria-hidden
                 className={cn(
                   "font-mono text-sm tabular-nums transition-colors",
-                  selected ? "text-highlight" : "text-ink-2 group-hover:text-ink",
+                  selected ? "font-semibold text-ink" : "text-ink-2 group-hover:text-ink",
                 )}
               >
                 {String(i + 1).padStart(2, "0")}
@@ -119,7 +119,7 @@ export function Workflow() {
           </div>
           <h3 className="t-sub mt-4 text-band-ink">{stage.title}</h3>
           <p className="mt-3 max-w-xl leading-relaxed text-band-ink-2">{stage.body}</p>
-          <pre className="mt-5 overflow-x-auto rounded-md border border-band-line bg-band px-4 py-3 font-mono text-sm leading-relaxed text-mint">
+          <pre className="mt-5 overflow-x-auto rounded-md border border-band-line bg-band px-4 py-3 font-mono text-sm leading-relaxed text-band-ink">
             {stage.command}
           </pre>
         </div>
@@ -136,7 +136,7 @@ export function Workflow() {
                 y1={A.y}
                 x2={B.x}
                 y2={B.y}
-                stroke={lit ? "var(--lime)" : "var(--band-line)"}
+                stroke={lit ? "var(--band-ink-2)" : "var(--band-line)"}
                 strokeWidth={lit ? 2 : 1}
                 strokeDasharray={lit ? undefined : "3 4"}
                 style={{ transition: "stroke 300ms" }}
@@ -155,7 +155,7 @@ export function Workflow() {
                   height={30}
                   rx={6}
                   fill={lit ? (k === "core" ? "var(--lime)" : "var(--band-surface)") : "var(--band-sunken)"}
-                  stroke={lit ? "var(--lime)" : "var(--band-line)"}
+                  stroke={lit ? (k === "core" ? "var(--lime)" : "var(--band-ink-2)") : "var(--band-line)"}
                   style={{ transition: "fill 300ms, stroke 300ms" }}
                 />
                 <text
@@ -164,7 +164,7 @@ export function Workflow() {
                   textAnchor="middle"
                   fontSize="11.5"
                   fontWeight={lit ? 600 : 400}
-                  fill={lit ? (k === "core" ? "var(--forest)" : "var(--band-ink)") : "var(--band-ink-3)"}
+                  fill={lit ? (k === "core" ? "var(--highlight-ink)" : "var(--band-ink)") : "var(--band-ink-3)"}
                 >
                   {p.label}
                 </text>

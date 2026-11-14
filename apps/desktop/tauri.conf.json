@@ -20,12 +20,6 @@
     "shortDescription": "See and test your Android app beside your AI coding agent.",
     "longDescription": "AI Mobile Runtime prepares the Android toolchain, runs an emulator, shows the running app beside your coding agent and gives the agent the screen, the errors and the controls (CLI and MCP).",
     "category": "DeveloperTool",
-    "resources": {
-      "../../target/release/umr.exe": "umr.exe",
-      "../../target/release/umr-core.exe": "umr-core.exe",
-      "../../target/release/umr-elevate.exe": "umr-elevate.exe",
-      "../../THIRD_PARTY_NOTICES.md": "THIRD_PARTY_NOTICES.md"
-    },
     "windows": {
       "nsis": {
         "installMode": "currentUser",

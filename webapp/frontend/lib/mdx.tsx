@@ -34,8 +34,16 @@ function A({ href, children, ...rest }: ComponentProps<"a">) {
   );
 }
 
+/** Guide screenshots: `images/x.png` in the repository is served from `/docs-images/x.png`. */
+function Img({ src, alt, ...rest }: ComponentProps<"img">) {
+  const s = typeof src === "string" && src.startsWith("images/") ? `/docs-images/${src.slice("images/".length)}` : src;
+  // eslint-disable-next-line @next/next/no-img-element -- static export, images are pre-sized PNGs
+  return <img src={s} alt={alt ?? ""} loading="lazy" className="my-6 rounded-md border border-line shadow-1" {...rest} />;
+}
+
 const components = {
   a: A,
+  img: Img,
   pre: (p: ComponentProps<"pre">) => <CodeBlock {...p} />,
   table: (p: ComponentProps<"table">) => (
     <div className="table-wrap" tabIndex={0} role="region" aria-label="Table">

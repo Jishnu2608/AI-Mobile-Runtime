@@ -42,7 +42,7 @@ shows "No public release yet". To preview a release layout locally, build with
 
 ## Rules
 
-- Green-only brand palette; status colours only with an icon and a word.
+- Graphite & Lime palette: neutral greys and electric lime `#B9E769` as the one accent; colours only through `design-system/tokens.css`; status colours only with an icon and a word.
 - No trackers, analytics, cookies or third-party requests. Fonts are self-hosted.
 - Animation with GSAP only where it explains something; `prefers-reduced-motion` is respected and
   every page works without JavaScript.

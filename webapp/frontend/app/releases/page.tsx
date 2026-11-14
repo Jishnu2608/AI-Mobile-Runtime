@@ -37,7 +37,7 @@ export default function ReleasesPage() {
           <div className="mt-6 rounded-lg border border-dashed border-line-strong bg-bg-alt p-6">
             <Status kind="pending">None yet</Status>
             <p className="t-body mt-4 max-w-[var(--reading-max)]">
-              No release has been published. Where releases are hosted is open decision W5, and signing is W8.
+              No release has been published yet. Releases will be published on GitHub Releases; code signing is open decision W8.
             </p>
           </div>
         ) : (
@@ -75,7 +75,7 @@ export default function ReleasesPage() {
         <ol className="relative mt-10 grid gap-8 border-l border-line pl-8">
           {milestones.map((m) => (
             <li key={m.id} className="relative">
-              <span aria-hidden className="absolute -left-[2.3rem] top-1.5 size-2.5 rounded-full border-2 border-bg bg-emerald ring-1 ring-line" />
+              <span aria-hidden className="absolute -left-[2.3rem] top-1.5 size-2.5 rounded-full border-2 border-bg bg-lime ring-1 ring-line" />
               <p className="t-meta t-num">
                 <span className="font-mono font-semibold text-ink">{m.id}</span> · {m.date}
               </p>

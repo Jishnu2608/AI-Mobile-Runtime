@@ -41,3 +41,7 @@ skills-lock.json
 # Release output (scripts/release.ps1)
 /dist/
 /target/release/bundle/
+
+# Brand work files (previews, icon renders); the artwork itself is committed
+/brand/.*
+/.playwright-mcp/

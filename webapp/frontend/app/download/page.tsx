@@ -122,7 +122,7 @@ function Latest({ release }: { release: Release }) {
             <Link className="link" href="/licences/">licences page</Link>.
           </p>
           <label className="mt-4 flex min-h-11 cursor-pointer items-start gap-3 text-[0.95rem] text-ink">
-            <input type="checkbox" className="mt-1 size-4 accent-[var(--pine)]" />
+            <input type="checkbox" className="mt-1 size-4 accent-[var(--ink)]" />
             <span>I have read the licence notes and understand that this build is a preview without a product licence.</span>
           </label>
         </div>
@@ -150,7 +150,7 @@ function Latest({ release }: { release: Release }) {
             const label = fileLabel[f.kind] ?? { title: f.kind, detail: "" };
             return (
               <li key={f.name} className="flex flex-col rounded-lg border border-line bg-surface p-6">
-                <Icon aria-hidden className="size-5 text-pine dark:text-jade" strokeWidth={1.75} />
+                <Icon aria-hidden className="size-5 text-icon" strokeWidth={1.75} />
                 <h3 className="mt-4 font-semibold text-ink">{label.title}</h3>
                 <p className="t-desc mt-2 flex-1">{label.detail}</p>
                 <FileFacts file={f} release={release} compact />
@@ -198,14 +198,15 @@ function NoRelease() {
         There is nothing to download yet
       </h2>
       <p className="t-body mt-4 max-w-2xl">
-        Release builds exist, but where they are published is not decided (open decision W5), and they are not code-signed yet (W8). When
+        Release builds exist and will be published on the project&apos;s GitHub Releases page, but none is published yet, and they are not
+        code-signed yet (W8). When
         the first release is published, this page lists it from the same release manifest the app&apos;s updater reads.
       </p>
       <p className="mt-8 font-semibold text-ink">Each release will show</p>
       <ul className="mt-3 grid gap-2 text-[0.95rem] text-ink-2 sm:grid-cols-2 lg:grid-cols-3">
         {["Version and release date", "File size", "SHA-256 checksum", "Signature status", "Supported Windows build", "Installer, portable ZIP and command-line ZIP"].map((x) => (
           <li key={x} className="flex items-center gap-2">
-            <span aria-hidden className="size-1.5 rounded-full bg-emerald" />
+            <span aria-hidden className="size-1.5 rounded-full bg-ink-3" />
             {x}
           </li>
         ))}

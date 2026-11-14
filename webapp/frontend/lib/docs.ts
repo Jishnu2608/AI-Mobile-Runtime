@@ -84,11 +84,18 @@ export const docs: DocPage[] = [
     source: { kind: "site", file: "reference-mcp.mdx", format: "mdx" },
   },
   {
+    slug: ["reference", "agent-clients"],
+    title: "Agent client reference",
+    description: "Where Claude Code, Codex, Cursor, Claude Desktop and VS Code read their MCP servers, and what umr writes for each.",
+    group: "Reference",
+    source: { kind: "generated", file: "agent-clients.md", format: "md" },
+  },
+  {
     slug: ["troubleshooting"],
     title: "Troubleshooting",
     description: "Problems by category: symptoms, likely cause, how to check and how to fix.",
     group: "Help",
-    source: { kind: "site", file: "troubleshooting.mdx", format: "mdx" },
+    source: { kind: "generated", file: "troubleshooting.md", format: "md" },
   },
   {
     slug: ["uninstall"],
@@ -148,6 +155,7 @@ const linkMap: Record<string, string> = {
   "getting-started.md": "/docs/getting-started/",
   "requirements.md": "/docs/requirements/",
   "agents.md": "/docs/guides/agents/",
+  "clients.md": "/docs/reference/agent-clients/",
   "troubleshooting.md": "/docs/troubleshooting/",
   "privacy-and-security.md": "/privacy/",
   "uninstall-and-data.md": "/docs/uninstall/",

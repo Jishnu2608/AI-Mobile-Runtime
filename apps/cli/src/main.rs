@@ -6,7 +6,9 @@
 //!
 //! Exit codes: 0 success · 1 failure / not running (status) / failing checks (doctor) · 2 usage error.
 
+mod agent_clients;
 mod agent_cmd;
+mod agent_setup;
 mod core_process;
 mod device_cmd;
 mod diag_cmd;
@@ -374,20 +376,56 @@ enum PreviewAction {
 
 #[derive(Debug, Subcommand)]
 enum AgentAction {
-    /// Connect Claude Code or Codex: creates its client, writes its MCP server entry and the
-    /// agent instructions (shows the changes and asks first).
+    /// Connect a coding agent (claude-code, codex, cursor, claude-desktop, vscode): creates its
+    /// client, writes its MCP server entry and agent instructions (shows the changes and asks
+    /// first). `--remove` disconnects it again.
     Setup {
-        /// `claude-code` or `codex`.
+        /// claude-code, codex, cursor, claude-desktop or vscode.
         agent: String,
-        /// Project folder (`.mcp.json`, skill / `AGENTS.md`); default: current folder.
+        /// Project folder (project-scope config and instruction files); default: current folder.
         #[arg(long)]
         project: Option<std::path::PathBuf>,
+        /// `project` (this folder) or `user` (all projects). Default: project for Claude Code,
+        /// Cursor and VS Code; user for Codex and Claude Desktop.
+        #[arg(long)]
+        scope: Option<String>,
+        /// Take the runtime out of the agent's files and revoke its token.
+        #[arg(long)]
+        remove: bool,
+        /// Only print the server entry to add by hand; write nothing.
+        #[arg(long)]
+        print: bool,
         /// Do not ask.
         #[arg(long)]
         yes: bool,
         /// Only show what would change.
         #[arg(long)]
         dry_run: bool,
+        /// Machine-readable plan / result; never asks (applies only with --yes).
+        #[arg(long)]
+        json: bool,
+    },
+    /// One-click install link for Cursor or VS Code, made for this PC's umr.exe (creates the
+    /// agent client if needed).
+    Link {
+        /// cursor or vscode.
+        agent: String,
+        #[arg(long)]
+        json: bool,
+    },
+    /// Check each connected agent end to end: config entry, program path, token, a real MCP
+    /// handshake and its last call. `--fix` repoints entries at this umr.exe.
+    Doctor {
+        /// Only this agent.
+        agent: Option<String>,
+        /// Project folder whose project-scope configs are checked; default: current folder.
+        #[arg(long)]
+        project: Option<std::path::PathBuf>,
+        /// Rewrite entries whose program path is missing or points at another umr.exe.
+        #[arg(long)]
+        fix: bool,
+        #[arg(long)]
+        json: bool,
     },
     /// Create an agent client with its own token (default scopes: observe, interact, control).
     Add {
@@ -395,6 +433,15 @@ enum AgentAction {
         /// Comma-separated: observe, interact, control.
         #[arg(long)]
         scopes: Option<String>,
+    },
+    /// Coding agents on this PC (Claude Code, Codex, Cursor, Claude Desktop, VS Code): installed,
+    /// connected, and how to connect each one. Does not need the Core.
+    Clients {
+        /// Project folder whose config files are checked; default: current folder.
+        #[arg(long)]
+        project: Option<std::path::PathBuf>,
+        #[arg(long)]
+        json: bool,
     },
     /// Agent clients, their scopes and grants.
     List {
@@ -629,11 +676,20 @@ fn main() -> ExitCode {
             }
             Command::Mcp { client, .. } => mcp_cmd::run(&target, &client).await,
             Command::Agent { action } => match action {
-                AgentAction::Setup { agent, project, yes, dry_run } => {
-                    agent_cmd::setup(&target, &agent, project, yes, dry_run).await
+                AgentAction::Setup { agent, project, scope, remove, print, yes, dry_run, json } => {
+                    let o = agent_setup::SetupOptions { project, scope, yes, dry_run, remove, print, json };
+                    agent_setup::setup(&target, &agent, o).await
+                }
+                AgentAction::Link { agent, json } => agent_setup::link(&target, &agent, json).await,
+                AgentAction::Doctor { agent, project, fix, json } => {
+                    agent_setup::doctor(&target, agent, project, fix, json).await
                 }
                 AgentAction::Add { name, scopes } => agent_cmd::add(&target, &name, scopes).await,
                 AgentAction::List { json } => agent_cmd::list(&target, json).await,
+                AgentAction::Clients { project, json } => {
+                    let project = std::path::PathBuf::from(session_cmd::absolute(&project.unwrap_or_else(|| ".".into())));
+                    agent_clients::list(&project, json)
+                }
                 AgentAction::Remove { name } => agent_cmd::remove(&target, &name).await,
                 AgentAction::Grant { name, what } => agent_cmd::grant(&target, &name, &what, true).await,
                 AgentAction::Ungrant { name, what } => agent_cmd::grant(&target, &name, &what, false).await,

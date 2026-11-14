@@ -17,7 +17,7 @@ export default async function OpenSourcePage() {
     <PageShell
       eyebrow="Open source"
       title="Open source and open decisions"
-      lead="The repository is private until the product licence is chosen. These are the decisions still to be made before the public release, and the rules contributions will follow."
+      lead="The source is public on GitHub. It has no licence yet, so it is all rights reserved until one is chosen. These are the decisions still to be made before the public release, and the rules contributions will follow."
     >
       <section aria-labelledby="open-decisions-title" id="open-decisions" className="scroll-mt-28">
         <h2 id="open-decisions-title" className="t-section">

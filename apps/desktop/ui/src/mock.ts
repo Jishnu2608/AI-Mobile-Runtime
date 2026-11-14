@@ -104,6 +104,9 @@ export async function mockCall(method: string, _params: unknown): Promise<any> {
       };
     case "admin.run":
       return { action: "enable-whpx", status: "already-on", message: "Windows Hypervisor Platform is on and usable" };
+    case "project.run":
+      await new Promise((r) => setTimeout(r, 1500));
+      return { status: "running", package: "com.example.my_app", serial: "emulator-5554", adapter: "flutter", seconds: 41, watching: true, capabilities: { hot_reload: true, hot_restart: true } };
     case "preview.open":
       return { url: "", profile: "standard" };
     case "device.profiles":
@@ -138,3 +141,4 @@ export async function mockCall(method: string, _params: unknown): Promise<any> {
       throw new Error(`mock: no sample for ${method}`);
   }
 }
+

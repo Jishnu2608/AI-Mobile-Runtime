@@ -1,0 +1,99 @@
+name: Release build (DIST-001)
+
+# Manual only. Builds a release on a fresh GitHub-hosted Windows VM with scripts/release.ps1 and
+# keeps the result as a workflow artifact: per-user NSIS installer, portable ZIP, CLI ZIP,
+# SHA256SUMS and releases.json (download URLs point at this repository's GitHub Releases, W5).
+# Nothing is published and nothing is signed yet: publishing to GitHub Releases is a later step
+# of DIST-001, and signing waits for the code-signing decision (W8).
+# It also installs the new installer silently, runs the installed umr, and uninstalls it again,
+# so every release build is checked on a clean machine.
+on:
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: "Release channel written into releases.json"
+        type: choice
+        options: [stable, beta]
+        default: stable
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-build
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  release:
+    name: Build, check and keep the release files
+    runs-on: windows-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: apps/desktop/ui/package-lock.json
+
+      # the third-party notices read the desktop UI's node_modules, so install them first
+      - name: Desktop UI dependencies
+        run: npm --prefix apps/desktop/ui ci --no-audit --no-fund
+
+      - name: Build the release (scripts/release.ps1, unsigned)
+        shell: pwsh
+        run: |
+          $base = "https://github.com/${{ github.repository }}/releases/download"
+          powershell -NoProfile -ExecutionPolicy Bypass -File scripts/release.ps1 -BaseUrl $base -Channel ${{ inputs.channel }}
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Check checksums and the manifest
+        shell: pwsh
+        run: |
+          $dir = Get-ChildItem dist -Directory | Sort-Object Name -Descending | Select-Object -First 1
+          "RELEASE_DIR=$($dir.FullName)" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+          Get-Content (Join-Path $dir.FullName "SHA256SUMS") | ForEach-Object {
+            $hash, $name = $_ -split '\s+', 2
+            $actual = (Get-FileHash (Join-Path $dir.FullName $name) -Algorithm SHA256).Hash.ToLower()
+            if ($actual -ne $hash) { throw "checksum mismatch: $name" }
+            "ok  $name"
+          }
+          $m = Get-Content (Join-Path $dir.FullName "releases.json") -Raw | ConvertFrom-Json
+          $r = $m.releases[0]
+          "version $($r.version), channel $($r.channel), signed $($r.signed), $($r.files.Count) files"
+          $r.files | ForEach-Object { "  $($_.kind): $($_.url)" }
+
+      - name: Install, run and uninstall on this clean machine
+        shell: pwsh
+        run: |
+          $setup = Get-ChildItem $env:RELEASE_DIR -Filter "*-setup.exe" | Select-Object -First 1
+          $p = Start-Process $setup.FullName -ArgumentList "/S" -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "installer exit code $($p.ExitCode)" }
+          $umr = Get-ChildItem $env:LOCALAPPDATA -Recurse -Filter umr.exe -Depth 3 -ErrorAction SilentlyContinue |
+            Where-Object { $_.FullName -notmatch 'cargo|target' } | Select-Object -First 1
+          if (-not $umr) { throw "umr.exe not found after the install" }
+          "installed: $($umr.FullName)"
+          & $umr.FullName --version
+          if ($LASTEXITCODE -ne 0) { throw "installed umr --version failed" }
+          & $umr.FullName agent clients
+          $uninst = Get-ChildItem $umr.DirectoryName -Filter "uninstall*.exe" | Select-Object -First 1
+          if ($uninst) {
+            $u = Start-Process $uninst.FullName -ArgumentList "/S" -Wait -PassThru
+            "uninstaller exit code $($u.ExitCode)"
+          }
+
+      - name: Keep the release files
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ inputs.channel }}-${{ github.sha }}
+          path: |
+            ${{ env.RELEASE_DIR }}/*.exe
+            ${{ env.RELEASE_DIR }}/*.zip
+            ${{ env.RELEASE_DIR }}/SHA256SUMS
+            ${{ env.RELEASE_DIR }}/releases.json
+          retention-days: 14
+          if-no-files-found: error

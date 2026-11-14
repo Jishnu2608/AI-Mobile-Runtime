@@ -5,8 +5,9 @@
   code-signing certificate is configured; otherwise everything is unsigned and says so.
 
 .PARAMETER BaseUrl
-  Where the files will be published (the manifest's download URLs). Default: a placeholder that
-  the website / release step replaces (Phase 9, DIST-001/002).
+  Where the files will be published (the manifest's download URLs are <BaseUrl>/v<version>/<file>).
+  For GitHub Releases (W5) pass https://github.com/<owner>/<repo>/releases/download; the release
+  notes link then points at .../releases/tag/v<version>. Default: a placeholder.
 .PARAMETER Channel
   stable or beta.
 
@@ -30,6 +31,10 @@ $out = Join-Path $root "dist\$version"
 $maxBytes = 60MB   # NFR-05
 $thumb = $env:UMR_SIGN_THUMBPRINT
 $tsUrl = if ($env:UMR_SIGN_TIMESTAMP_URL) { $env:UMR_SIGN_TIMESTAMP_URL } else { "http://timestamp.digicert.com" }
+
+# GitHub Releases (W5): files under .../releases/download/v<version>/, notes on .../releases/tag/v<version>
+$base = $BaseUrl.TrimEnd('/')
+$notesUrl = if ($base -match '/releases/download$') { ($base -replace '/releases/download$', '/releases/tag') + "/v$version" } else { "$base/v$version/" }
 
 function Step($m) { Write-Host "`n=== $m ===" -ForegroundColor Cyan }
 
@@ -71,10 +76,13 @@ if (-not $SkipBuild) {
   Step "Installer (NSIS, per user)"
   Push-Location apps\desktop
   try {
-    $cfg = @()
+    # The release binaries are bundled through a separate config: the Tauri build script checks
+    # every resource path, so listing the target release files in tauri.conf.json breaks every
+    # debug build (clippy, tests) on a machine without a release build, such as CI.
+    $cfg = @("--config", "tauri.release.conf.json")
     if ($thumb) {
       $json = '{"bundle":{"windows":{"certificateThumbprint":"' + $thumb + '","digestAlgorithm":"sha256","timestampUrl":"' + $tsUrl + '"}}}'
-      $cfg = @("--config", $json)
+      $cfg += @("--config", $json)
     }
     node ui\node_modules\@tauri-apps\cli\tauri.js build --bundles nsis @cfg
     if ($LASTEXITCODE -ne 0) { throw "tauri build failed" }
@@ -149,7 +157,7 @@ $manifest = [ordered]@{
       date              = (Get-Date).ToUniversalTime().ToString("yyyy-MM-dd")
       min_windows_build = 22000
       signed            = $signed
-      notes_url         = "$($BaseUrl.TrimEnd('/'))/v$version/"
+      notes_url         = $notesUrl
       files             = @($entries)
     })
 }

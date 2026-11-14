@@ -58,14 +58,14 @@ export function Hero({ hasRelease, toolCount }: { hasRelease: boolean; toolCount
   return (
     <section ref={root} aria-labelledby="hero-title" className="relative overflow-hidden">
       {/* soft tonal field behind the hero, flat colour, no orb */}
-      <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-full bg-[linear-gradient(180deg,var(--bg-alt)_0%,var(--bg)_70%)]" />
+      <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-full bg-[radial-gradient(60%_55%_at_78%_30%,var(--glow),transparent_70%),linear-gradient(180deg,var(--bg-alt)_0%,var(--bg)_75%)]" />
       <div className="wrap grid items-center gap-12 pt-14 pb-20 md:pt-20 lg:min-h-[calc(100dvh-var(--header-h)-2.5rem)] lg:grid-cols-12 lg:gap-10 lg:pb-24">
         <div className="lg:col-span-6 xl:col-span-6">
           <p className="eyebrow" data-enter>
             Local runtime for Windows 11
           </p>
           <h1 id="hero-title" className="t-display mt-6 max-w-[14ch]" data-enter>
-            The Android runtime for <span className="relative whitespace-nowrap text-pine dark:text-jade">AI coding agents</span>
+            The Android runtime for <span className="whitespace-nowrap bg-[linear-gradient(var(--lime),var(--lime))] bg-[length:100%_0.12em] bg-[position:0_92%] bg-no-repeat">AI coding agents</span>
           </h1>
           <p className="t-lead mt-7 max-w-[34rem]" data-enter>
             It sets up the Android toolchain, runs the emulator, docks your running app beside Claude Code or Codex, and hands

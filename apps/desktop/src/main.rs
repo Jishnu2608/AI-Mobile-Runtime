@@ -9,9 +9,12 @@
 //! Core's admin token and forwards calls. Only the API methods the wizard needs can be called
 //! from the web view ([`ALLOWED`]), so a bug in the page cannot reach anything else.
 //! The wizard's position is saved in `<home>\wizard.json`, so it continues after a restart or
-//! reboot.
+//! reboot. Its last step connects coding agents (CON-005, `agents.rs`).
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
+mod agents;
+mod links;
 
 use serde_json::Value;
 use tokio::sync::Mutex;
@@ -33,6 +36,8 @@ const ALLOWED: &[&str] = &[
     methods::SESSION_START,
     methods::PROJECT_RELOAD,
     methods::PROJECT_STATUS,
+    // wizard step "Run" (Phase 9.6)
+    methods::PROJECT_RUN,
     methods::DIAGNOSTICS_LIST,
     methods::DIAGNOSTICS_GET,
     methods::LOGS_TAIL,
@@ -127,6 +132,27 @@ fn wizard_save(bridge: tauri::State<'_, Bridge>, state: Value) -> Result<(), Str
         serde_json::to_vec_pretty(&state).map_err(|e| e.to_string())?,
     )
     .map_err(|e| e.to_string())
+}
+
+/// The "Connect your agent" page (CON-005): runs `umr agent … --json` (see `agents.rs`).
+#[tauri::command]
+async fn agent_cli(request: agents::AgentRequest) -> Result<Value, String> {
+    tauri::async_runtime::spawn_blocking(move || agents::run(&request))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+/// Opens a user guide page in the browser (fixed pages and anchors, see `links.rs`).
+#[allow(clippy::needless_pass_by_value)] // Tauri passes command arguments by value
+#[tauri::command]
+fn open_docs(page: String, anchor: Option<String>) -> Result<(), String> {
+    links::open_docs(&page, anchor.as_deref())
+}
+
+/// Opens the docked live preview window.
+#[tauri::command]
+fn open_preview_window() -> Result<(), String> {
+    links::open_preview()
 }
 
 /// Where the preview window sits.
@@ -257,7 +283,10 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             core_call,
             wizard_load,
-            wizard_save
+            wizard_save,
+            agent_cli,
+            open_docs,
+            open_preview_window
         ])
         .run(tauri::generate_context!())
         .unwrap_or_else(|e| eprintln!("umr-desktop: {e}"));

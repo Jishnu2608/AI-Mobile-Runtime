@@ -41,9 +41,9 @@ export function HeroDiagram() {
 
       {/* pulses travelling along the connectors (positioned by script) */}
       <g data-pulses aria-hidden>
-        <circle r="4" fill="var(--lime)" stroke="var(--forest)" strokeWidth="1" data-pulse="hd-l1" opacity="0" />
-        <circle r="4" fill="var(--lime)" stroke="var(--forest)" strokeWidth="1" data-pulse="hd-l3" opacity="0" />
-        <circle r="4" fill="var(--lime)" stroke="var(--forest)" strokeWidth="1" data-pulse="hd-l5" opacity="0" />
+        <circle r="4" fill="var(--lime)" stroke="var(--highlight-ink)" strokeWidth="1" data-pulse="hd-l1" opacity="0" />
+        <circle r="4" fill="var(--lime)" stroke="var(--highlight-ink)" strokeWidth="1" data-pulse="hd-l3" opacity="0" />
+        <circle r="4" fill="var(--lime)" stroke="var(--highlight-ink)" strokeWidth="1" data-pulse="hd-l5" opacity="0" />
       </g>
 
       {/* coding agent */}
@@ -61,9 +61,10 @@ export function HeroDiagram() {
 
       {/* runtime core */}
       <g data-node>
-        <rect x="262" y="96" width="178" height="170" rx="12" fill="var(--forest)" />
-        <text x="280" y="124" fontSize="12" fontWeight="600" fill="#edf5ed">Runtime Core</text>
-        <text x="280" y="142" fontSize="10.5" fontFamily="var(--ff-mono)" fill="#b1c5b4">umr mcp · umr</text>
+        <rect x="262" y="96" width="178" height="170" rx="12" fill="var(--band-bg)" stroke="var(--band-line)" />
+        <circle cx="422" cy="120" r="4" fill="var(--lime)" />
+        <text x="280" y="124" fontSize="12" fontWeight="600" fill="var(--band-ink)">Runtime Core</text>
+        <text x="280" y="142" fontSize="10.5" fontFamily="var(--ff-mono)" fill="var(--band-ink-2)">umr mcp · umr</text>
         {[
           ["toolchain", 168],
           ["device + session", 190],
@@ -71,8 +72,8 @@ export function HeroDiagram() {
           ["problems + logs", 234],
         ].map(([t, y]) => (
           <g key={t as string}>
-            <rect x="280" y={(y as number) - 13} width="142" height="18" rx="4" fill="#216b50" />
-            <text x="290" y={(y as number) + 0.5} fontSize="10.5" fill="#d1e8d7">{t}</text>
+            <rect x="280" y={(y as number) - 13} width="142" height="18" rx="4" fill="var(--band-surface)" stroke="var(--band-line)" />
+            <text x="290" y={(y as number) + 0.5} fontSize="10.5" fill="var(--band-ink)">{t}</text>
           </g>
         ))}
       </g>
@@ -82,13 +83,13 @@ export function HeroDiagram() {
         <rect x="486" y="40" width="130" height="276" rx="22" fill="var(--surface)" stroke="var(--line-strong)" strokeWidth="1.5" />
         <rect x="498" y="66" width="106" height="224" rx="6" fill="var(--surface-sunken)" />
         <rect x="533" y="50" width="36" height="6" rx="3" fill="var(--line-strong)" />
-        <rect x="510" y="80" width="62" height="9" rx="3" fill="var(--sage)" />
+        <rect x="510" y="80" width="62" height="9" rx="3" fill="var(--ink-3)" />
         <rect x="510" y="98" width="82" height="6" rx="3" fill="var(--line-strong)" />
         <rect x="510" y="110" width="70" height="6" rx="3" fill="var(--line-strong)" />
-        <rect x="510" y="128" width="82" height="58" rx="6" fill="var(--mint)" />
+        <rect x="510" y="128" width="82" height="58" rx="6" fill="var(--bg-alt)" stroke="var(--line)" />
         <rect x="510" y="196" width="82" height="6" rx="3" fill="var(--line-strong)" />
         <rect x="510" y="208" width="58" height="6" rx="3" fill="var(--line-strong)" />
-        <circle cx="580" cy="268" r="11" fill="var(--lime)" stroke="var(--forest)" />
+        <circle cx="580" cy="268" r="11" fill="var(--lime)" stroke="var(--lime-deep)" />
         <text x="551" y="334" fontSize="12" fontWeight="600" fill="var(--ink)" textAnchor="middle">Android emulator</text>
         <text x="551" y="350" fontSize="10.5" fontFamily="var(--ff-mono)" fill="var(--ink-2)" textAnchor="middle">your app, live</text>
       </g>
@@ -110,9 +111,9 @@ export function HeroDiagram() {
       </g>
       {/* a problem as the agent receives it: category, origin, file and line */}
       <g data-node>
-        <rect x="24" y="300" width="190" height="62" rx="10" fill="var(--lime-pale)" stroke="var(--lime-deep)" />
-        <text x="38" y="322" fontSize="11" fontWeight="600" fill="var(--forest)">Problem · runtime · your code</text>
-        <text x="38" y="344" fontSize="11" fontFamily="var(--ff-mono)" fill="var(--forest)">lib/main.dart:67</text>
+        <rect x="24" y="300" width="190" height="62" rx="10" fill="var(--note-bg)" stroke="var(--note-line)" />
+        <text x="38" y="322" fontSize="11" fontWeight="600" fill="var(--note-ink)">Problem · runtime · your code</text>
+        <text x="38" y="344" fontSize="11" fontFamily="var(--ff-mono)" fill="var(--note-ink)">lib/main.dart:67</text>
       </g>
       <text x="234" y="300" fontSize="10" fontFamily="var(--ff-mono)" fill="var(--ink-2)" textAnchor="middle">diagnostics</text>
     </svg>

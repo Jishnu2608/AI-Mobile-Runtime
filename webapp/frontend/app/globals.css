@@ -30,13 +30,11 @@
   --color-band-surface: var(--band-surface);
   --color-band-sunken: var(--band-sunken);
   --color-band-ink-3: var(--band-ink-3);
-  --color-forest: var(--forest);
-  --color-pine: var(--pine);
-  --color-emerald: var(--emerald);
-  --color-jade: var(--jade);
-  --color-sage: var(--sage);
-  --color-mint: var(--mint);
+  --color-header: var(--header-bg);
+  --color-icon: var(--icon);
   --color-lime: var(--lime);
+  --color-lime-deep: var(--lime-deep);
+  --color-lime-light: var(--lime-light);
   --color-lime-pale: var(--lime-pale);
   --color-ok: var(--ok);
   --color-ok-bg: var(--ok-bg);
@@ -73,7 +71,7 @@
   }
   ::selection {
     background: var(--lime);
-    color: var(--forest);
+    color: #202321;
   }
   :focus-visible {
     outline: 2px solid var(--focus);
@@ -195,9 +193,15 @@
     --ink: var(--band-ink);
     --ink-2: var(--band-ink-2);
     --line: var(--band-line);
-    --link: #b9e769;
-    --focus: #b9e769;
-    --accent: #64b98a;
+    --line-strong: var(--band-line);
+    --surface: var(--band-surface);
+    --surface-sunken: var(--band-sunken);
+    --link: var(--band-ink);
+    --link-hover: var(--lime-light);
+    --link-line: var(--lime);
+    --icon: var(--band-ink-2);
+    --focus: var(--lime);
+    --accent: var(--band-ink-3);
   }
 
   /* ---------------------------------------------------------- links */
@@ -206,7 +210,7 @@
     text-decoration: underline;
     text-decoration-thickness: 1px;
     text-underline-offset: 0.2em;
-    text-decoration-color: color-mix(in oklab, var(--link) 45%, transparent);
+    text-decoration-color: var(--link-line);
     transition: color var(--dur-fast) var(--ease-out), text-decoration-color var(--dur-fast) var(--ease-out);
   }
   .link:hover {
@@ -269,24 +273,23 @@
   .btn:hover .btn-icon {
     transform: translateX(3px);
   }
+  /* the signature lime download button: unchanged colour, dark text */
   .btn-primary {
     --btn-bg: var(--lime);
-    --btn-ink: var(--forest);
+    --btn-ink: #202321;
     --btn-line: var(--lime-deep);
   }
   .btn-primary:hover {
-    --btn-bg: #c6ee80;
-    border-color: var(--forest);
+    --btn-bg: var(--lime-light);
+    border-color: var(--lime-deep);
+  }
+  .btn-primary:active {
+    --btn-bg: var(--lime-deep);
   }
   .btn-solid {
-    --btn-bg: var(--forest);
-    --btn-ink: #edf5ed;
-    --btn-line: var(--forest);
-  }
-  :root[data-theme="dark"] .btn-solid {
-    --btn-bg: var(--mint);
-    --btn-ink: var(--forest);
-    --btn-line: var(--mint);
+    --btn-bg: var(--ink);
+    --btn-ink: var(--bg);
+    --btn-line: var(--ink);
   }
   .btn-ghost {
     --btn-bg: transparent;
@@ -318,7 +321,7 @@
   .badge-warn { background: var(--warn-bg); color: var(--warn); border-color: transparent; }
   .badge-err { background: var(--err-bg); color: var(--err); border-color: transparent; }
   .badge-info { background: var(--info-bg); color: var(--info); border-color: transparent; }
-  .badge-lime { background: var(--lime-pale); color: var(--forest); border-color: transparent; }
+  .badge-lime { background: var(--note-bg); color: var(--note-ink); border-color: transparent; }
 
   /* ---------------------------------------------------------- panels */
   .panel {
@@ -331,7 +334,7 @@
   }
   .card-link:hover {
     transform: translateY(-2px);
-    border-color: var(--accent);
+    border-color: var(--line-strong);
     box-shadow: var(--sh-1);
   }
 
@@ -400,7 +403,8 @@
     color: var(--link);
     text-decoration: underline;
     text-underline-offset: 0.2em;
-    text-decoration-thickness: 1px;
+    text-decoration-thickness: 1.5px;
+    text-decoration-color: var(--link-line);
   }
   .prose a:hover {
     color: var(--link-hover);

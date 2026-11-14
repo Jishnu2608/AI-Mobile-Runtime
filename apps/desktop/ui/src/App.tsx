@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { call, inTauri, loadWizard, saveWizard, size, Step, WizardState } from "./api";
+import { call, DocsPage, inTauri, loadWizard, openDocs, openPreview, saveWizard, size, Step, WizardState } from "./api";
+import { AgentsStep } from "./Agents";
+// the product mark, shared with the website and the app icon (brand/)
+import logo from "../../../../brand/logo-mark.svg";
 
 const STEPS: { id: Step; label: string }[] = [
   { id: "scan", label: "Scan" },
@@ -8,6 +11,8 @@ const STEPS: { id: Step; label: string }[] = [
   { id: "licences", label: "Licences" },
   { id: "install", label: "Install" },
   { id: "ready", label: "Ready" },
+  { id: "run", label: "Run" },
+  { id: "agents", label: "Agent" },
 ];
 
 const FRAMEWORK: Record<string, string> = {
@@ -75,7 +80,10 @@ export function App() {
   return (
     <div className="shell">
       <header>
-        <h1>AI Mobile Runtime</h1>
+        <h1 className="brand">
+          <img src={logo} alt="" width={30} height={30} />
+          AI Mobile Runtime
+        </h1>
         <p className="sub">Set up everything your project needs to run on the Android emulator.</p>
         {!inTauri && <p className="demo">Browser preview with sample data — open the desktop app for real results.</p>}
       </header>
@@ -95,9 +103,35 @@ export function App() {
         )}
         {state.step === "licences" && <LicenceStep path={state.projectPath} onBack={() => go({ step: "plan" })} onNext={() => go({ step: "install" })} />}
         {state.step === "install" && <InstallStep path={state.projectPath} jobId={state.jobId} onJob={(jobId) => go({ jobId })} onBack={() => go({ step: "plan", jobId: undefined })} onDone={() => go({ step: "ready", jobId: undefined })} />}
-        {state.step === "ready" && <ReadyStep path={state.projectPath} onRestart={() => go({ step: "scan", jobId: undefined })} />}
+        {state.step === "ready" && <ReadyStep path={state.projectPath} onRestart={() => go({ step: "scan", jobId: undefined })} onNext={() => go({ step: "run" })} />}
+        {state.step === "run" && <RunStep path={state.projectPath} onBack={() => go({ step: "ready" })} onNext={() => go({ step: "agents" })} />}
+        {state.step === "agents" && <AgentsStep project={state.projectPath} onBack={() => go({ step: "ready" })} />}
+        <StepDocs step={state.step} />
       </main>
     </div>
+  );
+}
+
+/** Each wizard step links to the part of the guide that explains it (9.6). */
+const STEP_DOCS: Record<Step, [DocsPage, string, string]> = {
+  scan: ["getting-started", "2-first-setup-the-wizard", "What the scan checks"],
+  project: ["getting-started", "2-first-setup-the-wizard", "Choosing a project"],
+  plan: ["getting-started", "2-first-setup-the-wizard", "What gets installed"],
+  licences: ["getting-started", "2-first-setup-the-wizard", "About the licences"],
+  install: ["troubleshooting", "environment", "If an install fails"],
+  ready: ["getting-started", "3-your-first-app", "Running your app"],
+  run: ["getting-started", "3-your-first-app", "Running your app"],
+  agents: ["agents", "connect-an-agent", "Connecting coding agents"],
+};
+
+function StepDocs({ step }: { step: Step }) {
+  const [page, anchor, label] = STEP_DOCS[step];
+  return (
+    <p className="step-docs small">
+      <button className="link" onClick={() => openDocs(page, anchor).catch(() => undefined)}>
+        {label} (guide) ↗
+      </button>
+    </p>
   );
 }
 
@@ -421,7 +455,7 @@ function InstallStep({ path, jobId, onJob, onBack, onDone }: { path: string; job
   );
 }
 
-function ReadyStep({ path, onRestart }: { path: string; onRestart: () => void }) {
+function ReadyStep({ path, onRestart, onNext }: { path: string; onRestart: () => void; onNext: () => void }) {
   const { data, error, loading, reload } = useAsync(() => call("components.list"), []);
   if (loading) return <Busy text="Checking the installed tools…" />;
   if (error) return <Problem text={error} retry={reload} />;
@@ -437,8 +471,71 @@ function ReadyStep({ path, onRestart }: { path: string; onRestart: () => void })
       <p>
         Project: <code>{path}</code>
       </p>
-      <p className="muted">Next: running the app on the emulator with a live preview arrives in the next phase.</p>
-      <Nav onBack={onRestart} backLabel="Set up another project" />
+      <Nav onBack={onRestart} backLabel="Set up another project" onNext={onNext} nextLabel="Run your app" />
+    </section>
+  );
+}
+
+/** Step "Run": the first run of the project on the emulator, then the live preview (9.6). */
+function RunStep({ path, onBack, onNext }: { path: string; onBack: () => void; onNext: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<any>(null);
+  const [error, setError] = useState<string | null>(null);
+  const run = () => {
+    setBusy(true);
+    setError(null);
+    setResult(null);
+    call("project.run", { path, watch: true })
+      .then((v) => {
+        setResult(v);
+        if (v?.status === "running") openPreview().catch(() => undefined);
+      })
+      .catch((e) => setError(String(e)))
+      .finally(() => setBusy(false));
+  };
+  const ok = result?.status === "running";
+  return (
+    <section>
+      <h2>Run your app</h2>
+      <p>
+        The runtime starts the emulator, builds <code>{path || "your project"}</code>, installs it and opens the live preview beside
+        your other windows. Saved files reload by themselves.
+      </p>
+      <p className="muted small">The first build of a project can take several minutes; later runs take seconds.</p>
+      {!ok && (
+        <button onClick={run} disabled={busy || !path}>
+          {busy ? "Starting the emulator and building…" : "Run the app"}
+        </button>
+      )}
+      {error && <Problem text={error} retry={run} />}
+      {result && !ok && (
+        <div className="problem" role="alert">
+          <strong>The app did not start.</strong> {result.error ?? result.status}
+          {(result.problems ?? []).slice(0, 3).map((p: any, i: number) => (
+            <div key={i} className="small">
+              {p.category}: {p.message}
+              {p.file ? ` (${p.file}${p.line ? `:${p.line}` : ""})` : ""}
+            </div>
+          ))}
+        </div>
+      )}
+      {ok && (
+        <div className="card">
+          <p className="big">
+            <span className="ok">Running</span> {result.package} on {result.serial}
+          </p>
+          <p className="small muted">
+            {result.adapter} adapter · {result.seconds} s{result.watching ? " · reloads when you save" : ""}
+          </p>
+          <button className="secondary" onClick={() => openPreview().catch(() => undefined)}>
+            Open the live preview
+          </button>
+        </div>
+      )}
+      <p className="small muted">
+        From a terminal the same is <code>umr run</code> in the project folder.
+      </p>
+      <Nav onBack={onBack} onNext={onNext} nextLabel={ok ? "Connect your agent" : "Skip to your agent"} />
     </section>
   );
 }

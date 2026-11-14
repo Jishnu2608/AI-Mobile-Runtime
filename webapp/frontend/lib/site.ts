@@ -10,10 +10,13 @@ export const site = {
   domain: null as string | null,
   /** W3 / DEC-025 pending: no product licence yet. */
   licence: null as string | null,
-  /** W5 / DEC-040 pending: hosting; the site is a static export. */
+  /** W5 / DEC-040: release files on GitHub Releases (owner, 2026-11-14); where the website itself
+   *  is hosted is still open, so the site stays a static export with no host-specific config. */
   hosting: null as string | null,
-  /** The source repository is private until W3 is decided; nothing links to it. */
-  repositoryPublic: false,
+  releasesHost: "GitHub Releases",
+  /** The source repository is public (owner, 2026-11-14). It has no licence yet (W3). */
+  repositoryPublic: true,
+  repository: "https://github.com/Jishnu2608/AI-Mobile-Runtime",
   platform: "Windows 11 (x64)",
   frameworks: ["Kotlin", "Java", "Flutter", "React Native", "Expo"] as const,
   agents: ["Claude Code", "Codex"] as const,
@@ -21,10 +24,10 @@ export const site = {
 
 /** The ten Phase 9 decisions, for the pending-decisions notice and the open-source page. */
 export const pendingDecisions = [
-  { w: "W1", id: "DEC-037", what: "Public product name and brand identity" },
+  { w: "W1", id: "DEC-037", what: "Public product name (the logo is set)" },
   { w: "W2", id: "DEC-038", what: "Domain" },
   { w: "W3", id: "DEC-025", what: "Product licence" },
-  { w: "W5", id: "DEC-040", what: "Hosting and release distribution" },
+  { w: "W5", id: "DEC-040", what: "Website hosting (release files: GitHub Releases, decided)" },
   { w: "W7", id: "DEC-027", what: "Website telemetry policy" },
   { w: "W8", id: "DEC-011 + DEC-033", what: "Release signing and key custody" },
   { w: "W9", id: "DEC-042", what: "Installer PATH option default" },

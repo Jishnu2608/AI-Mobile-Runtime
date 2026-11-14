@@ -3,7 +3,7 @@
 //!
 //! | What | Example | Becomes |
 //! |---|---|---|
-//! | private key blocks | `-----BEGIN RSA PRIVATE KEY----- …` | `[private key]` |
+//! | private key blocks | `-----BEGIN … PRIVATE KEY-----` … `-----END … PRIVATE KEY-----` | `[private key]` |
 //! | JSON Web Tokens | `eyJhbGciOi….eyJzdWIi….sig` | `[jwt]` |
 //! | known token formats | GitHub `ghp_…`, Slack `xoxb-…`, AWS `AKIA…`, Google `AIza…`, `sk-…`, npm, GitLab | `[token]` |
 //! | `Authorization: Bearer|Basic …` | | `Authorization: Bearer [redacted]` |
@@ -111,33 +111,77 @@ pub fn sanitize_diagnostic(d: &crate::Diagnostic) -> crate::Diagnostic {
 mod tests {
     use super::sanitize;
 
+    /// The fake credentials below are made at test time from a prefix and a filler, so the
+    /// repository never holds a complete token-shaped string that secret scanners report.
+    /// None of them is or was a real credential.
+    fn fake(prefix: &str, filler: &str) -> String {
+        format!("{prefix}{filler}")
+    }
+
     #[test]
     fn secrets_are_masked() {
+        let gh = fake("gh", "p_abcdefghijklmnopqrstuvwxyz0123456789");
+        let aws = fake("AK", "IAIOSFODNN7EXAMPLE");
+        let google = fake("AI", "zaSyA-1234567890abcdefghijklmnopqrstu");
+        let slack = fake("xo", "xb-1234567890-abcdefghij");
+        let anthropic = fake("sk-", "ant-api03-abcdefghijklmnopqrstuvwx");
+        let jwt = [
+            fake("ey", "JhbGciOiJIUzI1NiJ9"),
+            fake("ey", "JzdWIiOiIxMjM0NTY3ODkwIn0"),
+            "c2lnbmF0dXJlLWZvci10ZXN0".into(),
+        ]
+        .join(".");
+        let key_kind = ["RSA", "PRIVATE", "KEY"].join(" ");
+        let pem =
+            format!("-----BEGIN {key_kind}-----\nMIIEow\nabc\n-----END {key_kind}----- after");
+        let owned = [
+            (format!("token {gh} used"), "token [token] used"),
+            (format!("key {aws} end"), "key [token] end"),
+            (format!("{google} x"), "[token] x"),
+            (format!("slack {slack}"), "slack [token]"),
+            (format!("ANTHROPIC {anthropic}"), "ANTHROPIC [token]"),
+            (format!("jwt {jwt}"), "jwt [jwt]"),
+            (pem, "[private key] after"),
+        ];
+        for (input, want) in &owned {
+            assert_eq!(sanitize(input), *want, "{input}");
+        }
         let cases = [
-            ("token ghp_abcdefghijklmnopqrstuvwxyz0123456789 used", "token [token] used"),
-            ("key AKIAIOSFODNN7EXAMPLE end", "key [token] end"),
-            ("AIzaSyA-1234567890abcdefghijklmnopqrstu x", "[token] x"),
-            ("slack xoxb-1234567890-abcdefghij", "slack [token]"),
-            ("ANTHROPIC sk-ant-api03-abcdefghijklmnopqrstuvwx", "ANTHROPIC [token]"),
             (
-                "jwt eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U",
-                "jwt [jwt]",
+                "Authorization: Bearer abc.def-123",
+                "Authorization: Bearer [redacted]",
             ),
-            ("Authorization: Bearer abc.def-123", "Authorization: Bearer [redacted]"),
             ("password=hunter22 user=x", "password=[redacted] user=x"),
-            (r#"{"api_key": "abc123def", "n": 1}"#, r#"{"api_key": "[redacted]", "n": 1}"#),
-            ("DB_PASSWORD: s3cr3t!", "DB_PASSWORD: [redacted]"),
-            ("GET /x?access_token=qwerty12&page=2", "GET /x?access_token=[redacted]&page=2"),
-            ("ws://127.0.0.1:5555/preview?token=Zm9vYmFy", "ws://127.0.0.1:5555/preview?token=[redacted]"),
-            ("https://alice:pa55@repo.example.com/maven", "https://[redacted]@repo.example.com/maven"),
-            ("mail me at jane.doe@example.org now", "mail me at [email] now"),
-            (r"C:\Users\Alex\AppData\Local\x.log", r"C:\Users\[user]\AppData\Local\x.log"),
-            ("file:///C:/Users/alex/proj/lib/main.dart:3", "file:///C:/Users/[user]/proj/lib/main.dart:3"),
-            ("/home/alex/.gradle/caches", "/home/[user]/.gradle/caches"),
             (
-                "-----BEGIN RSA PRIVATE KEY-----\nMIIEow\nabc\n-----END RSA PRIVATE KEY----- after",
-                "[private key] after",
+                r#"{"api_key": "abc123def", "n": 1}"#,
+                r#"{"api_key": "[redacted]", "n": 1}"#,
             ),
+            ("DB_PASSWORD: s3cr3t!", "DB_PASSWORD: [redacted]"),
+            (
+                "GET /x?access_token=qwerty12&page=2",
+                "GET /x?access_token=[redacted]&page=2",
+            ),
+            (
+                "ws://127.0.0.1:5555/preview?token=Zm9vYmFy",
+                "ws://127.0.0.1:5555/preview?token=[redacted]",
+            ),
+            (
+                "https://alice:pa55@repo.example.com/maven",
+                "https://[redacted]@repo.example.com/maven",
+            ),
+            (
+                "mail me at jane.doe@example.org now",
+                "mail me at [email] now",
+            ),
+            (
+                r"C:\Users\Alex\AppData\Local\x.log",
+                r"C:\Users\[user]\AppData\Local\x.log",
+            ),
+            (
+                "file:///C:/Users/alex/proj/lib/main.dart:3",
+                "file:///C:/Users/[user]/proj/lib/main.dart:3",
+            ),
+            ("/home/alex/.gradle/caches", "/home/[user]/.gradle/caches"),
         ];
         for (input, want) in cases {
             assert_eq!(sanitize(input), want, "{input}");

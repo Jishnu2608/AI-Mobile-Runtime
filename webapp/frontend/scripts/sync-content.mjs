@@ -3,7 +3,7 @@
 // Runs before `dev` and `build`. Generated files are committed so the site also builds without
 // the Rust toolchain; the MCP tool list is refreshed when a built `umr.exe` is present.
 import { execFileSync } from "node:child_process";
-import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -19,12 +19,22 @@ const files = [
   ["docs/user/uninstall-and-data.md", "uninstall-and-data.md"],
   ["docs/user/privacy-and-security.md", "privacy-and-security.md"],
   ["docs/user/cli-reference.md", "cli-reference.md"],
+  ["docs/user/troubleshooting.md", "troubleshooting.md"],
+  ["docs/agents/clients.md", "agent-clients.md"],
   ["docs/security/review-v1.md", "security-review.md"],
   ["SECURITY.md", "SECURITY.md"],
   ["CONTRIBUTING.md", "CONTRIBUTING.md"],
   ["CODE_OF_CONDUCT.md", "CODE_OF_CONDUCT.md"],
   ["THIRD_PARTY_NOTICES.md", "THIRD_PARTY_NOTICES.md"],
 ];
+
+// screenshots used by the user guides (docs/user/images) are served from /docs-images
+const imgFrom = join(repo, "docs", "user", "images");
+const imgTo = join(site, "public", "docs-images");
+if (existsSync(imgFrom)) {
+  mkdirSync(imgTo, { recursive: true });
+  for (const f of readdirSync(imgFrom)) copyFileSync(join(imgFrom, f), join(imgTo, f));
+}
 
 let copied = 0;
 for (const [from, to] of files) {

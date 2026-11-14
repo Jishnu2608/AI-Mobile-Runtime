@@ -4,7 +4,7 @@ import { cn } from "@/lib/cn";
 
 const styles = {
   note: { icon: Info, cls: "border-l-accent bg-sunken", label: "Note" },
-  tip: { icon: Lightbulb, cls: "border-l-[var(--lime-deep)] bg-lime-pale/50 dark:bg-accent-soft", label: "Tip" },
+  tip: { icon: Lightbulb, cls: "border-l-lime-deep bg-[var(--note-bg)]", label: "Tip" },
   warning: { icon: AlertTriangle, cls: "border-l-warn bg-warn-bg", label: "Warning" },
   danger: { icon: XOctagon, cls: "border-l-err bg-err-bg", label: "Important" },
 } as const;

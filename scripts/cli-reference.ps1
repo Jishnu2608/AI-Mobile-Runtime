@@ -7,6 +7,9 @@
 param([string]$Umr = "target\release\umr.exe", [string]$Out = "docs\user\cli-reference.md")
 $ErrorActionPreference = "Stop"
 if (-not (Test-Path $Umr)) { throw "$Umr not found; build first (cargo build --release -p umr-cli)" }
+# umr writes UTF-8 (em dashes, arrows); read it as UTF-8, not the console code page
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$OutputEncoding = [System.Text.Encoding]::UTF8
 
 function Help([string[]]$cmd) {
   $text = & $Umr @cmd --help 2>&1 | Out-String

@@ -3,7 +3,7 @@
 Generated from `umr --help` by `scripts/cli-reference.ps1` - do not edit by hand.
 
 ```text
-AI Mobile Runtime ΓÇö run and preview mobile apps next to your coding agent
+AI Mobile Runtime — run and preview mobile apps next to your coding agent
 
 Usage: umr <COMMAND>
 
@@ -209,7 +209,7 @@ Commands:
   boot      Boot the emulator for a size class headless (creates it if needed). Warm boots from the product's snapshot when the GPU mode still matches; checks that the screen renders
   stop      Stop an emulator the product started
   use       Start a session on a size class: boot it (switching from another device), optionally install and launch an app
-  rotate    Rotate the emulator 90┬░ (left or right)
+  rotate    Rotate the emulator 90° (left or right)
   posture   Fold or unfold a foldable emulator while it runs: closed, half-opened, opened, flipped, tent
   help      Print this message or the help of the given subcommand(s)
 
@@ -312,7 +312,7 @@ Options:
 ### umr device rotate
 
 ```text
-Rotate the emulator 90┬░ (left or right)
+Rotate the emulator 90° (left or right)
 
 Usage: umr device rotate [DIRECTION]
 
@@ -367,7 +367,7 @@ Usage: umr preview [OPTIONS] [COMMAND]
 
 Commands:
   status    Frames, windows and the time the product adds (NFR-02a)
-  selftest  Touch ΓåÆ visible latency and frame rate on the device (NFR-02b / NFR-03); taps the home screen
+  selftest  Touch → visible latency and frame rate on the device (NFR-02b / NFR-03); taps the home screen
   help      Print this message or the help of the given subcommand(s)
 
 Options:
@@ -390,7 +390,7 @@ Options:
 ### umr preview selftest
 
 ```text
-Touch ΓåÆ visible latency and frame rate on the device (NFR-02b / NFR-03); taps the home screen
+Touch → visible latency and frame rate on the device (NFR-02b / NFR-03); taps the home screen
 
 Usage: umr preview selftest [OPTIONS]
 
@@ -458,6 +458,7 @@ Usage: umr mcp [OPTIONS]
 
 Options:
       --client <CLIENT>  The agent client whose token and permissions to use [default: claude-code]
+      --list-tools       Print the tool catalogue as JSON and exit (no Core needed; used for the docs)
   -h, --help             Print help
 ```
 
@@ -469,8 +470,11 @@ Connect AI coding agents: setup, clients, grants, audit log
 Usage: umr agent <COMMAND>
 
 Commands:
-  setup         Connect Claude Code or Codex: creates its client, writes its MCP server entry and the agent instructions (shows the changes and asks first)
+  setup         Connect a coding agent (claude-code, codex, cursor, claude-desktop, vscode): creates its client, writes its MCP server entry and agent instructions (shows the changes and asks first). `--remove` disconnects it again
+  link          One-click install link for Cursor or VS Code, made for this PC's umr (creates the agent client if needed)
+  doctor        Check each connected agent end to end: config entry, program path, token, a real MCP handshake and its last call. `--fix` repoints entries at this umr
   add           Create an agent client with its own token (default scopes: observe, interact, control)
+  clients       Coding agents on this PC (Claude Code, Codex, Cursor, Claude Desktop, VS Code): installed, connected, and how to connect each one. Does not need the Core
   list          Agent clients, their scopes and grants
   remove        Remove an agent client (its token stops working)
   grant         Let an agent run a project folder (or `device:switch`) without asking each time
@@ -486,17 +490,53 @@ Options:
 ### umr agent setup
 
 ```text
-Connect Claude Code or Codex: creates its client, writes its MCP server entry and the agent instructions (shows the changes and asks first)
+Connect a coding agent (claude-code, codex, cursor, claude-desktop, vscode): creates its client, writes its MCP server entry and agent instructions (shows the changes and asks first). `--remove` disconnects it again
 
 Usage: umr agent setup [OPTIONS] <AGENT>
 
 Arguments:
-  <AGENT>  `claude-code` or `codex`
+  <AGENT>  claude-code, codex, cursor, claude-desktop or vscode
 
 Options:
-      --project <PROJECT>  Project folder (`.mcp.json`, skill / `AGENTS.md`); default: current folder
+      --project <PROJECT>  Project folder (project-scope config and instruction files); default: current folder
+      --scope <SCOPE>      `project` (this folder) or `user` (all projects). Default: project for Claude Code, Cursor and VS Code; user for Codex and Claude Desktop
+      --remove             Take the runtime out of the agent's files and revoke its token
+      --print              Only print the server entry to add by hand; write nothing
       --yes                Do not ask
       --dry-run            Only show what would change
+      --json               Machine-readable plan / result; never asks (applies only with --yes)
+  -h, --help               Print help
+```
+
+### umr agent link
+
+```text
+One-click install link for Cursor or VS Code, made for this PC's umr (creates the agent client if needed)
+
+Usage: umr agent link [OPTIONS] <AGENT>
+
+Arguments:
+  <AGENT>  cursor or vscode
+
+Options:
+      --json  
+  -h, --help  Print help
+```
+
+### umr agent doctor
+
+```text
+Check each connected agent end to end: config entry, program path, token, a real MCP handshake and its last call. `--fix` repoints entries at this umr
+
+Usage: umr agent doctor [OPTIONS] [AGENT]
+
+Arguments:
+  [AGENT]  Only this agent
+
+Options:
+      --project <PROJECT>  Project folder whose project-scope configs are checked; default: current folder
+      --fix                Rewrite entries whose program path is missing or points at another umr
+      --json               
   -h, --help               Print help
 ```
 
@@ -513,6 +553,19 @@ Arguments:
 Options:
       --scopes <SCOPES>  Comma-separated: observe, interact, control
   -h, --help             Print help
+```
+
+### umr agent clients
+
+```text
+Coding agents on this PC (Claude Code, Codex, Cursor, Claude Desktop, VS Code): installed, connected, and how to connect each one. Does not need the Core
+
+Usage: umr agent clients [OPTIONS]
+
+Options:
+      --project <PROJECT>  Project folder whose config files are checked; default: current folder
+      --json               
+  -h, --help               Print help
 ```
 
 ### umr agent list

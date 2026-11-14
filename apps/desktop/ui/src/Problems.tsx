@@ -1,7 +1,7 @@
 // DIA-004: Problems and Logs panels of the preview window. Problems come classified and
 // deduplicated from the Core (`diagnostics.list`), logs from `logs.tail`; both already sanitised.
 import { useEffect, useRef, useState } from "react";
-import { call } from "./api";
+import { call, openDocs, troubleshootingAnchor } from "./api";
 
 export interface Problem {
   fingerprint: string;
@@ -144,7 +144,14 @@ function ProblemsTab({ problems }: { problems: Problem[] }) {
         if (!group.length) return null;
         return (
           <div key={cat}>
-            <div className="dg-cat">{cat} · {group.length}</div>
+            <div className="dg-cat">
+              {cat} · {group.length}
+              {troubleshootingAnchor(cat) && (
+                <button className="dg-help" title="Open the troubleshooting guide for this category" onClick={() => openDocs("troubleshooting", troubleshootingAnchor(cat)).catch(() => undefined)}>
+                  How to fix ↗
+                </button>
+              )}
+            </div>
             {group.map((p) => <ProblemRow key={p.fingerprint} p={p} />)}
           </div>
         );

@@ -19,8 +19,8 @@ export default async function SecurityPage() {
       lead="The runtime downloads and runs developer tools, opens a local API and gives agents control of a device. This page says how each is protected and how to report a problem."
     >
       <Callout type="warning" title="Reporting channel not open yet">
-        The policy below names GitHub private vulnerability reporting. The source repository is private until the product licence is
-        decided (open decision W3), so that channel is not available to the public yet.
+        The policy below names GitHub private vulnerability reporting. The repository is public, but private reporting is not switched
+        on for it yet; until it is, please do not post details of a vulnerability in a public issue.
       </Callout>
       <div className="mt-12">
         <DocSection id="policy" title="Policy">
