@@ -1,0 +1,36 @@
+React Native and Expo projects run through Metro. Which path the runtime takes depends on the project:
+
+| Project | Path |
+|---|---|
+| Expo without an `android/` folder | **Expo Go**: Metro serves the app to Expo Go on the emulator; no native build |
+| Expo with an `android/` folder (dev build) | **Native build** of the device's ABI, then Metro |
+| Bare React Native | **Native build** through Gradle, then Metro |
+
+<Steps>
+<Step title="Install Node.js and the Android parts">
+```powershell
+umr plan .
+umr install .
+umr trust .
+```
+The Node.js version follows `engines.node` in `package.json`.
+</Step>
+<Step title="Run it">
+```powershell
+umr run
+```
+Metro runs on `localhost` and the runtime forwards its port to the emulator with `adb reverse`.
+</Step>
+<Step title="Edit and save">
+Fast Refresh applies saved JavaScript and TypeScript by itself. After native changes:
+```powershell
+umr reload full
+```
+</Step>
+</Steps>
+
+<Callout type="warning" title="Long project paths">
+Native builds of some React Native modules fail when the project path is long (the C++ build hits the Windows path limit). The runtime refuses such paths up front; move the project closer to the drive root or turn on long paths.
+</Callout>
+
+Babel and Metro syntax errors appear with their file and line; JavaScript runtime errors that Metro reports appear as runtime problems.

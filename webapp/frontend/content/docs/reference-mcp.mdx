@@ -1,0 +1,9 @@
+`umr mcp` is a Model Context Protocol server over stdio. Your agent starts it (see [Coding agents](/docs/guides/agents/)); it connects to the Runtime Core with the agent's own client token, so that agent's permissions apply.
+
+This list is generated from the product itself (`umr mcp --list-tools`).
+
+<McpToolTable />
+
+## Permissions
+
+Tools that read are always allowed for a connected agent. Tools that act on the device or the app need the `interact` or `control` permission, which `umr agent setup` grants. Running a project folder for the first time and switching the device also wait for your approval in the preview window or with `umr approvals`.

@@ -195,6 +195,9 @@ enum Command {
         /// The agent client whose token and permissions to use.
         #[arg(long, default_value = "claude-code")]
         client: String,
+        /// Print the tool catalogue as JSON and exit (no Core needed; used for the docs).
+        #[arg(long)]
+        list_tools: bool,
     },
     /// Connect AI coding agents: setup, clients, grants, audit log.
     Agent {
@@ -620,7 +623,11 @@ fn main() -> ExitCode {
                 diag_cmd::logs(&target, source, level, grep, lines, follow, json).await
             }
             Command::Update { check, yes, json } => update_cmd::run(&target, check, yes, json).await,
-            Command::Mcp { client } => mcp_cmd::run(&target, &client).await,
+            Command::Mcp { list_tools: true, .. } => {
+                println!("{}", serde_json::to_string_pretty(&umr_mcp::tools::catalogue()).unwrap_or_default());
+                ExitCode::SUCCESS
+            }
+            Command::Mcp { client, .. } => mcp_cmd::run(&target, &client).await,
             Command::Agent { action } => match action {
                 AgentAction::Setup { agent, project, yes, dry_run } => {
                     agent_cmd::setup(&target, &agent, project, yes, dry_run).await

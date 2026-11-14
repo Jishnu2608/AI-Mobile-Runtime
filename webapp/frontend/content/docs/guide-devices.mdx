@@ -1,0 +1,30 @@
+Devices come from a fixed catalogue of size classes. Each profile becomes an emulator (AVD) the first time you use it.
+
+| Profile | Size class | Screen | Density |
+|---|---|---|---|
+| `compact` | Compact phone | 1080 × 2340 | 420 dpi |
+| `standard` | Standard phone (default) | 1080 × 2400 | 420 dpi |
+| `large` | Large phone | 1440 × 3120 | 500 dpi |
+| `fold` | Book foldable | 1768 × 2208 | 420 dpi |
+| `flip` | Flip foldable | 1080 × 2636 | 440 dpi |
+| `tablet` | Small tablet | 1600 × 2560 | 280 dpi |
+
+## Switching
+
+```powershell
+umr run --profile tablet
+umr device use fold
+```
+
+Or pick a profile in the preview window's device menu. Switching keeps the session: the running project follows to the new device.
+
+## Foldables
+
+On `fold` and `flip` the preview toolbar shows a posture menu (open, half-open, closed); from the command line, `umr device posture`.
+
+## A clean start
+
+```powershell
+umr device use standard --cold
+```
+boots without the saved snapshot.

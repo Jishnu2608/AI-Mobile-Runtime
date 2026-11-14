@@ -1,0 +1,45 @@
+The runtime needs a Windows 11 PC that can run an accelerated Android emulator. Everything else — the JDK, the Android SDK, Flutter, Node.js — it installs for you, only for the projects that need it.
+
+## Your PC
+
+<RequirementTable
+  caption="PC requirements"
+  rows={[
+    { item: "Windows", need: "Windows 11, x64", level: "required", notes: "Windows 10 and Arm PCs are not supported." },
+    { item: "CPU virtualization", need: "VT-x or AMD-V enabled in the firmware", level: "required", notes: "Task Manager → Performance → CPU shows `Virtualization: Enabled`. Software cannot turn this on." },
+    { item: "Windows Hypervisor Platform", need: "On", level: "required", notes: "`umr admin enable-whpx` turns it on (administrator prompt, then a restart)." },
+    { item: "Memory", need: "16 GB", level: "recommended", notes: "8 GB is the minimum: use the `compact` profile and close other heavy apps." },
+    { item: "Disk", need: "8–15 GB for toolchains and one emulator image", level: "required", notes: "About 25 MB for the app itself. Each extra emulator image takes 2–4 GB. You choose the folder." },
+    { item: "Long paths", need: "Enabled", level: "recommended", notes: "`umr admin enable-long-paths` (administrator prompt). Deep `node_modules` trees need it." },
+    { item: "Network", need: "Internet for the first setup", level: "required", notes: "Windows proxy settings are used; company TLS inspection works when its root certificate is in the Windows store." },
+  ]}
+/>
+
+## How virtualization fits together
+
+The emulator is only fast when every layer below it is in place. Check them from the bottom up.
+
+<VirtualizationDiagram />
+
+## Installed for you, per project
+
+<RequirementTable
+  caption="Toolchain installed by the runtime"
+  rows={[
+    { item: "Eclipse Temurin JDK", need: "From adoptium.net", level: "project", notes: "The version your Gradle and Android Gradle Plugin need." },
+    { item: "Android SDK packages", need: "From Google, through Android CLI", level: "project", notes: "Command-line tools, platform-tools, build-tools, platform, emulator, one system image." },
+    { item: "Flutter SDK", need: "From Google", level: "project", notes: "Flutter projects only." },
+    { item: "Node.js", need: "From nodejs.org", level: "project", notes: "React Native and Expo projects only." },
+    { item: "Git", need: "Git for Windows", level: "optional", notes: "Flutter needs it; the plan reports it as a step for you today." },
+  ]}
+/>
+
+Every download comes from the official publisher over HTTPS and is checked against the publisher's checksum before it is used. Each licence is shown for you to accept first.
+
+<Callout type="note" title="What the runtime never changes">
+Your system `PATH`, `JAVA_HOME` and `ANDROID_HOME`, existing JDKs and SDKs, and Android Studio. The runtime runs its own adb server on port 5137, so Android Studio and your own `adb` on port 5037 keep working.
+</Callout>
+
+## Not supported today
+
+macOS and Linux hosts, iOS, physical Android devices, and more than one device at a time.

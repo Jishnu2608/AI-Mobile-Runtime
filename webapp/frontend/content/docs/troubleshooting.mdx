@@ -1,0 +1,135 @@
+Start with `umr problems` (or ☰ in the preview window). Every problem has a **category** and an **origin**: *your code* means fix the project; *environment* means the toolchain, the device or the network.
+
+## Build
+
+<Issue
+  title="Compile error in your code"
+  category="build"
+  symptoms="`umr problems` lists an error with a file and line from `kotlinc`, `javac`, AAPT, Dart or Babel."
+  cause="The code or a resource file does not compile."
+  check="`umr problems show <fingerprint>` for the full message."
+>
+Fix the file. Flutter and React Native reload by themselves after you save; Kotlin and Java: `umr reload full`. An error under `build/`, `node_modules/` or the pub cache comes from generated or third-party code — check versions before editing those files.
+</Issue>
+
+## Runtime and crash
+
+<Issue
+  title="The app reports an error but keeps running"
+  category="runtime"
+  symptoms="A Flutter `EXCEPTION CAUGHT BY …`, an `Unhandled Exception` or a JavaScript error."
+  cause="An exception in the app's code that the framework caught."
+  check="The problem's location points to the widget or the first frame in your code."
+>
+Fix the code at that location; the next reload clears the build problems it replaces.
+</Issue>
+
+<Issue
+  title="The app closes"
+  category="crash"
+  symptoms="The app disappears from the screen; `umr problems` shows a crash or an ANR."
+  cause="An uncaught Java or Kotlin exception, a native crash, or the app not responding."
+  check="`umr problems show <fingerprint>` shows the stack; `umr logs --source logcat --level E` the app's last log lines."
+>
+Fix the frame in your own code named in the stack, then `umr reload full` or `umr run`.
+</Issue>
+
+## Environment
+
+<Issue
+  title="SDK package missing"
+  category="environment"
+  symptoms="`SDK location not found`, `Failed to find target …` or `Failed to find Platform SDK …`."
+  cause="An Android SDK package the project needs is not installed."
+  check="`umr plan .` lists what is missing."
+>
+`umr install .`
+</Issue>
+
+<Issue
+  title="Licence not accepted"
+  category="environment"
+  symptoms="`licences have not been accepted`."
+  cause="An SDK package's licence was not accepted yet."
+  check="`umr plan .` lists the licences still open."
+>
+`umr install .` shows each licence for you to accept.
+</Issue>
+
+<Issue
+  title="Wrong JDK for the Gradle version"
+  category="environment"
+  symptoms="`requires Java 17` or `Unsupported class file major version`."
+  cause="The JDK does not match the project's Gradle or Android Gradle Plugin."
+  check="`umr plan .` shows the JDK the project needs."
+>
+`umr install .` installs that JDK next to any others; nothing global changes.
+</Issue>
+
+<Issue
+  title="Gradle runs out of memory"
+  category="environment"
+  symptoms="`Java heap space` or `Gradle build daemon disappeared unexpectedly`."
+  cause="Gradle's memory limit is too low for the project."
+  check="Task Manager shows memory nearly full while Gradle builds."
+>
+Close other heavy apps, or add `org.gradle.jvmargs=-Xmx4g` to the project's `gradle.properties`.
+</Issue>
+
+<Issue
+  title="The emulator has no acceleration"
+  category="environment"
+  symptoms="`hardware acceleration` or `WHPX` errors when the device boots."
+  cause="CPU virtualization is off in the firmware, or Windows Hypervisor Platform is off."
+  check="See the layers on the [requirements page](/docs/requirements/#how-virtualization-fits-together)."
+>
+`umr admin enable-whpx`, then restart Windows. If Task Manager shows virtualization disabled, turn it on in the firmware settings.
+</Issue>
+
+<Issue
+  title="Port already in use"
+  category="environment"
+  symptoms="`address already in use` or port 8081 busy."
+  cause="Another Metro or development server is running."
+  check="`umr logs --source tool --grep EADDRINUSE`."
+>
+Stop the other server, then `umr run` again.
+</Issue>
+
+<Issue
+  title="Path too long"
+  category="environment"
+  symptoms="`filename … too long`."
+  cause="The Windows path limit of 260 characters."
+  check="Count the project path plus the deepest `node_modules` or `build` folder."
+>
+`umr admin enable-long-paths`, or move the project to a shorter path.
+</Issue>
+
+## Network
+
+<Issue
+  title="A download or the dev server cannot be reached"
+  category="network"
+  symptoms="`Could not GET …`, `UnknownHostException`, `PKIX path building failed`, `ENOTFOUND` or `Could not connect to development server`."
+  cause="No connection, a proxy, or a company proxy inspecting TLS."
+  check="Open the failing address in a browser on the same PC."
+>
+Fix the connection or proxy. For TLS-inspecting company proxies, their root certificate must be in the Windows certificate store; the runtime uses that store.
+</Issue>
+
+## Device
+
+<Issue
+  title="Device offline or app will not install"
+  category="device"
+  symptoms="`device offline`, `unauthorized`, `INSTALL_FAILED_INSUFFICIENT_STORAGE` or `INSTALL_FAILED_UPDATE_INCOMPATIBLE`."
+  cause="The emulator stopped answering, is full, or holds an older copy signed with another key."
+  check="`umr session` shows the device and its state."
+>
+`umr device use <profile> --cold` reboots it cleanly; `umr app uninstall <package>` removes an older copy with another signature.
+</Issue>
+
+## Still stuck
+
+`umr doctor` checks the machine. When reporting a problem, attach `umr doctor --json`, `umr problems --json` and the newest file in `%USERPROFILE%\.umr\logs`. Output from `umr` is already sanitised; check raw log files before you share them.

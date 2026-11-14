@@ -31,7 +31,7 @@ umr run            # builds, boots a phone, installs, launches, opens the previe
 
 The preview docks on the right of your screen. Click and type in it like on a phone; the toolbar has back, home, recents, rotate, screenshot, reload, and **☰ / ⚠** for problems and logs.
 Saved files reload by themselves (Flutter hot reload, Metro Fast Refresh). For Kotlin/Java use `umr reload full`.
-Other phone sizes: `umr run --profile large` (or `compact`, `standard`, `foldable`, `flip`, `tablet`), or the device menu in the preview.
+Other phone sizes: `umr run --profile large` (or `compact`, `standard`, `fold`, `flip`, `tablet`), or the device menu in the preview.
 
 ## 4. Connect your agent
 ```powershell

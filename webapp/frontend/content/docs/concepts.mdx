@@ -1,0 +1,37 @@
+## The Runtime Core
+
+One background program per Windows user, `umr-core`, owns everything: the environment scan, install plans, the emulator, the running app, problems and logs, the preview stream and agent permissions. It keeps running when you close the preview window or your agent, so a session survives both.
+
+Three clients talk to it over a named pipe only your Windows user can open:
+
+| Client | What it is for |
+|---|---|
+| `umr` | The command line: `umr run`, `umr problems`, `umr update` and the rest ([reference](/docs/reference/cli/)) |
+| Desktop app | The setup wizard and the preview window docked beside your agent |
+| `umr mcp` | The MCP server your coding agent starts ([tools](/docs/reference/mcp/)) |
+
+## Sessions and devices
+
+A session is one device and, when something runs, one app. `umr run` uses the session's device, booting it if needed; `umr run --profile tablet` or the preview's device menu switches the device and keeps the session. Device sizes come from a fixed catalogue ([profiles](/docs/guides/device-profiles/)).
+
+## Running a project
+
+`umr run` detects the framework, checks the toolchain against the project's own versions, makes sure the device runs, then builds, installs and launches through an adapter:
+
+| Framework | Adapter | After you save a file |
+|---|---|---|
+| Kotlin / Java | Gradle, through the project's wrapper | `umr reload full`: incremental rebuild and reinstall |
+| Flutter | `flutter run --machine` | Hot reload by itself; `restart` and `full` on request |
+| React Native / Expo | Metro (Expo Go or a native build) | Fast Refresh by itself; `restart` and `full` on request |
+
+## Problems and logs
+
+Build errors, crashes, "app not responding" reports and runtime exceptions are collected while the app runs, classified into six categories — build, runtime, crash, environment, device, network — deduplicated, and located at file and line. Each one says whether it is in your code or in the environment. Text is sanitised (tokens, keys, e-mail addresses and your user name are masked) before any client sees it.
+
+## Where files go
+
+| What | Where |
+|---|---|
+| Programs | `%LOCALAPPDATA%\AI Mobile Runtime` (installer) or the folder you unpacked |
+| Settings, database, logs, agent tokens | `%USERPROFILE%\.umr` |
+| Toolchains, emulator images, AVDs | `[storage] toolchains_dir` in `config.toml`; empty means inside `%USERPROFILE%\.umr` |
