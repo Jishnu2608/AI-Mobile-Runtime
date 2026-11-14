@@ -63,6 +63,10 @@ pub fn known_locations(ctx: &ScanContext) -> Vec<Watched> {
         "Dart telemetry settings",
     );
     add(
+        ctx.local_app_data.as_ref().map(|l| l.join("Dart")),
+        "Dart Tooling Daemon connection files (`flutter run`)",
+    );
+    add(
         ctx.local_app_data
             .as_ref()
             .map(|l| l.join("Pub").join("Cache")),

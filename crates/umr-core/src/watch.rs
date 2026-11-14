@@ -110,6 +110,9 @@ pub fn start(state: &ApiState, root: &Path, adapter_id: &str) -> Result<Watch, S
                             if !umr_adapter::ignored(&r) {
                                 pending.insert(r);
                                 last_change = Instant::now();
+                                if let Some(s) = weak.upgrade() {
+                                    s.watch_busy.store(true, Ordering::SeqCst);
+                                }
                             }
                         }
                         continue;
@@ -123,6 +126,7 @@ pub fn start(state: &ApiState, root: &Path, adapter_id: &str) -> Result<Watch, S
                 let files = std::mem::take(&mut pending);
                 let Some(state) = weak.upgrade() else { return };
                 let Some(kind) = decide(adapter.as_ref(), &files) else {
+                    state.watch_busy.store(false, Ordering::SeqCst);
                     continue;
                 };
                 let list: Vec<&str> = files.iter().map(String::as_str).take(5).collect();
@@ -138,6 +142,10 @@ pub fn start(state: &ApiState, root: &Path, adapter_id: &str) -> Result<Watch, S
                     Ok(v) => tracing::info!(status = %v["status"], ms = %v["ms"], "watch reload"),
                     Err(e) => tracing::warn!(error = %e.message, "watch reload"),
                 }
+                // files saved during the reload are already pending again
+                state
+                    .watch_busy
+                    .store(!pending.is_empty(), Ordering::SeqCst);
                 // changes made while reloading are handled in the next round
             }
         })

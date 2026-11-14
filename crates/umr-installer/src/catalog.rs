@@ -137,6 +137,63 @@ pub fn node_artifact(dist: &str, version: &str, shasums: &str) -> Result<Artifac
     })
 }
 
+// ---- Git for Windows (MinGit, INS-008) -----------------------------------------------------
+
+/// The latest Git for Windows release (GitHub API). Flutter needs `git` on PATH.
+pub const GIT_RELEASES: &str = "https://api.github.com/repos/git-for-windows/git/releases/latest";
+
+/// The 64-bit `MinGit` ZIP of a Git for Windows release. `MinGit` is the minimal, portable Git the
+/// Git for Windows project publishes for applications that need Git. The SHA-256 comes from the
+/// asset's `digest` (GitHub computes it at upload) or, failing that, from the release notes'
+/// checksum table; without one the artifact is refused.
+pub fn parse_mingit(json: &str) -> Result<Artifact, InstallError> {
+    let v: serde_json::Value = serde_json::from_str(json).map_err(meta)?;
+    let assets = v["assets"]
+        .as_array()
+        .ok_or_else(|| meta("release has no assets"))?;
+    let asset = assets
+        .iter()
+        .find(|a| {
+            a["name"].as_str().is_some_and(|n| {
+                n.starts_with("MinGit-") && n.ends_with("-64-bit.zip") && !n.contains("busybox")
+            })
+        })
+        .ok_or_else(|| meta("no 64-bit MinGit ZIP in the latest Git for Windows release"))?;
+    let name = asset["name"].as_str().unwrap_or_default().to_string();
+    let url = asset["browser_download_url"]
+        .as_str()
+        .ok_or_else(|| meta("MinGit asset has no download URL"))?
+        .to_string();
+    let from_digest = asset["digest"]
+        .as_str()
+        .and_then(|d| d.strip_prefix("sha256:"))
+        .map(str::to_lowercase);
+    let from_notes = || {
+        v["body"].as_str().and_then(|b| {
+            b.lines().filter(|l| l.contains(&name)).find_map(|l| {
+                l.split(|c: char| !c.is_ascii_hexdigit())
+                    .find(|w| w.len() == 64)
+                    .map(str::to_lowercase)
+            })
+        })
+    };
+    let sha = from_digest
+        .or_else(from_notes)
+        .filter(|h| h.len() == 64 && h.chars().all(|c| c.is_ascii_hexdigit()))
+        .ok_or_else(|| meta(format!("no SHA-256 published for {name}")))?;
+    let version = name
+        .trim_start_matches("MinGit-")
+        .trim_end_matches("-64-bit.zip")
+        .to_string();
+    Ok(Artifact {
+        url,
+        file_name: name,
+        checksum: Checksum::Sha256(sha),
+        size: asset["size"].as_u64(),
+        version,
+    })
+}
+
 // ---- Flutter ------------------------------------------------------------------------------
 
 /// Stable Flutter release: the exact `pinned` version, else the current stable if it is at
@@ -367,6 +424,34 @@ impl Repository {
 
 #[cfg(test)]
 pub(crate) mod tests {
+
+    #[test]
+    fn mingit_from_release_json() {
+        let sha = "a".repeat(64);
+        let json = format!(
+            r#"{{"tag_name":"v2.52.0.windows.1","body":"","assets":[
+              {{"name":"Git-2.52.0-64-bit.exe","browser_download_url":"https://github.com/x/Git.exe","size":1}},
+              {{"name":"MinGit-2.52.0-busybox-64-bit.zip","browser_download_url":"https://github.com/x/bb.zip","size":2,"digest":"sha256:{sha}"}},
+              {{"name":"MinGit-2.52.0-64-bit.zip","browser_download_url":"https://github.com/x/MinGit.zip","size":3,"digest":"sha256:{sha}"}}]}}"#
+        );
+        let a = parse_mingit(&json).unwrap();
+        assert_eq!(a.file_name, "MinGit-2.52.0-64-bit.zip");
+        assert_eq!(a.version, "2.52.0");
+        assert_eq!(a.checksum, Checksum::Sha256(sha.clone()));
+        // no digest: the release notes' table
+        let notes = format!(
+            r#"{{"body":"Filename | SHA-256\n--- | ---\nMinGit-2.52.0-64-bit.zip | {}\n","assets":[{{"name":"MinGit-2.52.0-64-bit.zip","browser_download_url":"https://github.com/x/m.zip"}}]}}"#,
+            "B".repeat(64)
+        );
+        assert_eq!(
+            parse_mingit(&notes).unwrap().checksum,
+            Checksum::Sha256("b".repeat(64))
+        );
+        // no checksum anywhere: refused
+        let none = r#"{"body":"","assets":[{"name":"MinGit-2.52.0-64-bit.zip","browser_download_url":"https://github.com/x/m.zip"}]}"#;
+        assert!(parse_mingit(none).is_err());
+    }
+
     use super::*;
 
     pub const ADOPTIUM: &str = r#"[{"binary":{"architecture":"x64","image_type":"jdk","os":"windows",

@@ -56,6 +56,56 @@ pub fn write_private(path: &Path, data: &[u8]) -> io::Result<()> {
     Ok(())
 }
 
+/// DACL for a private file: full control for the user, SYSTEM and Administrators (backup and
+/// repair tools keep working); nothing inherited from the folder.
+#[must_use]
+pub fn private_file_sddl(sid: &str) -> String {
+    format!("D:P(A;;FA;;;{sid})(A;;FA;;;SY)(A;;FA;;;BA)")
+}
+
+/// Replaces the DACL of an existing file with [`private_file_sddl`] (STOR-002: the database and
+/// its `-wal` / `-shm` files when `UMR_HOME` points to a shared folder).
+pub fn make_private(path: &Path) -> io::Result<()> {
+    use windows_sys::Win32::Security::Authorization::{SetNamedSecurityInfoW, SE_FILE_OBJECT};
+    use windows_sys::Win32::Security::{
+        GetSecurityDescriptorDacl, ACL, DACL_SECURITY_INFORMATION,
+        PROTECTED_DACL_SECURITY_INFORMATION,
+    };
+    let sid = crate::identity::current_user_sid()?;
+    let sd = SecurityDescriptor::from_sddl(&private_file_sddl(&sid))?;
+    let mut present = 0;
+    let mut defaulted = 0;
+    let mut dacl: *mut ACL = std::ptr::null_mut();
+    // SAFETY: `sd` is a valid self-relative descriptor that outlives the call; out-pointers are
+    // valid locals.
+    let ok = unsafe {
+        GetSecurityDescriptorDacl(sd.0, &raw mut present, &raw mut dacl, &raw mut defaulted)
+    };
+    if ok == 0 || present == 0 {
+        return Err(io::Error::last_os_error());
+    }
+    let mut wide = to_wide(path.as_os_str());
+    // SAFETY: `wide` is a NUL-terminated path; `dacl` points into `sd`, alive for the call; owner
+    // and group are left unchanged (null).
+    let rc = unsafe {
+        SetNamedSecurityInfoW(
+            wide.as_mut_ptr(),
+            SE_FILE_OBJECT,
+            DACL_SECURITY_INFORMATION | PROTECTED_DACL_SECURITY_INFORMATION,
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            dacl,
+            std::ptr::null(),
+        )
+    };
+    if rc != 0 {
+        return Err(io::Error::from_raw_os_error(
+            i32::try_from(rc).unwrap_or(i32::MAX),
+        ));
+    }
+    Ok(())
+}
+
 /// Returns the DACL of an existing file as SDDL (for verification and diagnostics).
 pub fn file_dacl_sddl(path: &Path) -> io::Result<String> {
     let f = File::open(path)?;
@@ -153,6 +203,28 @@ mod tests {
         assert!(dacl.starts_with("D:P"), "{dacl}");
         assert!(crate::identity::sddl_names_user(&dacl, &sid), "{dacl}");
         assert_eq!(dacl.matches("(A;").count(), 1, "{dacl}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn make_private_replaces_inherited_permissions() {
+        let dir = std::env::temp_dir().join(format!("umr-make-private-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("data.db");
+        std::fs::write(&path, b"x").unwrap();
+        make_private(&path).unwrap();
+        let dacl = file_dacl_sddl(&path).unwrap();
+        let sid = crate::identity::current_user_sid().unwrap();
+        assert!(dacl.starts_with("D:P"), "{dacl}");
+        assert!(
+            crate::identity::sddl_names_user(&dacl, &sid)
+                && dacl.contains(";SY)")
+                && dacl.contains(";BA)"),
+            "{dacl}"
+        );
+        assert_eq!(dacl.matches("(A;").count(), 3, "{dacl}");
+        assert!(!dacl.contains("AU)") && !dacl.contains(";BU)"), "{dacl}");
+        assert_eq!(std::fs::read(&path).unwrap(), b"x");
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

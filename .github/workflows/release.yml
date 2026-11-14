@@ -1,6 +1,6 @@
-name: Release build (DIST-001)
+name: Release build
 
-# Manual only. Builds a release on a fresh GitHub-hosted Windows VM with scripts/release.ps1 and
+# Manual only (task DIST-001). Builds a release on a fresh GitHub-hosted Windows VM with scripts/release.ps1 and
 # keeps the result as a workflow artifact: per-user NSIS installer, portable ZIP, CLI ZIP,
 # SHA256SUMS and releases.json (download URLs point at this repository's GitHub Releases, W5).
 # Nothing is published and nothing is signed yet: publishing to GitHub Releases is a later step

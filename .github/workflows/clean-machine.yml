@@ -1,4 +1,4 @@
-name: Clean machine (TEST-001)
+name: Clean machine
 
 # Manual only. Full first-run install on a fresh GitHub-hosted Windows VM:
 # real downloads (~6 GB), licence gate, a hard Core kill mid-download, resume, re-plan,

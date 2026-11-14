@@ -21,6 +21,8 @@ pub enum InstallError {
     },
     /// Archive is unsafe or broken.
     Extract(String),
+    /// The component's main program is not signed by its publisher (INS-009).
+    Signature(String),
     /// Official metadata could not be read or has no matching file.
     Metadata(String),
     /// A tool (Android CLI) failed.
@@ -49,6 +51,7 @@ impl std::fmt::Display for InstallError {
                 write!(f, "checksum mismatch: expected {expected}, got {actual}")
             }
             Self::Extract(e) => write!(f, "cannot extract archive: {e}"),
+            Self::Signature(e) => write!(f, "publisher signature check failed: {e}"),
             Self::Metadata(e) => write!(f, "release metadata: {e}"),
             Self::Tool(e) | Self::Disk(e) | Self::Unsupported(e) => write!(f, "{e}"),
             Self::LicenceNotAccepted(ids) => {

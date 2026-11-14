@@ -37,7 +37,15 @@ pub fn detect(
     ] {
         tools.extend(simple(ctx, name, exe, &["--version"], &[], child_env));
     }
-    tools.extend(simple(ctx, "git", "git", &["--version"], &[], child_env));
+    // INS-008: the managed MinGit is `<toolchains>\git\<version>\cmd\git.exe`
+    tools.extend(simple(
+        ctx,
+        "git",
+        "git",
+        &["--version"],
+        &managed_bins(ctx, "git", &["cmd"]),
+        child_env,
+    ));
     let android_cli_extra: Vec<PathBuf> = sdk_roots
         .iter()
         .map(|r| {

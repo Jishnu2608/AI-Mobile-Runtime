@@ -23,6 +23,8 @@
 mod wide;
 
 #[cfg(windows)]
+/// Authenticode signatures of executables (INS-009).
+pub mod authenticode;
 pub mod elevate;
 #[cfg(windows)]
 pub mod folders;

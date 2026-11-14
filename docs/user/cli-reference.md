@@ -471,6 +471,7 @@ Usage: umr agent <COMMAND>
 
 Commands:
   setup         Connect a coding agent (claude-code, codex, cursor, claude-desktop, vscode): creates its client, writes its MCP server entry and agent instructions (shows the changes and asks first). `--remove` disconnects it again
+  hook          The agent's stop hook (written by `setup` for claude-code, codex and cursor): reads the hook input on stdin, waits for the rebuild the agent's saves started, and keeps the agent working while the app has a build error, a new runtime error or a crash. Never blocks when nothing of this folder runs
   link          One-click install link for Cursor or VS Code, made for this PC's umr (creates the agent client if needed)
   doctor        Check each connected agent end to end: config entry, program path, token, a real MCP handshake and its last call. `--fix` repoints entries at this umr
   add           Create an agent client with its own token (default scopes: observe, interact, control)
@@ -506,6 +507,20 @@ Options:
       --dry-run            Only show what would change
       --json               Machine-readable plan / result; never asks (applies only with --yes)
   -h, --help               Print help
+```
+
+### umr agent hook
+
+```text
+The agent's stop hook (written by `setup` for claude-code, codex and cursor): reads the hook input on stdin, waits for the rebuild the agent's saves started, and keeps the agent working while the app has a build error, a new runtime error or a crash. Never blocks when nothing of this folder runs
+
+Usage: umr agent hook <AGENT>
+
+Arguments:
+  <AGENT>  claude-code, codex or cursor
+
+Options:
+  -h, --help  Print help
 ```
 
 ### umr agent link
@@ -751,6 +766,7 @@ Usage: umr session [COMMAND]
 Commands:
   status  State, recent events, supervised processes and ports (default)
   stop    Stop the session and its emulator
+  follow  Print each session change as it happens (state, device, app) until Ctrl+C. Uses `session.wait`, so nothing polls
   help    Print this message or the help of the given subcommand(s)
 
 Options:
@@ -777,6 +793,18 @@ Stop the session and its emulator
 Usage: umr session stop
 
 Options:
+  -h, --help  Print help
+```
+
+### umr session follow
+
+```text
+Print each session change as it happens (state, device, app) until Ctrl+C. Uses `session.wait`, so nothing polls
+
+Usage: umr session follow [OPTIONS]
+
+Options:
+      --json  
   -h, --help  Print help
 ```
 

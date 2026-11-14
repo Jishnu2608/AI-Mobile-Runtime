@@ -176,6 +176,8 @@ pub fn install_archive(
                 job.check.display()
             )));
         }
+        // INS-009: the publisher's own signature on the main program, before it is ever run
+        crate::verify::check_publisher(&job.kind, &staging.join(&job.check))?;
         set(db, &txn, TxnState::Extracted, None)?;
         if cancel.load(Ordering::Relaxed) {
             return Err(InstallError::Cancelled);

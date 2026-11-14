@@ -67,6 +67,17 @@ claude.ai web and mobile connectors: they connect from Anthropic's cloud to a pu
 ## Setup, removal and checks
 `umr agent setup <id> [--scope project|user] [--remove] [--print]` and `umr agent doctor [id] [--fix]` work for all five clients (CON-002…004). Default scope: project for Claude Code, Cursor and VS Code; user for Codex and Claude Desktop.
 
+## Stop hooks (HOOK-001)
+`umr agent setup` also registers `umr agent hook <client>` as the agent's stop hook, so build errors and crashes left after the agent's turn go back to it (user guide: `docs/user/agents.md`, *Problems go back to the agent*). Formats checked against each client's documentation on 2026-11-15:
+
+| Client | File (project / user) | Entry | Keeps the agent going with |
+|---|---|---|---|
+| Claude Code | `.claude/settings.local.json` / `~/.claude/settings.json` | `hooks.Stop[].hooks[]`: `{type: "command", command: <umr.exe>, args: ["agent","hook","claude-code"], timeout: 150}` (exec form, no shell) | stdout `{"decision":"block","reason":…}` |
+| Codex | `.codex/hooks.json` / `%CODEX_HOME%\hooks.json` | `hooks.Stop[].hooks[]`: `{type: "command", command: "\"<umr.exe>\" agent hook codex", timeout: 150}`; new hooks must be trusted once (`/hooks`) | stdout `{"decision":"block","reason":…}` (the reason becomes the next prompt) |
+| Cursor | `.cursor/hooks.json` / `~/.cursor/hooks.json` | `{version: 1, hooks: {stop: [{command: "& '<umr.exe>' agent hook cursor", timeout: 150, loop_limit: 3}]}}` (PowerShell on Windows) | stdout `{"followup_message":…}` |
+
+Live: Claude Code 2.1.310 passed 2026-11-15 (Kotlin demo, seeded compile error). Codex and Cursor: not run yet (HOOK-002); Cursor has known forum reports of `followup_message` being ignored on Windows in some versions.
+
 ## Install links (CON-006)
 `umr agent link cursor|vscode [--json]` prints a link made on the PC, because it carries that PC's `umr.exe` path (the reason the website has no install buttons, DEC-055):
 - Cursor: `cursor://anysphere.cursor-deeplink/mcp/install?name=umr&config=<URL-encoded base64 of the server entry>` ([docs](https://cursor.com/docs/mcp/install-links)).

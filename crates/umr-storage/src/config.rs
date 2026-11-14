@@ -66,6 +66,20 @@ pub struct StorageConfig {
     /// Folder for toolchains (JDK, Android SDK, images, AVDs, Node, Flutter, downloads).
     /// Empty = inside the home folder. Must be an absolute path.
     pub toolchains_dir: String,
+    /// STOR-001: audit-log entries and environment scans older than this many days are deleted
+    /// when the Core starts. 0 = keep forever. Missing = [`DEFAULT_RETENTION_DAYS`].
+    pub retention_days: Option<u32>,
+}
+
+/// Default for `[storage] retention_days`.
+pub const DEFAULT_RETENTION_DAYS: u32 = 90;
+
+impl StorageConfig {
+    /// The retention in days (0 = keep forever).
+    #[must_use]
+    pub fn retention(&self) -> u32 {
+        self.retention_days.unwrap_or(DEFAULT_RETENTION_DAYS)
+    }
 }
 
 /// `[core]` section.
@@ -124,6 +138,9 @@ telemetry = false
 # Where toolchains go (JDK, Android SDK, emulator images, AVDs, Node, Flutter, downloads).
 # Several GB. Empty = inside this folder. Example: toolchains_dir = 'D:\UMR'
 toolchains_dir = ""
+# Days to keep audit-log entries and environment scans (deleted when the Core starts).
+# 0 = keep forever. Default 90.
+# retention_days = 90
 
 [device]
 # Port of the product's own adb server. 5037 (Android Studio / your own adb) is never used.
@@ -201,6 +218,28 @@ mod tests {
             "typos rejected"
         );
         assert_eq!(Config::parse(DEFAULT_TEMPLATE).unwrap(), Config::default());
+    }
+
+    #[test]
+    fn retention_setting() {
+        assert_eq!(
+            Config::default().storage.retention(),
+            DEFAULT_RETENTION_DAYS
+        );
+        let c = Config::parse(
+            "[storage]
+retention_days = 0
+",
+        )
+        .unwrap();
+        assert_eq!(c.storage.retention(), 0);
+        let c = Config::parse(
+            "[storage]
+retention_days = 30
+",
+        )
+        .unwrap();
+        assert_eq!(c.storage.retention(), 30);
     }
 
     #[test]

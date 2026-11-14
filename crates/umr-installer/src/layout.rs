@@ -44,6 +44,12 @@ impl Layout {
         self.root.join("node")
     }
 
+    /// `git\<version>\cmd\git.exe` (`MinGit`, INS-008)
+    #[must_use]
+    pub fn git(&self) -> PathBuf {
+        self.root.join("git")
+    }
+
     /// `flutter\<version>\bin\flutter.bat`
     #[must_use]
     pub fn flutter(&self) -> PathBuf {

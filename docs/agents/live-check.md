@@ -33,6 +33,7 @@ and shows (screenshot or UI tree) that the counter goes up.
 | Agent | Date | Result | Turns / time | Notes |
 |---|---|---|---|---|
 | Claude Code 2.1.310 (headless `claude -p`) | 2026-11-14 | **Pass** | 30 turns, 248 s, $0.69 | Connected through the `.mcp.json` written by `umr agent setup`; skill loaded. Found `lib/main.dart:66`, fixed it, verified 0 → 2. Exposed two runtime bugs: `run_project` attached to an older installed build (the bug only showed after a restart), and the tap-handler `FormatException` was not reported as a problem (PRV-015, DIA-007) |
+| Claude Code 2.1.310, stop hook (HOOK-001) | 2026-11-15 | **Pass** | 8 turns, 42 s, $0.31 | Kotlin demo with a typo seeded (`uppercse`); the prompt asked only for a KDoc comment. The first stop was blocked with `DataRepository.kt:14 Unresolved reference 'uppercse'`; Claude called `runtime_status`, fixed the typo; the hook waited for the rebuild (17 s) and let it stop. With an ambiguous error (`platformName()` undefined) it explained and stopped after one report |
 | Cursor | — | not run yet | | connected and doctor-checked; run by the owner |
 | VS Code (agent mode) | — | not run yet | | connected and doctor-checked; run by the owner |
 | Claude Desktop | — | not run yet | | connected (user config) and doctor-checked; run by the owner |

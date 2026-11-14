@@ -41,6 +41,7 @@ impl Policy {
         Self {
             hosts: [
                 "api.adoptium.net",
+                "api.github.com",
                 "github.com",
                 ".githubusercontent.com",
                 "nodejs.org",

@@ -13,7 +13,7 @@ Start with `umr problems` (or ☰ in the preview window). Every problem has a **
 | Symptoms | `umr problems` lists an error with a file and line from `kotlinc`, `javac`, AAPT, Dart or Babel. |
 | Likely cause | The code or a resource file does not compile. |
 | How to check | `umr problems show <fingerprint>` for the full message. |
-| Fix | Fix the file. Flutter and React Native reload by themselves after you save; Kotlin and Java: `umr reload full`. An error under `build/`, `node_modules/` or the pub cache comes from generated or third-party code — check versions before editing those files. |
+| Fix | Fix the file. Every framework rebuilds or reloads by itself after you save (Kotlin and Java: an incremental Gradle rebuild); `umr reload full` forces one. An error under `build/`, `node_modules/` or the pub cache comes from generated or third-party code — check versions before editing those files. |
 
 
 ## Runtime and crash
@@ -39,7 +39,7 @@ Start with `umr problems` (or ☰ in the preview window). Every problem has a **
 | Symptoms | The app disappears from the screen; `umr problems` shows a crash or an ANR. |
 | Likely cause | An uncaught Java or Kotlin exception, a native crash, or the app not responding. |
 | How to check | `umr problems show <fingerprint>` shows the stack; `umr logs --source logcat --level E` the app's last log lines. |
-| Fix | Fix the frame in your own code named in the stack, then `umr reload full` or `umr run`. |
+| Fix | Fix the frame in your own code named in the stack and save (the app rebuilds and starts again), or run `umr reload full` / `umr run`. |
 
 
 ## Environment

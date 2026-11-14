@@ -43,6 +43,10 @@ pub struct AndroidFacts {
     pub ndk_version: Option<String>,
     pub uses_cmake: bool,
     pub cmake_version: Option<String>,
+    /// `buildToolsVersion` from the app build script or the root `ext` block (React Native
+    /// declares it there, RES-009), so the plan knows it before `node_modules` exists.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub build_tools: Option<String>,
 }
 
 /// Everything the resolver needs from a project.
@@ -159,6 +163,19 @@ fn first_line(p: &Path) -> Option<String> {
         .filter(|l| !l.is_empty())
 }
 
+/// Why the AGP version is unknown. React Native keeps it in its Gradle plugin inside
+/// `node_modules`, which does not exist before `npm install` (RES-009).
+fn agp_missing_note(root: &Path) -> String {
+    let rn_without_modules = std::fs::read_to_string(root.join("package.json"))
+        .is_ok_and(|t| t.contains("\"react-native\""))
+        && !root.join("node_modules").is_dir();
+    if rn_without_modules {
+        "Android Gradle Plugin version comes with React Native's Gradle plugin in node_modules: install the JavaScript dependencies (npm install) and plan again to check it".into()
+    } else {
+        "Android Gradle Plugin version not found in version catalog or build scripts".into()
+    }
+}
+
 fn read_android(root: &Path, dir: &Path, notes: &mut Vec<String>) -> AndroidFacts {
     let rel = dir.strip_prefix(root).map_or_else(
         |_| ".".into(),
@@ -203,9 +220,7 @@ fn read_android(root: &Path, dir: &Path, notes: &mut Vec<String>) -> AndroidFact
         .or_else(|| build_files.iter().find_map(|t| agp_from_build_script(t)))
         .or_else(|| rn_catalog.as_deref().and_then(agp_from_version_catalog));
     if agp.is_none() {
-        notes.push(
-            "Android Gradle Plugin version not found in version catalog or build scripts".into(),
-        );
+        notes.push(agp_missing_note(root));
     }
 
     let app = ["app/build.gradle.kts", "app/build.gradle"]
@@ -236,6 +251,9 @@ fn read_android(root: &Path, dir: &Path, notes: &mut Vec<String>) -> AndroidFact
         notes.push("compileSdk is computed in the build script (e.g. flutter.compileSdkVersion); resolved later by the build".into());
     }
     let ndk_version = quoted_assignment(&app, "ndkVersion").or_else(|| from_ext("ndkVersion"));
+    let build_tools = quoted_assignment(&app, "buildToolsVersion")
+        .or_else(|| from_ext("buildToolsVersion"))
+        .or_else(|| ext.get("buildToolsVersion").cloned());
     let uses_cmake = app.contains("cmake") && app.contains("externalNativeBuild")
         || dir
             .join("app")
@@ -255,6 +273,7 @@ fn read_android(root: &Path, dir: &Path, notes: &mut Vec<String>) -> AndroidFact
         ndk_version,
         uses_cmake,
         cmake_version,
+        build_tools,
     }
 }
 
@@ -625,6 +644,12 @@ mod react_native_ext_tests {
         assert_eq!(a.min_sdk.as_deref(), Some("24"));
         assert_eq!(a.ndk_version.as_deref(), Some("27.1.12297006"));
         assert_eq!(a.agp.as_deref(), Some("8.12.0"));
+        assert_eq!(a.build_tools.as_deref(), Some("37.0.0"), "RES-009");
+        // before `npm install`: no AGP, but build-tools still known
+        std::fs::remove_dir_all(base.join("node_modules")).unwrap();
+        let a = read(&base).android.unwrap();
+        assert_eq!(a.agp, None);
+        assert_eq!(a.build_tools.as_deref(), Some("37.0.0"));
         let _ = std::fs::remove_dir_all(&base);
     }
 }

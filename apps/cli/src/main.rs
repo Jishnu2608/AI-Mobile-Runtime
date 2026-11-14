@@ -8,6 +8,7 @@
 
 mod agent_clients;
 mod agent_cmd;
+mod agent_hook;
 mod agent_setup;
 mod core_process;
 mod device_cmd;
@@ -405,6 +406,14 @@ enum AgentAction {
         #[arg(long)]
         json: bool,
     },
+    /// The agent's stop hook (written by `setup` for claude-code, codex and cursor): reads the
+    /// hook input on stdin, waits for the rebuild the agent's saves started, and keeps the agent
+    /// working while the app has a build error, a new runtime error or a crash. Never blocks
+    /// when nothing of this folder runs.
+    Hook {
+        /// claude-code, codex or cursor.
+        agent: String,
+    },
     /// One-click install link for Cursor or VS Code, made for this PC's umr.exe (creates the
     /// agent client if needed).
     Link {
@@ -516,6 +525,12 @@ enum SessionAction {
     },
     /// Stop the session and its emulator.
     Stop,
+    /// Print each session change as it happens (state, device, app) until Ctrl+C. Uses
+    /// `session.wait`, so nothing polls.
+    Follow {
+        #[arg(long)]
+        json: bool,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -681,6 +696,7 @@ fn main() -> ExitCode {
                     agent_setup::setup(&target, &agent, o).await
                 }
                 AgentAction::Link { agent, json } => agent_setup::link(&target, &agent, json).await,
+                AgentAction::Hook { agent } => agent_hook::run(&target, &agent).await,
                 AgentAction::Doctor { agent, project, fix, json } => {
                     agent_setup::doctor(&target, agent, project, fix, json).await
                 }
@@ -716,6 +732,7 @@ fn main() -> ExitCode {
             Command::Session { action } => match action.unwrap_or(SessionAction::Status { json: false }) {
                 SessionAction::Status { json } => session_cmd::status(&target, json).await,
                 SessionAction::Stop => session_cmd::stop(&target).await,
+                SessionAction::Follow { json } => session_cmd::follow(&target, json).await,
             },
             Command::App { action } => {
                 let (method, params) = match action {

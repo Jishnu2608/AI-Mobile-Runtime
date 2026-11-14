@@ -133,7 +133,7 @@ export function HowItWorks() {
 /* ------------------------------------------------------------- frameworks */
 
 const frameworks = [
-  { name: "Kotlin and Java", build: "Gradle, with the project's own wrapper", reload: "Full rebuild and reinstall (umr reload full)", kind: "warn" as const, detect: "build.gradle(.kts) with an Android application" },
+  { name: "Kotlin and Java", build: "Gradle, with the project's own wrapper", reload: "Incremental rebuild and reinstall on save", kind: "warn" as const, detect: "build.gradle(.kts) with an Android application" },
   { name: "Flutter", build: "flutter run in machine mode", reload: "Hot reload on save, hot restart on request", kind: "ok" as const, detect: "pubspec.yaml with an android/ folder" },
   { name: "React Native", build: "Gradle for native code, Metro for JavaScript", reload: "Fast Refresh on save", kind: "ok" as const, detect: "package.json with react-native" },
   { name: "Expo", build: "Expo Go, or a native development build", reload: "Fast Refresh on save", kind: "ok" as const, detect: "package.json with expo" },

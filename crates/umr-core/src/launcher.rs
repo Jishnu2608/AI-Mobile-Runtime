@@ -63,6 +63,11 @@ impl CoreTarget {
         Ok(Some(client))
     }
 
+    /// Connects with a client token (an agent's), or reports that the Core is not running.
+    pub async fn connect_as(&self, token: &str) -> Result<Option<Client>, String> {
+        self.connect_inner(Some(token)).await
+    }
+
     /// Connects with a client token (an agent's), starting the Core first if needed.
     pub async fn connect_or_start_as(&self, token: &str) -> Result<Client, String> {
         if let Some(c) = self.connect_inner(Some(token)).await? {

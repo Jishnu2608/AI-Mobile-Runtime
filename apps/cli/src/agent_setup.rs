@@ -96,6 +96,21 @@ fn instructions_target(c: &Client, scope: Scope) -> Option<InstrTarget> {
     }
 }
 
+/// Where the stop hook (HOOK-001) goes for this client and scope. Claude Code's project hook
+/// goes to `settings.local.json`: it holds this PC's `umr.exe` path, and Claude Code keeps that
+/// file out of git.
+fn hook_place(c: &Client, scope: Scope) -> Option<Place> {
+    match (c.id, scope) {
+        ("claude-code", Scope::Project) => Some(Place::Project(".claude/settings.local.json")),
+        ("claude-code", Scope::User) => Some(Place::Home(".claude/settings.json")),
+        ("codex", Scope::Project) => Some(Place::Project(".codex/hooks.json")),
+        ("codex", Scope::User) => Some(Place::CodexHome("hooks.json")),
+        ("cursor", Scope::Project) => Some(Place::Project(".cursor/hooks.json")),
+        ("cursor", Scope::User) => Some(Place::Home(".cursor/hooks.json")),
+        _ => None,
+    }
+}
+
 const SKILL_DESCRIPTION: &str = "Run and check the user's Android app (Kotlin/Java, Flutter, React Native/Expo) on the AI Mobile Runtime emulator through the `umr` MCP tools: status after edits, problems with file:line, screenshots, taps, reloads.";
 
 /// The instructions file content for a client (CON-003).
@@ -341,6 +356,26 @@ pub fn plan(
             out.push(Change { path, old, new });
         }
         None => {}
+    }
+
+    if let Some(place) = hook_place(c, scope) {
+        let path = resolve(place, project)?;
+        let shown = path.display().to_string();
+        let old = read(&path);
+        let new = if remove {
+            match &old {
+                Some(o) => crate::agent_hook::hooks_remove(c.id, o, &shown)?,
+                None => None,
+            }
+        } else {
+            Some(crate::agent_hook::hooks_set(
+                c.id,
+                old.as_deref(),
+                &shown,
+                exe,
+            )?)
+        };
+        out.push(Change { path, old, new });
     }
     // nothing to do: same text, or deleting a file that is not there
     out.retain(|ch| ch.old != ch.new);
@@ -1015,6 +1050,22 @@ async fn doctor_client(
         if is_stale {
             stale.push(*scope);
         }
+        // HOOK-001: the stop hook that reports build errors and crashes back to the agent
+        if let Some(hook) = hook_place(c, *scope).and_then(|p| resolve(p, project).ok()) {
+            let on = read(&hook).is_some_and(|t| crate::agent_hook::has_hook(&t));
+            checks.push(if on {
+                check(Mark::Ok, format!("stop hook in {}", hook.display()), None)
+            } else {
+                check(
+                    Mark::Warn,
+                    format!(
+                        "no stop hook in {} (problems are not reported back by themselves)",
+                        hook.display()
+                    ),
+                    Some(format!("umr agent setup {}", c.id)),
+                )
+            });
+        }
     }
     Some((checks, stale))
 }
@@ -1320,7 +1371,20 @@ mod tests {
             let dir = temp(id);
             let c = agent_clients::find(id).unwrap();
             let plan1 = plan(c, Scope::Project, &dir, r"C:\umr\umr.exe", false).unwrap();
-            assert_eq!(plan1.len(), 2, "{id}: config + instructions");
+            let hooked = crate::agent_hook::HOOK_CLIENTS.contains(&id);
+            assert_eq!(
+                plan1.len(),
+                if hooked { 3 } else { 2 },
+                "{id}: config + instructions (+ stop hook)"
+            );
+            if hooked {
+                let hook = std::fs::read_to_string(&plan1[2].path).ok();
+                assert!(hook.is_none(), "{id}: hook file is new");
+                assert!(plan1[2]
+                    .new
+                    .as_deref()
+                    .is_some_and(crate::agent_hook::has_hook));
+            }
             apply(&plan1, &dir).unwrap();
             let cfg = &plan1[0].path;
             assert_eq!(entry_in(c, cfg).unwrap().1, vec!["mcp", "--client", id]);
@@ -1333,7 +1397,7 @@ mod tests {
             let undo = plan(c, Scope::Project, &dir, r"C:\umr\umr.exe", true).unwrap();
             apply(&undo, &dir).unwrap();
             assert!(
-                !cfg.exists() && !plan1[1].path.exists(),
+                plan1.iter().all(|ch| !ch.path.exists()),
                 "{id}: files removed"
             );
             assert_eq!(

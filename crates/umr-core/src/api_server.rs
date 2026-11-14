@@ -63,6 +63,9 @@ pub struct ApiState {
     pub ports: umr_supervisor::PortAllocator,
     /// Step 2.6: the current runtime session (one device at a time in the MVP).
     pub session: Mutex<Option<umr_session::Session>>,
+    /// SES-002: bumped on every session change; `session.wait` sleeps on `session_changed`.
+    pub session_version: Mutex<u64>,
+    pub session_changed: std::sync::Condvar,
     /// A `session.start` is in progress.
     pub session_busy: std::sync::atomic::AtomicBool,
     /// Phase 3: the app an adapter runs now, what it is, and its events.
@@ -71,6 +74,8 @@ pub struct ApiState {
     pub run_events: Arc<Mutex<crate::run_api::EventLog>>,
     /// ADP-006: file watcher of the current run.
     pub run_watch: Mutex<Option<crate::watch::Watch>>,
+    /// HOOK-001: the watcher has saved files it has not reloaded yet.
+    pub watch_busy: std::sync::atomic::AtomicBool,
     /// DIA-004: the run's problems and log lines, and the device collector feeding them.
     pub diag: Arc<Mutex<crate::diag_api::DiagStore>>,
     pub diag_collector: Mutex<Option<crate::diag_api::Collector>>,
@@ -119,11 +124,14 @@ impl ApiState {
             supervisor: umr_supervisor::Supervisor::new(),
             ports: umr_supervisor::PortAllocator::new(),
             session: Mutex::new(None),
+            session_version: Mutex::new(1), // 0 = "not seen yet" in session.wait
+            session_changed: std::sync::Condvar::new(),
             session_busy: std::sync::atomic::AtomicBool::new(false),
             run_app: Mutex::new(None),
             run_info: Mutex::new(None),
             run_events: Arc::default(),
             run_watch: Mutex::new(None),
+            watch_busy: std::sync::atomic::AtomicBool::new(false),
             diag: Arc::default(),
             diag_collector: Mutex::new(None),
             approvals: crate::agent_api::Approvals::default(),
@@ -246,6 +254,8 @@ fn is_slow(method: &str) -> bool {
             | methods::APP_UNINSTALL
             | methods::SESSION_START
             | methods::SESSION_STATUS
+            | methods::SESSION_WAIT
+            | methods::AGENT_CHECK
             | methods::SESSION_STOP
             | methods::PROJECT_RUN
             | methods::PROJECT_RELOAD
@@ -338,6 +348,11 @@ fn dispatch_checked(state: &ApiState, conn: &mut Connection, req: &Request) -> R
             crate::session_api::start(state, id, &p)
         }),
         methods::SESSION_STATUS => crate::session_api::status(state, id),
+        methods::SESSION_WAIT => with_params(
+            id,
+            &req.params,
+            |id, p: umr_api::methods::SessionWaitParams| crate::session_api::wait(state, id, p),
+        ),
         methods::PROJECT_RUN => with_params(id, &req.params, |id, p: RunParams| {
             crate::run_api::run(state, id, &p)
         }),
@@ -358,6 +373,11 @@ fn dispatch_checked(state: &ApiState, conn: &mut Connection, req: &Request) -> R
         methods::RUNTIME_DIGEST => with_target(id, &req.params, |id, p: DigestParams| {
             crate::agent_api::digest(state, id, &p)
         }),
+        methods::AGENT_CHECK => with_params(
+            id,
+            &req.params,
+            |id, p: umr_api::methods::AgentCheckParams| crate::agent_api::check(state, id, &p),
+        ),
         methods::APPROVALS_LIST => crate::agent_api::approvals_list(state, id),
         methods::APPROVALS_DECIDE => with_params(id, &req.params, |id, p: DecideParams| {
             crate::agent_api::approvals_decide(state, id, &p)
@@ -854,6 +874,58 @@ mod tests {
                 "{m} runs tools or waits on the user: blocking thread"
             );
         }
+    }
+
+    #[test]
+    fn session_wait_wakes_on_change_and_times_out() {
+        // SES-002: a waiter returns as soon as the session is published, not on a poll
+        let tmp = TempRoot::new("session-wait");
+        let s = Arc::new(state(&tmp));
+        let first = crate::session_api::wait(
+            &s,
+            Id::Num(1),
+            umr_api::methods::SessionWaitParams {
+                since: 0,
+                timeout_ms: 0,
+            },
+        );
+        let v0 = first.result.as_ref().unwrap()["version"].as_u64().unwrap();
+        let s2 = s.clone();
+        let waiter = std::thread::spawn(move || {
+            let t = std::time::Instant::now();
+            let r = crate::session_api::wait(
+                &s2,
+                Id::Num(2),
+                umr_api::methods::SessionWaitParams {
+                    since: v0,
+                    timeout_ms: 20_000,
+                },
+            );
+            (r, t.elapsed())
+        });
+        std::thread::sleep(std::time::Duration::from_millis(300));
+        crate::session_api::publish(&s, None);
+        let (r, took) = waiter.join().unwrap();
+        let r = r.result.unwrap();
+        assert_eq!(r["changed"], true);
+        assert!(r["version"].as_u64().unwrap() > v0);
+        assert!(
+            took < std::time::Duration::from_secs(5),
+            "woken, not timed out: {took:?}"
+        );
+        // nothing changes → answers at the timeout with changed = false
+        let v1 = r["version"].as_u64().unwrap();
+        let t = std::time::Instant::now();
+        let r = crate::session_api::wait(
+            &s,
+            Id::Num(3),
+            umr_api::methods::SessionWaitParams {
+                since: v1,
+                timeout_ms: 400,
+            },
+        );
+        assert_eq!(r.result.unwrap()["changed"], false);
+        assert!(t.elapsed() >= std::time::Duration::from_millis(390));
     }
 
     fn state(tmp: &TempRoot) -> ApiState {

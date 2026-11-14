@@ -152,6 +152,8 @@ struct Tools {
     jdk: Option<PathBuf>,
     flutter: Option<PathBuf>,
     node: Option<PathBuf>,
+    /// Folder of `git.exe` (the Flutter tool needs Git, INS-008).
+    git: Option<PathBuf>,
 }
 
 fn toolchain(state: &ApiState, path: &str) -> Result<Tools, RpcError> {
@@ -201,10 +203,18 @@ fn toolchain(state: &ApiState, path: &str) -> Result<Tools, RpcError> {
             p
         }
     });
+    let git = reuse("git").map(|p| {
+        if p.is_file() {
+            p.parent().map(Path::to_path_buf).unwrap_or(p)
+        } else {
+            p
+        }
+    });
     Ok(Tools {
         jdk: reuse("jdk"),
         flutter: reuse("flutter"),
         node,
+        git,
     })
 }
 
@@ -235,9 +245,9 @@ fn context(
         android_sdk: Some(sdk.clone()),
         flutter_root: tools.flutter.clone(),
         node_dir: tools.node.clone(),
+        extra_path: tools.git.clone().into_iter().collect(),
         isolate_appdata: true,
         adb_port: Some(state.adb_port),
-        ..Default::default()
     };
     umr_env::recipe::IsolationDirs::under(&state.toolchains)
         .create()
@@ -544,6 +554,13 @@ pub(crate) fn reload_kind(state: &ApiState, kind: ReloadKind) -> Result<Value, R
         };
         let _ = session_api::apply(state, s, ev, Some(&format!("{kind:?}").to_lowercase()));
     }
+    // this build reports its own compile errors: the previous build's (at old lines, or already
+    // fixed) would otherwise stay listed until a build succeeds
+    state
+        .diag
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .build_fixed();
     let r = app.reload(kind, &sink);
     drop(guard);
     match r {

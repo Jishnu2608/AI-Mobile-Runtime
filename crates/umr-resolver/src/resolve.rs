@@ -379,9 +379,11 @@ fn resolve_android(
             {
                 if let Some(min) = Version::parse(&r.min_agp) {
                     if *v < min {
+                        // RES-007 (checked against Google's table 2026-11-14): a minimum Google
+                        // recommends; older AGP may still build (Android CLI's template does)
                         c.conflict(
                             "agp-too-old-for-compile-sdk",
-                            format!("compileSdk {api} needs AGP {min} or newer; the project uses AGP {v}"),
+                            format!("Google lists AGP {min} as the minimum for compileSdk {api}; the project uses AGP {v}, which can cause build problems"),
                             "Update the Android Gradle Plugin, or lower compileSdk".into(),
                             c.url(&r.source),
                         );
@@ -405,8 +407,19 @@ fn resolve_android(
         );
     }
 
-    // Build-tools: AGP's default for its line.
-    if let Some((r, bt)) = agp
+    // Build-tools: the project's own `buildToolsVersion` (RES-009), else AGP's default.
+    if let Some(bt) = &a.build_tools {
+        c.need(
+            "android-build-tools",
+            Some(format!("build-tools/{bt}")),
+            Some(bt.clone()),
+            format!(
+                "buildToolsVersion = \"{bt}\" in {}/build.gradle(.kts)",
+                a.dir
+            ),
+            Vec::new(),
+        );
+    } else if let Some((r, bt)) = agp
         .as_ref()
         .and_then(|v| agp_default(pack, v, |r| r.default_build_tools.as_ref()))
     {

@@ -60,6 +60,27 @@ fn toolchains_folder(home: &std::path::Path) -> std::path::PathBuf {
     dir
 }
 
+/// STOR-001: audit entries and environment scans older than `[storage] retention_days` go at
+/// start-up.
+fn prune_old_records(db: &umr_storage::Db, paths: &CorePaths) {
+    let retention = umr_storage::config::Config::load_in(paths.root())
+        .unwrap_or_default()
+        .storage
+        .retention();
+    match db.prune(retention, umr_installer::now_unix()) {
+        Ok((0, 0)) => {}
+        Ok((audit, scans)) => {
+            tracing::info!(
+                audit,
+                scans,
+                days = retention,
+                "pruned old audit entries and scans"
+            );
+        }
+        Err(e) => tracing::warn!(error = %e, "pruning old records failed"),
+    }
+}
+
 /// Runs the Core until `shutdown` completes.
 pub async fn run<F>(paths: &CorePaths, shutdown: F) -> Result<RunOutcome, LockError>
 where
@@ -85,6 +106,7 @@ where
         std::io::Error::other(e.to_string())
     })?;
     tracing::info!(schema = db.schema_version().unwrap_or(0), path = %db.path().display(), "database ready");
+    prune_old_records(&db, paths);
 
     // Open the API before announcing the start, so a squatted or broken pipe fails early.
     let pipe_name = paths.pipe_name()?;

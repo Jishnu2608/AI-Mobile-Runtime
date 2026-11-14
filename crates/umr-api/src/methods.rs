@@ -84,6 +84,11 @@ pub const SESSION_START: &str = "session.start";
 pub const SESSION_STATUS: &str = "session.status";
 /// `session.stop` → session (emulator stopped). Scope: control.
 pub const SESSION_STOP: &str = "session.stop";
+/// `session.wait` [`SessionWaitParams`] → `{ version, changed, session }` (SES-002): returns as
+/// soon as the session changed after `since` (a state change, a device or app that died), or
+/// at `timeout_ms`. A client follows the session with one call at a time instead of polling
+/// `session.status`. Scope: observe.
+pub const SESSION_WAIT: &str = "session.wait";
 
 // ---- running projects (Phase 3: ADP-001..003) -------------------------------------------------
 
@@ -191,6 +196,13 @@ pub const AUTH_CLIENT_REVOKE: &str = "auth.client.revoke";
 /// run state, problem counts, up to 3 new problems since `since`, the next cursor. The first
 /// call an agent makes after each change (MCP `runtime_status`). Scope: observe.
 pub const RUNTIME_DIGEST: &str = "runtime.digest";
+/// `agent.check` [`AgentCheckParams`] → `{ status: ok|not_running|busy, problems: [{fp,
+/// category, at, msg, count}], cursor, alive }` (HOOK-001): waits until the file watcher and any
+/// rebuild or reload it started have finished, then returns the app-code problems an agent should
+/// fix: every open build problem (they are cleared by the next good build) and runtime / crash
+/// problems seen after `since`. Called by the agents' stop hooks (`umr agent hook`), so an agent
+/// cannot finish its turn while the app it changed does not build or crashes. Scope: observe.
+pub const AGENT_CHECK: &str = "agent.check";
 /// `approvals.list` → `{ pending: [{id, client, action, detail, created_ms}] }`: requests from
 /// agents waiting for the user (running an ungranted project, switching the device). Scope: admin.
 pub const APPROVALS_LIST: &str = "approvals.list";
@@ -353,6 +365,38 @@ pub struct AppParams {
     /// `app.launch` only: activity (`.Main` or `pkg/.Main`); default the launcher activity.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub activity: Option<String>,
+}
+
+/// Parameters of [`AGENT_CHECK`].
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AgentCheckParams {
+    /// The agent's project folder; only a run of this folder is checked.
+    pub project: String,
+    /// Problem cursor from the previous check (0: all runtime / crash problems of the run).
+    #[serde(default)]
+    pub since: u64,
+    /// How long to wait for a rebuild to finish; capped at 170 s. Default 120 s.
+    #[serde(default = "default_check_ms")]
+    pub timeout_ms: u64,
+}
+
+fn default_check_ms() -> u64 {
+    120_000
+}
+
+/// Parameters of [`SESSION_WAIT`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SessionWaitParams {
+    /// The `version` the client has seen (0: answer at once with the current one).
+    #[serde(default)]
+    pub since: u64,
+    /// How long to wait for a change; capped at 60 s. Default 25 s.
+    #[serde(default = "default_wait_ms")]
+    pub timeout_ms: u64,
+}
+
+fn default_wait_ms() -> u64 {
+    25_000
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

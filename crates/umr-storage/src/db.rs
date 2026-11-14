@@ -100,7 +100,45 @@ impl Db {
             path: path.to_path_buf(),
         };
         db.migrate(migrations)?;
+        db.make_private();
         Ok(db)
+    }
+
+    /// STOR-002: the database and its WAL files are readable by this user only (plus SYSTEM and
+    /// Administrators), whatever the folder's permissions. Re-applied on every open, because
+    /// SQLite recreates the `-wal` / `-shm` files. A failure is logged, not fatal: the data stays
+    /// usable and the private home folder already protects it in the default setup.
+    fn make_private(&self) {
+        #[cfg(windows)]
+        {
+            let base = self.path.as_os_str().to_owned();
+            for suffix in ["", "-wal", "-shm"] {
+                let mut p = base.clone();
+                p.push(suffix);
+                let p = std::path::PathBuf::from(p);
+                if p.is_file() {
+                    if let Err(e) = umr_platform::secure_file::make_private(&p) {
+                        tracing::warn!(file = %p.display(), error = %e, "cannot restrict database file permissions");
+                    }
+                }
+            }
+        }
+    }
+
+    /// STOR-001: deletes audit-log entries and environment scans older than `days` (0 = keep
+    /// everything). Returns how many rows went (audit, scans).
+    pub fn prune(&self, days: u32, now_unix: i64) -> Result<(usize, usize), StorageError> {
+        if days == 0 {
+            return Ok((0, 0));
+        }
+        let cutoff = now_unix - i64::from(days) * 86_400;
+        let audit = self
+            .conn
+            .execute("DELETE FROM audit_log WHERE at_unix < ?1", [cutoff])?;
+        let scans = self
+            .conn
+            .execute("DELETE FROM env_scans WHERE scanned_unix < ?1", [cutoff])?;
+        Ok((audit, scans))
     }
 
     /// Current schema version (`PRAGMA user_version`).
@@ -190,6 +228,48 @@ pub(crate) mod tests {
 
     fn cleanup(path: &Path) {
         let _ = std::fs::remove_dir_all(path.parent().unwrap());
+    }
+
+    #[test]
+    fn prune_drops_old_audit_and_scans_only() {
+        let path = temp_db_path("prune");
+        let db = Db::open(&path).unwrap();
+        let now = 1_800_000_000_i64;
+        for (at, tag) in [(now - 100 * 86_400, "old"), (now - 86_400, "new")] {
+            db.conn
+                .execute(
+                    "INSERT INTO audit_log (at_unix, client_id, action) VALUES (?1, ?2, 'test')",
+                    rusqlite::params![at, tag],
+                )
+                .unwrap();
+            db.conn
+                .execute(
+                    "INSERT INTO env_scans (scanned_unix, report_json) VALUES (?1, '{}')",
+                    [at],
+                )
+                .unwrap();
+        }
+        assert_eq!(db.prune(0, now).unwrap(), (0, 0), "0 keeps everything");
+        assert_eq!(db.prune(90, now).unwrap(), (1, 1));
+        let left: i64 = db
+            .conn
+            .query_row("SELECT COUNT(*) FROM audit_log", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(left, 1);
+        drop(db);
+        cleanup(&path);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn database_files_are_private() {
+        let path = temp_db_path("acl");
+        let db = Db::open(&path).unwrap();
+        let dacl = umr_platform::secure_file::file_dacl_sddl(&path).unwrap();
+        assert!(dacl.starts_with("D:P"), "{dacl}");
+        assert_eq!(dacl.matches("(A;").count(), 3, "{dacl}");
+        drop(db);
+        cleanup(&path);
     }
 
     #[test]

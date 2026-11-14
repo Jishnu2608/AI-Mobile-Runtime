@@ -4,7 +4,7 @@
 | What | Where |
 |---|---|
 | The programs | `%LOCALAPPDATA%\AI Mobile Runtime` (installer) or wherever you unpacked the portable ZIP |
-| Settings, database, logs, agent tokens | `%USERPROFILE%\.umr` (`config.toml`, `umr.db`, `logs\`, `agents\`) |
+| Settings, database, logs, agent tokens | `%USERPROFILE%\.umr` (`config.toml`, `umr.db`, `logs\`, `agents\`). Audit entries and scans older than `[storage] retention_days` (default 90) are deleted when the Core starts |
 | Toolchains, emulator images, emulators (AVDs), download cache | `[storage] toolchains_dir` in `config.toml`; empty = inside `%USERPROFILE%\.umr` |
 | Agent configuration written by `umr agent setup` | the project's `.mcp.json` / `.claude\skills\umr-runtime\`, `AGENTS.md`, `%CODEX_HOME%\config.toml` |
 | adb keys | `%USERPROFILE%\.android\adbkey*` — written by Google's adb itself, shared with Android Studio |

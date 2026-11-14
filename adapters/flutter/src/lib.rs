@@ -144,6 +144,16 @@ pub fn reusable_apk(root: &Path) -> Option<PathBuf> {
     inputs.iter().flatten().all(|t| *t <= built).then_some(apk)
 }
 
+/// Whether the Dart sources (`lib/`) changed after `apk` was built: then an attached app runs
+/// older code than the editor shows (PRV-015).
+#[must_use]
+pub fn sources_newer_than(root: &Path, apk: &Path) -> bool {
+    let Ok(built) = std::fs::metadata(apk).and_then(|m| m.modified()) else {
+        return true;
+    };
+    newest(&root.join("lib"), 8).is_some_and(|t| t > built)
+}
+
 /// `applicationId` from `android/app/build.gradle(.kts)`.
 #[must_use]
 pub fn application_id(root: &Path) -> Option<String> {
@@ -183,11 +193,35 @@ struct Shared {
 
 type State = Arc<(Mutex<Shared>, Condvar)>;
 
+/// Reports a problem. Every occurrence goes to the sink, which deduplicates by fingerprint and
+/// counts repeats (DIA-007: a crash on every tap must show ×N, not one stale entry); the session
+/// keeps each distinct problem once for its summary.
 fn add_problem(p: Problem, sink: &Sink, st: &mut Shared) {
+    sink(Event::Problem(p.clone()));
     if !st.problems.contains(&p) {
-        sink(Event::Problem(p.clone()));
         st.problems.push(p);
     }
+}
+
+/// Flutter prints an error's full block only the first time; later ones are one line:
+/// `Another exception was thrown: FormatException: Invalid radix-10 number …`. Such a line is the
+/// same problem again when an earlier block ended with the same text, otherwise a new one
+/// (without a location: the line has none).
+fn repeated_exception(rest: &str, st: &Shared) -> Problem {
+    let detail = rest.split_once(": ").map_or(rest, |(_, d)| d).trim();
+    st.problems
+        .iter()
+        .rev()
+        .find(|p| p.source == "flutter" && !detail.is_empty() && p.message.ends_with(detail))
+        .cloned()
+        .unwrap_or_else(|| Problem {
+            severity: Severity::Error,
+            message: rest.trim().to_string(),
+            file: None,
+            line: None,
+            column: None,
+            source: "flutter".into(),
+        })
 }
 
 /// Reports the buffered exception block (if any) as one problem.
@@ -224,6 +258,12 @@ fn problem_from_log(text: &str, root: &Path, sink: &Sink, st: &mut Shared) {
             add_problem(p, sink, st);
         }
         let t = log_text(line).trim();
+        if let Some(rest) = t.strip_prefix("Another exception was thrown:") {
+            flush_exception(root, sink, st);
+            let p = repeated_exception(rest, st);
+            add_problem(p, sink, st);
+            continue;
+        }
         if t.contains("EXCEPTION CAUGHT BY") || t.contains("Unhandled Exception:") {
             flush_exception(root, sink, st);
             st.exc.push(line.to_string());
@@ -362,6 +402,9 @@ struct Session {
     stdin: ChildStdin,
     state: State,
     next_id: u64,
+    /// Started through the attach shortcut: the app runs the Dart code compiled into the
+    /// installed APK until the first restart (PRV-015).
+    attached: bool,
 }
 
 /// SHA-256 of a file as lower-case hex.
@@ -605,6 +648,7 @@ fn launch_tool(
         .spawn(move || reader(stdout, root, s2, st2))
         .map_err(|e| AdapterError::Failed(e.to_string()))?;
     Ok(Session {
+        attached: false,
         name,
         log,
         stdin,
@@ -681,7 +725,8 @@ fn attach_app(ctx: &AdapterContext, sink: &Sink, package: &str) -> Option<Sessio
     };
     // the device-side address: `flutter attach` forwards the port itself
     let url = format!("http://127.0.0.1:{dev_port}{path}");
-    let s = launch_tool(ctx, sink, Some((package, &url))).ok()?;
+    let mut s = launch_tool(ctx, sink, Some((package, &url))).ok()?;
+    s.attached = true;
     if wait(&s.state, Duration::from_secs(60), |st| {
         st.started.then_some(())
     })
@@ -819,16 +864,15 @@ impl Adapter for Flutter {
             AdapterError::Missing("applicationId in android/app/build.gradle(.kts)".into())
         })?;
         let s = run_app(ctx, &sink, &package)?;
-        let pid = umr_device::app::pid(ctx.device.adb.port, &ctx.device.serial, &package);
-        sink(Event::AppStarted {
-            package: package.clone(),
-            pid,
-        });
-        Ok(Box::new(FlutterApp {
+        let mut app = FlutterApp {
             ctx: ctx.clone(),
-            package,
+            package: package.clone(),
             session: Some(s),
-        }))
+        };
+        app.sync_after_attach(&sink);
+        let pid = umr_device::app::pid(ctx.device.adb.port, &ctx.device.serial, &package);
+        sink(Event::AppStarted { package, pid });
+        Ok(Box::new(app))
     }
 }
 
@@ -837,6 +881,35 @@ struct FlutterApp {
     ctx: AdapterContext,
     package: String,
     session: Option<Session>,
+}
+
+impl FlutterApp {
+    /// After the attach shortcut the app runs the code inside the installed APK. When `lib/`
+    /// changed since that build, a hot restart loads the current code, so what the user and the
+    /// agent see matches the editor (PRV-015). A failed restart (e.g. a compile error) leaves the
+    /// app running and reports its problems; the next save or reload tries again.
+    fn sync_after_attach(&mut self, sink: &Sink) {
+        let attached = self.session.as_ref().is_some_and(|s| s.attached);
+        let stale = reusable_apk(&self.ctx.project)
+            .is_none_or(|apk| sources_newer_than(&self.ctx.project, &apk));
+        if !attached || !stale {
+            return;
+        }
+        sink(Event::Phase {
+            phase: Phase::Reloading,
+            message:
+                "the installed build is older than lib/ — hot restart to load the current code"
+                    .into(),
+        });
+        if let Some(s) = self.session.as_mut() {
+            s.attached = false;
+        }
+        if let Err(e) = self.reload(ReloadKind::Restart, sink) {
+            sink(Event::Log {
+                line: format!("hot restart after attach failed: {e}"),
+            });
+        }
+    }
 }
 
 impl FlutterApp {
@@ -891,6 +964,7 @@ impl RunningApp for FlutterApp {
             });
             self.end_tool();
             self.session = Some(run_app(&self.ctx, sink, &self.package)?);
+            self.sync_after_attach(sink);
         } else {
             let full = kind == ReloadKind::Restart;
             let (id, app_id, state) = {
@@ -1097,6 +1171,75 @@ mod tests {
             }
         )));
         assert!(ev.iter().any(|e| matches!(e, Event::AppStopped { .. })));
+    }
+
+    #[test]
+    fn repeated_exceptions_are_counted() {
+        // DIA-007: Flutter prints the block once, then "Another exception was thrown: …"
+        let root = Path::new(r"C:\p");
+        let seen: Arc<Mutex<Vec<Event>>> = Arc::default();
+        let s2 = seen.clone();
+        let sink: Sink = Arc::new(move |e| s2.lock().unwrap().push(e));
+        let mut st = Shared::default();
+        let log = |l: &str| {
+            format!(
+                r#"[{{"event":"app.log","params":{{"appId":"a1","log":{}}}}}]"#,
+                serde_json::to_string(l).unwrap()
+            )
+        };
+        for line in [
+            "══╡ EXCEPTION CAUGHT BY GESTURE ╞════",
+            "The following FormatException was thrown while handling a gesture:",
+            "Invalid radix-10 number (at character 1)",
+            "When the exception was thrown, this was the stack:",
+            "#0      int.parse (dart:core-patch/integers_patch.dart:52:25)",
+            "#1      _MyHomePageState._incrementCounter.<anonymous closure> (package:demo/main.dart:66:19)",
+            "════════════════",
+            "Another exception was thrown: FormatException: Invalid radix-10 number (at character 1)",
+            "Another exception was thrown: FormatException: Invalid radix-10 number (at character 1)",
+            "Another exception was thrown: StateError: something else",
+        ] {
+            for m in decode(&log(line)) {
+                handle(m, root, &sink, &mut st);
+            }
+        }
+        assert_eq!(st.problems.len(), 2, "{:?}", st.problems);
+        assert_eq!(
+            (st.problems[0].file.as_deref(), st.problems[0].line),
+            (Some("lib/main.dart"), Some(66))
+        );
+        let ev = seen.lock().unwrap();
+        let same = ev
+            .iter()
+            .filter(|e| matches!(e, Event::Problem(p) if *p == st.problems[0]))
+            .count();
+        assert_eq!(
+            same, 3,
+            "the block and both repeats reach the store, which counts them"
+        );
+        assert_eq!(st.problems[1].message, "StateError: something else");
+        assert_eq!(st.problems[1].file, None);
+    }
+
+    #[test]
+    fn stale_installed_build_is_detected() {
+        // PRV-015: lib/ newer than the APK → the attached app runs old code
+        let d = std::env::temp_dir().join(format!("umr-flutter-stale-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(d.join("lib")).unwrap();
+        let apk = d.join("app-debug.apk");
+        std::fs::write(d.join("lib").join("main.dart"), "void main() {}").unwrap();
+        std::thread::sleep(Duration::from_millis(1100));
+        std::fs::write(&apk, b"apk").unwrap();
+        assert!(!sources_newer_than(&d, &apk), "built after the last edit");
+        std::thread::sleep(Duration::from_millis(1100));
+        std::fs::write(d.join("lib").join("main.dart"), "void main() { }").unwrap();
+        assert!(sources_newer_than(&d, &apk), "edited after the build");
+        assert!(
+            sources_newer_than(&d, &d.join("missing.apk")),
+            "no build: treat as stale"
+        );
+        let _ = std::fs::remove_dir_all(&d);
     }
 
     #[test]

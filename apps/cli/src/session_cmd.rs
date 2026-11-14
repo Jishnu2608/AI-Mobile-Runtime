@@ -100,6 +100,55 @@ pub async fn use_profile(
     }
 }
 
+/// `umr session follow`: one `session.wait` at a time (SES-002); prints each change.
+pub async fn follow(target: &CoreTarget, json: bool) -> ExitCode {
+    let mut c = match target.connect_or_start().await {
+        Ok((c, _)) => c,
+        Err(e) => return fail(&e),
+    };
+    let mut since = 0u64;
+    loop {
+        let v: Value = match c
+            .call(
+                methods::SESSION_WAIT,
+                serde_json::json!({ "since": since, "timeout_ms": 30_000 }),
+            )
+            .await
+        {
+            Ok(v) => v,
+            Err(e) => return fail(&e.to_string()),
+        };
+        // the first answer is the current state; after that only changes are printed
+        let first = since == 0;
+        since = v["version"].as_u64().unwrap_or(since);
+        if !first && v["changed"] != true {
+            continue; // timed out without a change: ask again
+        }
+        if json {
+            println!("{}", serde_json::to_string(&v).unwrap_or_default());
+        } else {
+            let s = &v["session"];
+            if s.is_null() {
+                println!("session: none");
+            } else {
+                println!(
+                    "session {}: {}{}{}",
+                    s["id"].as_str().unwrap_or("?"),
+                    s["state"].as_str().unwrap_or("?"),
+                    s["serial"]
+                        .as_str()
+                        .map(|x| format!(" on {x}"))
+                        .unwrap_or_default(),
+                    s["app"]
+                        .as_str()
+                        .map(|x| format!(" · {x}"))
+                        .unwrap_or_default()
+                );
+            }
+        }
+    }
+}
+
 pub async fn status(target: &CoreTarget, json: bool) -> ExitCode {
     let v = match call(target, methods::SESSION_STATUS, Value::Null).await {
         Ok(v) => v,

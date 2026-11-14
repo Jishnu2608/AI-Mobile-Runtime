@@ -28,8 +28,64 @@ pub(crate) fn apply(
             .map_err(|e| journal_error(&e))?;
     }
     tracing::info!(session = %s.id, event = event.as_str(), state = s.state.as_str(), detail, "session");
-    *state.session.lock().unwrap_or_else(PoisonError::into_inner) = Some(s.clone());
+    publish(state, Some(s.clone()));
     Ok(())
+}
+
+/// Stores the current session and wakes every `session.wait` (SES-002).
+pub(crate) fn publish(state: &ApiState, s: Option<Session>) {
+    *state.session.lock().unwrap_or_else(PoisonError::into_inner) = s;
+    *state
+        .session_version
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner) += 1;
+    state.session_changed.notify_all();
+}
+
+fn version(state: &ApiState) -> u64 {
+    *state
+        .session_version
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+}
+
+/// `session.wait`: answers when the session changed after `since`, or at the timeout. While it
+/// waits it checks every 2 s whether the device or the app died (what a polling client used to
+/// notice), so a crash wakes the waiters too.
+pub fn wait(state: &ApiState, id: Id, p: umr_api::methods::SessionWaitParams) -> Response {
+    let timeout = std::time::Duration::from_millis(p.timeout_ms.clamp(0, 60_000));
+    let deadline = std::time::Instant::now() + timeout;
+    loop {
+        let v = version(state);
+        if p.since == 0 || v > p.since {
+            return ok(
+                id,
+                &serde_json::json!({ "version": v, "changed": p.since != 0, "session": current(state) }),
+            );
+        }
+        let left = deadline.saturating_duration_since(std::time::Instant::now());
+        if left.is_zero() {
+            return ok(
+                id,
+                &serde_json::json!({ "version": v, "changed": false, "session": current(state) }),
+            );
+        }
+        let slice = left.min(std::time::Duration::from_secs(2));
+        {
+            let guard = state
+                .session_version
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner);
+            let _ = state
+                .session_changed
+                .wait_timeout_while(guard, slice, |ver| *ver <= p.since)
+                .unwrap_or_else(PoisonError::into_inner);
+        }
+        if version(state) <= p.since {
+            // nothing published: look for a dead device or app (moves the session on)
+            let _ = refresh(state);
+        }
+    }
 }
 
 pub(crate) fn current(state: &ApiState) -> Option<Session> {
@@ -189,7 +245,7 @@ fn start_inner(state: &ApiState, p: &StartSessionParams) -> Result<serde_json::V
             }
             old.serial = None;
             old.app = None; // the app is not on the new device (yet)
-            *state.session.lock().unwrap_or_else(PoisonError::into_inner) = Some(old.clone());
+            publish(state, Some(old.clone()));
             old
         }
         other => {
@@ -339,7 +395,7 @@ pub fn recover(state: &ApiState) {
             for s in &list {
                 tracing::warn!(session = %s.id, avd = %s.avd, "session lost its device with the previous Core; `session.start` recovers it");
             }
-            *state.session.lock().unwrap_or_else(PoisonError::into_inner) = list.into_iter().next();
+            publish(state, list.into_iter().next());
         }
         Ok(_) => {}
         Err(e) => tracing::error!(error = %e, "session recovery failed"),

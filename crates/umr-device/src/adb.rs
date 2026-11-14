@@ -121,15 +121,20 @@ impl Connection {
 
     /// Sends a host request and reads `OKAY` / `FAIL`.
     pub fn request(&mut self, cmd: &str) -> Result<(), AdbError> {
+        // A program that is not adb may answer and drop the connection before reading the
+        // request: depending on timing that shows up as a closed, reset or aborted connection.
+        // An adb server never does that to a host request, so all three mean "not adb".
+        let not_adb = |e: io::Error| match e.kind() {
+            io::ErrorKind::UnexpectedEof => AdbError::NotAdb("connection closed".into()),
+            io::ErrorKind::ConnectionReset | io::ErrorKind::ConnectionAborted => {
+                AdbError::NotAdb(format!("connection dropped ({e})"))
+            }
+            _ => AdbError::from(e),
+        };
         let msg = format!("{:04x}{cmd}", cmd.len());
-        self.stream.write_all(msg.as_bytes())?;
+        self.stream.write_all(msg.as_bytes()).map_err(not_adb)?;
         let mut status = [0u8; 4];
-        self.stream
-            .read_exact(&mut status)
-            .map_err(|e| match e.kind() {
-                io::ErrorKind::UnexpectedEof => AdbError::NotAdb("connection closed".into()),
-                _ => AdbError::from(e),
-            })?;
+        self.stream.read_exact(&mut status).map_err(not_adb)?;
         match &status {
             b"OKAY" => Ok(()),
             b"FAIL" => Err(AdbError::Fail(self.read_payload().unwrap_or_default())),
@@ -386,16 +391,34 @@ mod tests {
         // port 1: nothing listens there on Windows (a freed random port could be reused by a
         // test running in parallel)
         assert!(matches!(server_version(1), Err(AdbError::NotRunning)));
-        // something else listens and closes
+        // something else listens, answers with something that is not adb, and closes
         let other = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
         let p2 = other.local_addr().unwrap().port();
         std::thread::spawn(move || {
             for s in other.incoming().flatten() {
                 let mut s = s;
+                let mut req = [0u8; 16];
+                let _ = s.read(&mut req);
                 let _ = s.write_all(b"HTTP/1.1 400 Bad Request\r\n\r\n");
+                let _ = s.shutdown(std::net::Shutdown::Both);
             }
         });
-        assert!(matches!(server_version(p2), Err(AdbError::NotAdb(_))));
+        for _ in 0..20 {
+            let r = server_version(p2);
+            assert!(matches!(r, Err(AdbError::NotAdb(_))), "{r:?}");
+        }
+        // one that drops the connection without answering (reset or close, timing-dependent)
+        let rude = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let p3 = rude.local_addr().unwrap().port();
+        std::thread::spawn(move || {
+            for s in rude.incoming().flatten() {
+                drop(s);
+            }
+        });
+        for _ in 0..20 {
+            let r = server_version(p3);
+            assert!(matches!(r, Err(AdbError::NotAdb(_))), "{r:?}");
+        }
         assert!(
             matches!(kill_server(crate::PUBLIC_ADB_PORT), Err(AdbError::Fail(_))),
             "never kills port 5037"

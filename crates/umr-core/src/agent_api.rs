@@ -19,9 +19,11 @@ use std::sync::{Condvar, Mutex, PoisonError};
 use std::time::{Duration, Instant};
 
 use serde_json::{json, Value};
-use umr_api::methods::{self, AuditParams, DecideParams, DigestParams, GrantsParams};
+use umr_api::methods::{
+    self, AgentCheckParams, AuditParams, DecideParams, DigestParams, GrantsParams,
+};
 use umr_api::rpc::{codes, Id, Request, Response, RpcError};
-use umr_diagnostics::sanitize;
+use umr_diagnostics::{sanitize, Category, Origin};
 
 use crate::api_server::{ok, ApiState};
 use crate::auth::{Principal, Scope};
@@ -357,6 +359,96 @@ fn short(s: &str, n: usize) -> String {
     }
 }
 
+/// Same folder, whatever the case, slashes or `\\?\` prefix.
+fn same_folder(a: &str, b: &str) -> bool {
+    let norm = |s: &str| {
+        let p = std::path::Path::new(s);
+        let c = std::fs::canonicalize(p).unwrap_or_else(|_| p.to_path_buf());
+        c.display()
+            .to_string()
+            .trim_start_matches(r"\\?\")
+            .replace('/', "\\")
+            .trim_end_matches('\\')
+            .to_lowercase()
+    };
+    norm(a) == norm(b)
+}
+
+/// The problems an agent's stop hook reports: open build problems, and runtime / crash problems
+/// after `since`; never the environment's (the agent cannot fix those in the code).
+fn problems_for_agent(d: &crate::diag_api::DiagStore, since: u64) -> Vec<Value> {
+    let mut picked: Vec<_> = d
+        .problems
+        .entries()
+        .iter()
+        .filter(|e| {
+            let g = &e.diagnostic;
+            g.origin != Origin::Environment
+                && match g.category {
+                    Category::Build => true,
+                    Category::Runtime | Category::Crash => e.seq > since,
+                    _ => false,
+                }
+        })
+        .collect();
+    picked.sort_by_key(|e| std::cmp::Reverse(e.seq));
+    picked
+        .iter()
+        .take(5)
+        .map(|e| {
+            let g = &e.diagnostic;
+            let at = match (&g.file, g.line) {
+                (Some(f), Some(l)) => Some(format!("{}:{l}", sanitize(f))),
+                (Some(f), None) => Some(sanitize(f)),
+                _ => None,
+            };
+            json!({ "fp": g.fingerprint, "category": g.category, "at": at,
+                "msg": short(&sanitize(&g.message), 300), "count": e.count })
+        })
+        .collect()
+}
+
+/// `agent.check` (HOOK-001): waits for the watcher and the reload it started, then the problems
+/// the agent should still fix.
+pub fn check(state: &ApiState, id: Id, p: &AgentCheckParams) -> Response {
+    use std::sync::atomic::Ordering;
+    let running = state
+        .run_info
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .as_ref()
+        .is_some_and(|r| same_folder(&r.project, &p.project));
+    if !running {
+        return ok(id, &json!({ "status": "not_running", "problems": [] }));
+    }
+    let deadline = Instant::now() + Duration::from_millis(p.timeout_ms.min(170_000));
+    // the watcher picks up the last save after its debounce
+    std::thread::sleep(crate::watch::DEBOUNCE + Duration::from_millis(500));
+    loop {
+        let idle = !state.watch_busy.load(Ordering::SeqCst)
+            && !state.session_busy.load(Ordering::SeqCst)
+            && state.run_app.try_lock().is_ok();
+        if idle {
+            break;
+        }
+        if Instant::now() > deadline {
+            return ok(id, &json!({ "status": "busy", "problems": [] }));
+        }
+        std::thread::sleep(Duration::from_millis(200));
+    }
+    let alive = state
+        .run_app
+        .try_lock()
+        .ok()
+        .and_then(|mut g| g.as_mut().map(|a| a.is_alive()));
+    let d = state.diag.lock().unwrap_or_else(PoisonError::into_inner);
+    let problems = problems_for_agent(&d, p.since);
+    ok(
+        id,
+        &json!({ "status": "ok", "problems": problems, "cursor": d.problems.cursor(), "alive": alive }),
+    )
+}
+
 /// MCP-002: what changed, small enough to call after every edit (≤ 1 KB).
 pub fn digest(state: &ApiState, id: Id, p: &DigestParams) -> Response {
     ok(id, &digest_value(state, p.since.as_deref()))
@@ -446,6 +538,52 @@ pub(crate) fn digest_value(state: &ApiState, since: Option<&str>) -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn problem(cat: Category, origin: Origin, msg: &str) -> umr_diagnostics::Diagnostic {
+        let mut d = umr_diagnostics::from_message("kotlinc", msg, cat);
+        d.category = cat;
+        d.origin = origin;
+        d.fingerprint = format!("fp-{msg}");
+        d
+    }
+
+    #[test]
+    fn hook_gets_open_build_problems_and_new_crashes_only() {
+        let mut d = crate::diag_api::DiagStore::default();
+        d.problem(problem(
+            Category::Build,
+            Origin::App,
+            "Unresolved reference: foo",
+        ));
+        d.problem(problem(
+            Category::Environment,
+            Origin::Environment,
+            "SDK missing",
+        ));
+        d.problem(problem(
+            Category::Crash,
+            Origin::App,
+            "NullPointerException",
+        ));
+        let all = problems_for_agent(&d, 0);
+        let msgs: Vec<_> = all.iter().map(|v| v["msg"].as_str().unwrap()).collect();
+        assert_eq!(msgs, ["NullPointerException", "Unresolved reference: foo"]);
+        // after the cursor: the crash was already reported, the build error is still open
+        let later = problems_for_agent(&d, d.problems.cursor());
+        assert_eq!(later.len(), 1);
+        assert_eq!(later[0]["category"], "build");
+        d.build_fixed();
+        assert_eq!(
+            problems_for_agent(&d, d.problems.cursor()),
+            Vec::<Value>::new()
+        );
+    }
+
+    #[test]
+    fn folders_compare_case_and_slash_blind() {
+        assert!(same_folder(r"C:\Proj\App\", "c:/proj/app"));
+        assert!(!same_folder(r"C:\Proj\App", r"C:\Proj\Other"));
+    }
 
     fn principal() -> Principal {
         Principal {

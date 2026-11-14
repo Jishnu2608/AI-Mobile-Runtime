@@ -19,7 +19,10 @@
 //! Claude Desktop (CORE-007), so they go to `<managed>\cache\{pub,npm}`. Expo's home
 //! (`~/.expo`, login token cache) goes to `<managed>\expo-home`. With
 //! [`Selection::isolate_appdata`] (Flutter adapter, Phase 3) `APPDATA` points to
-//! `<managed>\appdata`, which keeps `.flutter_settings` and Dart's telemetry files there.
+//! `<managed>\appdata`, which keeps `.flutter_settings` and Dart's telemetry files there, and
+//! `LOCALAPPDATA` points to `<managed>\localappdata`: the Dart Tooling Daemon that `flutter run`
+//! starts writes `%LOCALAPPDATA%\Dart\dtd\<pid>` and never removes it (ENV-010, found
+//! 2026-11-15).
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -39,7 +42,8 @@ pub struct Selection {
     pub flutter_root: Option<PathBuf>,
     /// Extra folders to put first on PATH.
     pub extra_path: Vec<PathBuf>,
-    /// Point `APPDATA` at `<managed>\appdata` (tools that keep settings there: Flutter, Dart).
+    /// Point `APPDATA` at `<managed>\appdata` and `LOCALAPPDATA` at `<managed>\localappdata`
+    /// (tools that keep settings or state there: Flutter, Dart, the Dart Tooling Daemon).
     pub isolate_appdata: bool,
     /// The product's private adb server port (`ANDROID_ADB_SERVER_PORT`), so every tool the
     /// product starts uses its adb server and never the one on 5037 (DEV-007).
@@ -57,6 +61,7 @@ pub struct IsolationDirs {
     pub npm_cache: PathBuf,
     pub expo_home: PathBuf,
     pub appdata: PathBuf,
+    pub local_appdata: PathBuf,
 }
 
 impl IsolationDirs {
@@ -72,6 +77,7 @@ impl IsolationDirs {
             npm_cache: cache.join("npm"),
             expo_home: managed_root.join("expo-home"),
             appdata: managed_root.join("appdata"),
+            local_appdata: managed_root.join("localappdata"),
             android_user_home,
             tmp,
         }
@@ -88,6 +94,7 @@ impl IsolationDirs {
             &self.npm_cache,
             &self.expo_home,
             &self.appdata,
+            &self.local_appdata,
         ] {
             std::fs::create_dir_all(d)?;
         }
@@ -130,6 +137,7 @@ pub fn child_env(ctx: &ScanContext, sel: &Selection) -> HashMap<String, String> 
     env.insert("__UNSAFE_EXPO_HOME_DIRECTORY".into(), s(&dirs.expo_home));
     if sel.isolate_appdata {
         env.insert("APPDATA".into(), s(&dirs.appdata));
+        env.insert("LOCALAPPDATA".into(), s(&dirs.local_appdata));
     }
 
     // ENV-009: JVM loopback fix, keeping the user's own options
@@ -237,6 +245,8 @@ mod tests {
             },
         );
         assert_eq!(flutter["APPDATA"], r"D:\UMR\appdata");
+        assert_eq!(flutter["LOCALAPPDATA"], r"D:\UMR\localappdata");
+        assert!(!env.contains_key("LOCALAPPDATA"));
         assert!(
             !env.contains_key("ANDROID_ADB_SERVER_PORT"),
             "only when a port is chosen"

@@ -5,9 +5,9 @@ The runtime is an MCP server, so any coding agent that speaks MCP can see and dr
 ## Connect an agent
 | Agent | Command | What is written |
 |---|---|---|
-| Claude Code | `umr agent setup claude-code` | `<project>\.mcp.json` and the skill `<project>\.claude\skills\umr-runtime\SKILL.md`. With `--scope user`: `%USERPROFILE%\.claude.json` and `%USERPROFILE%\.claude\skills\umr-runtime\SKILL.md` (all projects) |
-| Codex | `umr agent setup codex` | `%CODEX_HOME%\config.toml` (`[mcp_servers.umr]`) and a marked section in `<project>\AGENTS.md`. With `--scope project`: `<project>\.codex\config.toml` (Codex reads it in trusted projects) |
-| Cursor | `umr agent setup cursor` | `<project>\.cursor\mcp.json` and the rule `<project>\.cursor\rules\umr-runtime.mdc`. With `--scope user`: `%USERPROFILE%\.cursor\mcp.json` |
+| Claude Code | `umr agent setup claude-code` | `<project>\.mcp.json`, the skill `<project>\.claude\skills\umr-runtime\SKILL.md` and the stop hook in `<project>\.claude\settings.local.json`. With `--scope user`: `%USERPROFILE%\.claude.json`, `%USERPROFILE%\.claude\skills\umr-runtime\SKILL.md` and `%USERPROFILE%\.claude\settings.json` (all projects) |
+| Codex | `umr agent setup codex` | `%CODEX_HOME%\config.toml` (`[mcp_servers.umr]`), the stop hook in `%CODEX_HOME%\hooks.json` and a marked section in `<project>\AGENTS.md`. With `--scope project`: `<project>\.codex\config.toml` and `<project>\.codex\hooks.json` (Codex reads them in trusted projects) |
+| Cursor | `umr agent setup cursor` | `<project>\.cursor\mcp.json`, the rule `<project>\.cursor\rules\umr-runtime.mdc` and the stop hook in `<project>\.cursor\hooks.json`. With `--scope user`: `%USERPROFILE%\.cursor\mcp.json` and `%USERPROFILE%\.cursor\hooks.json` |
 | Claude Desktop | `umr agent setup claude-desktop` | Claude Desktop's `claude_desktop_config.json` (all chats); then quit Claude Desktop completely and start it again |
 | VS Code (agent mode) | `umr agent setup vscode` | `<project>\.vscode\mcp.json` and `<project>\.github\instructions\umr-runtime.instructions.md`. With `--scope user`: the user `mcp.json` |
 | Any other MCP client | `umr agent add <name>` | Nothing: add a stdio server yourself, command = the full path of `umr.exe`, arguments = `mcp --client <name>` |
@@ -18,6 +18,17 @@ The runtime is an MCP server, so any coding agent that speaks MCP can see and dr
 - `--print` prints the entry without writing anything, for setting a client up by hand.
 - No secret goes into any agent's files: each agent's token stays in `%USERPROFILE%\.umr\agents\`.
 - `umr agent instructions` prints the instructions agents get.
+
+### Problems go back to the agent
+For Claude Code, Codex and Cursor, setup also adds a **stop hook**: `umr agent hook <agent>` runs each time the agent ends its turn. It works the same for every framework the runtime runs (Kotlin, Java, Dart/Flutter, React Native/Expo):
+
+1. It waits until the rebuild or reload started by the agent's last saves has finished (up to two minutes; a Kotlin rebuild takes 15–20 s).
+2. If the app does not build, or a new runtime error or crash appeared, it hands the agent a short report — kind, `file:line`, message, and the fingerprint for `get_diagnostic` — and the agent keeps working on it instead of stopping. Claude Code and Codex get it as the reason the stop was blocked; Cursor as a follow-up message.
+3. When everything builds and runs, the agent stops as usual.
+
+The hook never stands in the way: when nothing of that folder runs, the Runtime Core is not started, or a build is still running after two minutes, the agent simply stops. Each set of problems is reported once until the agent changes the code, and at most three times in a row, so a problem the agent cannot fix (or was told not to touch) does not loop. Problems of the toolchain or the device are not sent to the agent; they are shown to you. The hook uses the agent's own token (read-only scope) and never the administrator token.
+
+Codex asks you to trust new hooks once (`/hooks` in Codex). The Claude Code hook goes to `settings.local.json`, which Claude Code keeps out of git, because it holds this PC's `umr.exe` path.
 
 ### In the desktop app
 The setup wizard's last step, **Agent**, lists the coding agents on your PC. For each one: **Connect** shows the files it will change as a diff and writes them when you press **Apply**; **Check** runs the doctor below; **Disconnect** takes the runtime out again. The page runs the same `umr agent` commands as the command line.

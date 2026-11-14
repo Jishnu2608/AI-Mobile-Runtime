@@ -28,6 +28,8 @@ pub struct Endpoints {
     pub adoptium_api: String,
     pub node_dist: String,
     pub flutter_releases: String,
+    /// Git for Windows releases (`MinGit` for Flutter).
+    pub git_releases: String,
     /// Folder of `repository2-3.xml` and `sys-img/`.
     pub google_repository: String,
 }
@@ -38,6 +40,7 @@ impl Default for Endpoints {
             adoptium_api: catalog::ADOPTIUM_API.into(),
             node_dist: catalog::NODE_DIST.into(),
             flutter_releases: catalog::FLUTTER_RELEASES.into(),
+            git_releases: catalog::GIT_RELEASES.into(),
             google_repository: catalog::GOOGLE_REPOSITORY.into(),
         }
     }
@@ -195,9 +198,18 @@ pub fn prepare(
         };
         let step = match i.component.as_str() {
             "jdk" => {
-                let major: u32 = i.version.as_deref().and_then(|v| v.split('.').next()?.parse().ok()).unwrap_or(17);
-                let a = catalog::parse_adoptium(&http.get_text(&catalog::adoptium_url(&ep.adoptium_api, major), catalog::MAX_METADATA_BYTES)?)?;
-                let target = layout.jdks().join(format!("temurin-{}", sanitize(&a.version)));
+                let major: u32 = i
+                    .version
+                    .as_deref()
+                    .and_then(|v| v.split('.').next()?.parse().ok())
+                    .unwrap_or(17);
+                let a = catalog::parse_adoptium(&http.get_text(
+                    &catalog::adoptium_url(&ep.adoptium_api, major),
+                    catalog::MAX_METADATA_BYTES,
+                )?)?;
+                let target = layout
+                    .jdks()
+                    .join(format!("temurin-{}", sanitize(&a.version)));
                 let v = a.version.clone();
                 base(
                     StepKind::Archive {
@@ -213,10 +225,20 @@ pub fn prepare(
                 )
             }
             "node" => {
-                let major: u64 = i.version.as_deref().and_then(|v| v.split('.').next()?.parse().ok()).unwrap_or(24);
-                let index = http.get_text(&format!("{}/index.json", ep.node_dist.trim_end_matches('/')), catalog::MAX_METADATA_BYTES)?;
+                let major: u64 = i
+                    .version
+                    .as_deref()
+                    .and_then(|v| v.split('.').next()?.parse().ok())
+                    .unwrap_or(24);
+                let index = http.get_text(
+                    &format!("{}/index.json", ep.node_dist.trim_end_matches('/')),
+                    catalog::MAX_METADATA_BYTES,
+                )?;
                 let version = catalog::parse_node_index(&index, major)?;
-                let sums = http.get_text(&catalog::node_shasums_url(&ep.node_dist, &version), catalog::MAX_METADATA_BYTES)?;
+                let sums = http.get_text(
+                    &catalog::node_shasums_url(&ep.node_dist, &version),
+                    catalog::MAX_METADATA_BYTES,
+                )?;
                 let a = catalog::node_artifact(&ep.node_dist, &version, &sums)?;
                 base(
                     StepKind::Archive {
@@ -251,14 +273,22 @@ pub fn prepare(
             "android-cmdline-tools" => {
                 let repo = repos.main()?;
                 let a = repo.windows_artifact(&ep.google_repository, "cmdline-tools;latest")?;
-                let lic = repo.package("cmdline-tools;latest").and_then(|p| p.licence.clone()).unwrap_or_else(|| "android-sdk-license".into());
+                let lic = repo
+                    .package("cmdline-tools;latest")
+                    .and_then(|p| p.licence.clone())
+                    .unwrap_or_else(|| "android-sdk-license".into());
                 let v = a.version.clone();
                 base(
                     StepKind::Archive {
                         component_id: "android/cmdline-tools/latest".into(),
                         kind: "android-sdk-package".into(),
                         artifact: a,
-                        target: layout.android_sdk().join("cmdline-tools").join("latest").display().to_string(),
+                        target: layout
+                            .android_sdk()
+                            .join("cmdline-tools")
+                            .join("latest")
+                            .display()
+                            .to_string(),
                         strip_top: true,
                         check: r"bin\android.exe".into(),
                     },
@@ -268,25 +298,49 @@ pub fn prepare(
             }
             c if c.starts_with("android-") => {
                 let Some(pkg) = i.package.clone() else {
-                    return Err(InstallError::Metadata(format!("{c} has no SDK package name")));
+                    return Err(InstallError::Metadata(format!(
+                        "{c} has no SDK package name"
+                    )));
                 };
                 let repo = repos.for_package(&pkg)?;
                 let found = repo.package(&pkg);
                 if found.is_none() {
-                    return Err(InstallError::Metadata(format!("{pkg} is not in the Android SDK repository")));
+                    return Err(InstallError::Metadata(format!(
+                        "{pkg} is not in the Android SDK repository"
+                    )));
                 }
-                let lic = found.and_then(|p| p.licence.clone()).unwrap_or_else(|| "android-sdk-license".into());
+                let lic = found
+                    .and_then(|p| p.licence.clone())
+                    .unwrap_or_else(|| "android-sdk-license".into());
                 let v = found.map(|p| p.revision.clone());
                 base(StepKind::SdkPackage { package: pkg }, vec![lic], v)
             }
-            "git" => base(
+            "git" => {
+                // INS-008: MinGit, the portable Git that Git for Windows publishes for tools
+                let a = catalog::parse_mingit(
+                    &http.get_text(&ep.git_releases, catalog::MAX_METADATA_BYTES)?,
+                )?;
+                let v = a.version.clone();
+                base(
+                    StepKind::Archive {
+                        component_id: format!("git@{v}"),
+                        kind: "git".into(),
+                        artifact: a,
+                        target: layout.git().join(sanitize(&v)).display().to_string(),
+                        strip_top: false,
+                        check: r"cmd\git.exe".into(),
+                    },
+                    Vec::new(),
+                    Some(v),
+                )
+            }
+            other => base(
                 StepKind::Unsupported {
-                    reason: "Git is needed by Flutter but cannot be installed automatically yet. Install Git for Windows from https://git-scm.com/download/win, then run the install again.".into(),
+                    reason: format!("{other} cannot be installed automatically yet"),
                 },
                 Vec::new(),
                 None,
             ),
-            other => base(StepKind::Unsupported { reason: format!("{other} cannot be installed automatically yet") }, Vec::new(), None),
         };
         for l in &step.licences {
             if !licence_ids.contains(l) {
@@ -665,6 +719,11 @@ mod tests {
             &[("node-v24.15.0-win-x64/node.exe", b"MZ".as_slice())],
         ))
         .unwrap();
+        let mingit = std::fs::read(make_zip(
+            &dir.join("g.zip"),
+            &[("cmd/git.exe", b"MZ".as_slice())],
+        ))
+        .unwrap();
         let clt = std::fs::read(make_zip(
             &dir.join("c.zip"),
             &[("cmdline-tools/bin/android.exe", b"MZ".as_slice())],
@@ -674,6 +733,7 @@ mod tests {
         // Downloads and Google/Node metadata; Adoptium (which needs this server's URL) below.
         let s = TestServer::start({
             routes.insert("/jdk.zip".into(), Route::body(&jdk));
+            routes.insert("/MinGit-2.52.0-64-bit.zip".into(), Route::body(&mingit));
             routes.insert(
                 "/dist/v24.15.0/node-v24.15.0-win-x64.zip".into(),
                 Route::body(&node),
@@ -713,10 +773,19 @@ mod tests {
             sha256_hex(&jdk),
             jdk.len()
         );
-        let s2 = TestServer::start(Map::from([(
-            "/v3/assets/latest/17/hotspot".to_string(),
-            Route::body(adoptium.as_bytes()),
-        )]));
+        let git_release = format!(
+            r#"{{"tag_name":"v2.52.0.windows.1","body":"","assets":[{{"name":"MinGit-2.52.0-64-bit.zip","browser_download_url":"{}/MinGit-2.52.0-64-bit.zip","size":{},"digest":"sha256:{}"}}]}}"#,
+            s.base,
+            mingit.len(),
+            sha256_hex(&mingit)
+        );
+        let s2 = TestServer::start(Map::from([
+            (
+                "/v3/assets/latest/17/hotspot".to_string(),
+                Route::body(adoptium.as_bytes()),
+            ),
+            ("/git.json".to_string(), Route::body(git_release.as_bytes())),
+        ]));
         let http = Http::new(Policy {
             hosts: vec![],
             allow_loopback_http: true,
@@ -728,6 +797,7 @@ mod tests {
             adoptium_api: s2.base.clone(),
             node_dist: s.url("/dist"),
             flutter_releases: s.url("/flutter.json"),
+            git_releases: format!("{}/git.json", s2.base),
             google_repository: s.url("/android"),
         };
         Fx {
@@ -763,7 +833,13 @@ mod tests {
         );
         assert_eq!(prep.steps[0].version.as_deref(), Some("17.0.21+9"));
         assert_eq!(prep.steps[1].version.as_deref(), Some("24.15.0"));
-        assert!(matches!(prep.steps[2].kind, StepKind::Unsupported { .. }));
+        // INS-008: Git is installed (MinGit), checked by cmd\git.exe
+        assert!(
+            matches!(&prep.steps[2].kind, StepKind::Archive { kind, check, strip_top: false, .. } if kind == "git" && check == r"cmd\git.exe"),
+            "{:?}",
+            prep.steps[2].kind
+        );
+        assert_eq!(prep.steps[2].version.as_deref(), Some("2.52.0"));
         assert_eq!(
             prep.steps[4].kind,
             StepKind::SdkPackage {

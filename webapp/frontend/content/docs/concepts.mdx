@@ -20,7 +20,7 @@ A session is one device and, when something runs, one app. `umr run` uses the se
 
 | Framework | Adapter | After you save a file |
 |---|---|---|
-| Kotlin / Java | Gradle, through the project's wrapper | `umr reload full`: incremental rebuild and reinstall |
+| Kotlin / Java | Gradle, through the project's wrapper | Incremental rebuild and reinstall by itself; `umr reload full` on request |
 | Flutter | `flutter run --machine` | Hot reload by itself; `restart` and `full` on request |
 | React Native / Expo | Metro (Expo Go or a native build) | Fast Refresh by itself; `restart` and `full` on request |
 

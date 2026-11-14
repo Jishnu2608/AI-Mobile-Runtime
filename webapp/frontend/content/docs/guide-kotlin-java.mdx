@@ -20,7 +20,7 @@ umr run
 Gradle builds a debug APK through the project's own wrapper, the runtime installs it and launches the launcher activity.
 </Step>
 <Step title="Apply changes">
-Kotlin and Java have no hot reload outside Android Studio. After saving, run a full reload: an incremental Gradle build and a reinstall.
+Kotlin and Java have no hot reload outside Android Studio, so saving a file starts an incremental Gradle build and a reinstall by itself (about 15–20 s once the Gradle daemon is warm). To force one:
 ```powershell
 umr reload full
 ```

@@ -15,6 +15,61 @@ use sha1::Digest as _;
 
 use crate::InstallError;
 
+/// Publishers that sign each component's main program (INS-009), as the signing certificate's
+/// display name. Checked on the files of these publishers' own releases (2026-11-14): Temurin
+/// `java.exe` — Eclipse Foundation; `node.exe` — the `OpenJS` Foundation; `MinGit` `git.exe` — Johannes
+/// Schindelin (the Git for Windows maintainer); Android CLI and SDK tools — Google LLC. Flutter's
+/// `flutter.bat` / `dart.exe` are not signed, so Flutter relies on its published SHA-256 only.
+#[must_use]
+pub fn expected_signers(kind: &str) -> &'static [&'static str] {
+    match kind {
+        "jdk" => &["Eclipse Foundation"],
+        "node" => &["OpenJS Foundation"],
+        "git" => &["Johannes Schindelin"],
+        "android-sdk-package" => &["Google LLC"], // cmdline-tools, checked by bin/android.exe
+        _ => &[],
+    }
+}
+
+/// Checks that `program` is signed by one of `kind`'s publishers (nothing to check for kinds
+/// without a list). A missing, broken or foreign signature refuses the install.
+pub fn check_publisher(kind: &str, program: &Path) -> Result<(), InstallError> {
+    // unit-test archives hold stub programs of a few bytes; real programs are far larger
+    if cfg!(test) && std::fs::metadata(program).is_ok_and(|m| m.len() < 1024) {
+        return Ok(());
+    }
+    check_publisher_with(kind, program, umr_platform::authenticode::signer)
+}
+
+fn check_publisher_with(
+    kind: &str,
+    program: &Path,
+    signer: impl Fn(
+        &Path,
+    ) -> Result<
+        umr_platform::authenticode::Signer,
+        umr_platform::authenticode::SignatureError,
+    >,
+) -> Result<(), InstallError> {
+    let expected = expected_signers(kind);
+    if expected.is_empty() {
+        return Ok(());
+    }
+    match signer(program) {
+        Ok(s) if expected.iter().any(|e| s.name == *e) => Ok(()),
+        Ok(s) => Err(InstallError::Signature(format!(
+            "{} is signed by \"{}\", expected {}",
+            program.display(),
+            s.name,
+            expected.join(" or ")
+        ))),
+        Err(e) => Err(InstallError::Signature(format!(
+            "{}: {e}",
+            program.display()
+        ))),
+    }
+}
+
 /// Upper limit for unpacked size (the Android NDK is ~2.3 GB; Flutter ~3.5 GB).
 pub const MAX_UNPACKED_BYTES: u64 = 16 * 1024 * 1024 * 1024;
 
@@ -234,6 +289,29 @@ pub fn extract_zip(
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn publisher_rules() {
+        use umr_platform::authenticode::{SignatureError, Signer};
+        let p = Path::new("x.exe");
+        let by = |name: &'static str| move |_: &Path| Ok(Signer { name: name.into() });
+        assert!(check_publisher_with("jdk", p, by("Eclipse Foundation")).is_ok());
+        assert!(check_publisher_with("node", p, by("OpenJS Foundation")).is_ok());
+        assert!(check_publisher_with("git", p, by("Johannes Schindelin")).is_ok());
+        let e = check_publisher_with("jdk", p, by("Someone Else")).unwrap_err();
+        assert!(e.to_string().contains("Someone Else"), "{e}");
+        assert!(
+            check_publisher_with("node", p, |_: &Path| Err(SignatureError::NotSigned)).is_err()
+        );
+        assert!(
+            check_publisher_with("node", p, |_: &Path| Err(SignatureError::Invalid(-1))).is_err()
+        );
+        // no publisher list: nothing to check (Flutter is not signed)
+        assert!(
+            check_publisher_with("flutter", p, |_: &Path| Err(SignatureError::NotSigned)).is_ok()
+        );
+    }
+
     use super::*;
     use crate::testkit::{make_zip, tmp_dir};
 

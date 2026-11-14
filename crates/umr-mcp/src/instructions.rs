@@ -6,7 +6,7 @@
 pub const INSTRUCTIONS: &str = "\
 AI Mobile Runtime runs the user's Android app (Kotlin/Java, Flutter, React Native/Expo) on an \
 emulator and reports what happens. Loop: edit code → saved files reload by themselves (Flutter hot \
-reload, Metro Fast Refresh; Gradle apps need reload kind=full) → call runtime_status → if it shows \
+reload, Metro Fast Refresh, an incremental Gradle rebuild for Kotlin/Java) → call runtime_status → if it shows \
 new problems, get_diagnostic <fp> → fix → runtime_status again. Use screenshot (or ui_tree for exact \
 coordinates) to check what the user sees; tap/swipe/type_text take device pixels. runtime_status \
 remembers its cursor, so each call shows only what changed. Problems say whether they are in the \
@@ -31,8 +31,11 @@ lets you see and drive it.
 ## The loop
 1. `runtime_status` — what runs, and only what changed since your last call (problem counts,
    up to 3 new problems with `fp`, a hint). Small; call it after every edit.
-2. Edit code and save. Flutter and React Native apply saved files by themselves; for Kotlin/Java
-   (Gradle) call `reload` with `kind: \"full\"`. `reload` `restart` restarts the app's state.
+2. Edit code and save. Saved files are applied by themselves: Flutter hot reload, React Native
+   Fast Refresh, and for Kotlin/Java an incremental Gradle rebuild and reinstall (15–20 s; wait
+   for it before `runtime_status`). `reload` `restart` restarts the app's state, `full` forces a
+   rebuild. When you finish, a stop hook may hand you build errors or crashes that are still
+   open: fix them, or say why you cannot.
 3. `runtime_status` again. New problems → `get_diagnostic` with the `fp` (message, `file:line`,
    stack) → fix → repeat.
 4. Check the result: `screenshot` (scaled image; it says the device size) or `ui_tree` (texts,
