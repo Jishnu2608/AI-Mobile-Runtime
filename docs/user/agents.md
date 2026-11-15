@@ -59,6 +59,7 @@ The claude.ai website and mobile app cannot use the runtime: their connectors ru
 | `get_logs` | Recent app log (logcat), tool output and progress |
 | `screenshot`, `ui_tree` | The screen (scaled image) and its elements with coordinates |
 | `tap`, `swipe`, `type_text`, `press_key`, `rotate` | Input in device pixels |
+| `fingerprint` | Touch the fingerprint sensor (enrolled finger 1): unlocks the lock screen or passes the app's `BiometricPrompt`; says whether the phone is still locked |
 | `reload`, `run_project`, `stop_app` | Hot / restart / full reload; run a project folder; stop the app |
 | `switch_device`, `list_device_profiles` | Change the phone size |
 

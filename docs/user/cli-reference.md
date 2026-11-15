@@ -203,15 +203,17 @@ Devices seen by the product's adb server
 Usage: umr device <COMMAND>
 
 Commands:
-  list      List devices and emulators (starts the product's private adb server if needed)
-  profiles  Show the device size classes (compact, standard, large, fold, flip, tablet)
-  create    Create the emulator (AVD) for a size class from the product's own hardware definition
-  boot      Boot the emulator for a size class headless (creates it if needed). Warm boots from the product's snapshot when the GPU mode still matches; checks that the screen renders
-  stop      Stop an emulator the product started
-  use       Start a session on a size class: boot it (switching from another device), optionally install and launch an app
-  rotate    Rotate the emulator 90° (left or right)
-  posture   Fold or unfold a foldable emulator while it runs: closed, half-opened, opened, flipped, tent
-  help      Print this message or the help of the given subcommand(s)
+  list         List devices and emulators (starts the product's private adb server if needed)
+  profiles     Show the device size classes (compact, standard, large, fold, flip, tablet)
+  create       Create the emulator (AVD) for a size class from the product's own hardware definition
+  boot         Boot the emulator for a size class headless (creates it if needed). Warm boots from the product's snapshot when the GPU mode still matches; checks that the screen renders
+  stop         Stop an emulator the product started
+  use          Start a session on a size class: boot it (switching from another device), optionally install and launch an app
+  rotate       Rotate the emulator 90° (left or right)
+  posture      Fold or unfold a foldable emulator while it runs: closed, half-opened, opened, flipped, tent
+  fingerprint  Touch the emulator's fingerprint sensor: unlocks the lock screen and answers an app's biometric prompt once a finger is enrolled (Settings, with a screen lock set). `down` / `up` hold the finger, e.g. while Settings enrols it
+  auth         Lock screen and fingerprint state: locked, sensor waiting for a finger, fingers enrolled
+  help         Print this message or the help of the given subcommand(s)
 
 Options:
   -h, --help  Print help
@@ -332,6 +334,34 @@ Usage: umr device posture [OPTIONS] <POSTURE>
 
 Arguments:
   <POSTURE>  
+
+Options:
+      --target <TARGET>  
+  -h, --help             Print help
+```
+
+### umr device fingerprint
+
+```text
+Touch the emulator's fingerprint sensor: unlocks the lock screen and answers an app's biometric prompt once a finger is enrolled (Settings, with a screen lock set). `down` / `up` hold the finger, e.g. while Settings enrols it
+
+Usage: umr device fingerprint [OPTIONS] [TOUCH]
+
+Arguments:
+  [TOUCH]  tap (default), down or up [default: tap]
+
+Options:
+      --finger <FINGER>  Enrolled finger, 1-10 [default: 1]
+      --target <TARGET>  
+  -h, --help             Print help
+```
+
+### umr device auth
+
+```text
+Lock screen and fingerprint state: locked, sensor waiting for a finger, fingers enrolled
+
+Usage: umr device auth [OPTIONS]
 
 Options:
       --target <TARGET>  

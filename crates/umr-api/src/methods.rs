@@ -64,6 +64,17 @@ pub const DEVICE_INPUT: &str = "device.input";
 /// `device.posture` [`PostureParams`] → `{ serial, posture }`: fold / half-open / unfold a
 /// foldable emulator while it runs (DEV-008b). Scope: interact.
 pub const DEVICE_POSTURE: &str = "device.posture";
+/// `device.fingerprint` [`FingerprintParams`] → `{ serial, id, touch, after: {locked,
+/// sensor_active, enrolled} }` (PRV-016): a finger on
+/// the emulator's fingerprint sensor — `tap` (down, 300 ms, up), `down` or `up`. Unlocks the lock
+/// screen and answers an app's `BiometricPrompt` once a finger is enrolled. Emulators started by
+/// the product only (gRPC). Scope: interact.
+pub const DEVICE_FINGERPRINT: &str = "device.fingerprint";
+/// `device.auth_state` [`TargetParams`] → `{ serial, locked, sensor_active, enrolled,
+/// lock_disabled }` (PRV-016): the lock screen is up; the fingerprint sensor is waiting for a
+/// finger (lock screen, an app's biometric prompt, enrolment in Settings); how many fingers are
+/// enrolled. The preview shows its in-display sensor from this. Scope: observe.
+pub const DEVICE_AUTH_STATE: &str = "device.auth_state";
 /// `app.install` [`InstallAppParams`] → `{ serial, package }`. Scope: control.
 pub const APP_INSTALL: &str = "app.install";
 /// `app.launch` [`AppParams`] → `{ serial, component, total_ms, pid }`. Scope: control.
@@ -347,6 +358,27 @@ pub struct PostureParams {
     pub target: Option<String>,
     /// `closed`, `half-opened`, `opened`, `flipped`, `tent`
     pub posture: String,
+}
+
+/// Parameters of [`DEVICE_FINGERPRINT`].
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FingerprintParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub target: Option<String>,
+    /// Enrolled finger id, 1-10 (default 1).
+    #[serde(default = "default_finger")]
+    pub id: i32,
+    /// `tap` (default), `down` or `up`.
+    #[serde(default = "default_touch")]
+    pub touch: String,
+}
+
+fn default_finger() -> i32 {
+    1
+}
+
+fn default_touch() -> String {
+    "tap".into()
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

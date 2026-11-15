@@ -145,16 +145,28 @@ impl PortAllocator {
 mod tests {
     use super::*;
 
-    /// A private test range that starts at a port the OS just gave us.
+    /// A private test range, its own block per call, below Windows' ephemeral ports
+    /// (49152–65535). Starting at a port the OS just handed out (as before CI-005) put the range
+    /// exactly where the next sockets of any process land, so a busy CI runner took ports the
+    /// test expected to get back.
     fn range(len: u16, step: u16, pair: bool) -> PortRange {
-        let l = TcpListener::bind("127.0.0.1:0").unwrap();
-        let first = l.local_addr().unwrap().port();
-        drop(l);
-        PortRange {
-            first,
-            last: first.saturating_add(len),
-            step,
-            pair,
+        use std::sync::atomic::{AtomicU16, Ordering};
+        static NEXT_BLOCK: AtomicU16 = AtomicU16::new(0);
+        let pid_block = u16::try_from(std::process::id() % 200).unwrap_or(0);
+        loop {
+            let block = NEXT_BLOCK.fetch_add(1, Ordering::SeqCst);
+            let first = 30_000 + ((pid_block + block * 7) % 200) * 100;
+            let last = first + len;
+            // skip a block where something already listens
+            if (first..=last).all(bindable) {
+                return PortRange {
+                    first,
+                    last,
+                    step,
+                    pair,
+                };
+            }
+            assert!(block < 200, "no free test port block in 30000-49999");
         }
     }
 

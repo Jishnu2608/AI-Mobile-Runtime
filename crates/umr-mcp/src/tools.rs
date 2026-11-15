@@ -7,6 +7,7 @@
 //! | `get_logs` | `logs.tail` | observe |
 //! | `screenshot`, `ui_tree`, `list_device_profiles` | `device.screenshot` (scaled), `device.ui`, `device.profiles` | observe |
 //! | `tap`, `swipe`, `type_text`, `press_key`, `rotate` | `device.input`, `device.rotate` | interact |
+//! | `fingerprint` | `device.fingerprint` (+ `device.auth_state` after the touch) | interact |
 //! | `reload`, `run_project`, `stop_app`, `switch_device` | `project.reload`, `project.run`, `project.stop`, `session.start` | control (+ user approval for new folders / device switches) |
 //!
 //! Results are compact text (and a PNG for `screenshot`); errors come back as tool errors
@@ -126,6 +127,15 @@ const TOOLS: &[Tool] = &[
         title: "Rotate",
         description: "Rotate the device by 90°.",
         schema: no_args,
+        read_only: false,
+    },
+    Tool {
+        name: "fingerprint",
+        title: "Fingerprint",
+        description: "Touch the emulator's fingerprint sensor with enrolled finger 1 (or `finger`): unlocks the lock screen or answers the app's BiometricPrompt, e.g. to test fingerprint login. `touch`: tap (default), down or up (hold while Settings enrols a finger). Needs a screen lock and an enrolled finger; the result says whether the device is still locked and how many fingers are enrolled.",
+        schema: || json!({ "type": "object", "properties": {
+            "touch": { "type": "string", "enum": ["tap", "down", "up"] },
+            "finger": { "type": "integer", "minimum": 1, "maximum": 10 } } }),
         read_only: false,
     },
     Tool {
@@ -434,6 +444,23 @@ pub async fn run<C: Core>(
         "rotate" => {
             let v = s.core.call("device.rotate", json!({})).await?;
             Ok(vec![text(&compact(&v))])
+        }
+        "fingerprint" => {
+            let touch = args["touch"].as_str().unwrap_or("tap");
+            let finger = args["finger"].as_i64().unwrap_or(1);
+            let v = s
+                .core
+                .call(
+                    "device.fingerprint",
+                    json!({ "touch": touch, "id": finger }),
+                )
+                .await?;
+            // the Core reads the lock state again after the touch: did it unlock?
+            let a = &v["after"];
+            Ok(vec![text(&compact(
+                &json!({ "touched": touch, "finger": finger,
+                "locked": a["locked"], "sensor_waiting": a["sensor_active"], "enrolled": a["enrolled"] }),
+            ))])
         }
         "reload" => {
             let kind = args["kind"].as_str().unwrap_or("hot");

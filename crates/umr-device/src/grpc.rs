@@ -85,6 +85,16 @@ pub struct PostureMsg {
     pub value: i32,
 }
 
+/// `Fingerprint`: a finger on (or off) the emulator's fingerprint sensor (PRV-016).
+#[derive(Clone, PartialEq, prost::Message)]
+pub struct Fingerprint {
+    #[prost(bool, tag = "1")]
+    pub is_touching: bool,
+    /// The enrolled finger (the emulator offers ids 1-10; Settings enrols whichever touches).
+    #[prost(int32, tag = "2")]
+    pub touch_id: i32,
+}
+
 #[derive(Clone, PartialEq, prost::Message)]
 pub struct EmulatorStatus {
     #[prost(string, tag = "1")]
@@ -404,6 +414,24 @@ impl Emulator {
         .map(|_| ())
     }
 
+    /// `sendFingerprint` (PRV-016): puts finger `id` on the sensor (`touching`) or lifts it.
+    pub async fn fingerprint_async(&self, touching: bool, id: i32) -> Res<()> {
+        self.unary::<Fingerprint, Empty>(
+            "sendFingerprint",
+            Fingerprint {
+                is_touching: touching,
+                touch_id: id.clamp(1, 10),
+            },
+        )
+        .await
+        .map(|_| ())
+    }
+
+    /// Blocking [`Self::fingerprint_async`].
+    pub fn fingerprint(&self, touching: bool, id: i32) -> Res<()> {
+        block(self.fingerprint_async(touching, id))
+    }
+
     /// `setPosture` (foldables): closed, half-opened, opened, flipped, tent.
     pub fn set_posture(&self, p: Posture) -> Res<()> {
         block(self.unary::<PostureMsg, Empty>(
@@ -425,6 +453,12 @@ mod tests {
     fn wire_format_matches_the_proto() {
         // Posture.value is field 3 (varint): tag 0x18
         assert_eq!(PostureMsg { value: 2 }.encode_to_vec(), [0x18, 2]);
+        // Fingerprint: isTouching field 1 (0x08), touchId field 2 (0x10)
+        let f = Fingerprint {
+            is_touching: true,
+            touch_id: 1,
+        };
+        assert_eq!(f.encode_to_vec(), [0x08, 1, 0x10, 1]);
         // PNG request: format 0 is the default, so nothing is sent
         assert_eq!(ImageFormat::default().encode_to_vec(), Vec::<u8>::new());
         let t = TouchEvent {

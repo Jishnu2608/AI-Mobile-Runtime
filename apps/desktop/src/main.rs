@@ -29,6 +29,8 @@ const ALLOWED: &[&str] = &[
     methods::PREVIEW_STATUS,
     methods::PREVIEW_SELFTEST,
     methods::DEVICE_ROTATE,
+    methods::DEVICE_FINGERPRINT,
+    methods::DEVICE_AUTH_STATE,
     methods::DEVICE_POSTURE,
     methods::DEVICE_SCREENSHOT,
     methods::DEVICE_PROFILES,

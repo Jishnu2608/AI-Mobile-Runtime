@@ -109,6 +109,13 @@ export async function mockCall(method: string, _params: unknown): Promise<any> {
       return { status: "running", package: "com.example.my_app", serial: "emulator-5554", adapter: "flutter", seconds: 41, watching: true, capabilities: { hot_reload: true, hot_restart: true } };
     case "preview.open":
       return { url: "", profile: "standard" };
+    case "device.auth_state": {
+      // `?locked=1` shows the lock screen sensor in a plain browser
+      const locked = new URLSearchParams(window.location.search).get("locked") === "1";
+      return { serial: "emulator-5554", locked, sensor_active: locked, enrolled: 1, lock_disabled: false };
+    }
+    case "device.fingerprint":
+      return { serial: "emulator-5554", id: 1, touch: "tap" };
     case "device.profiles":
       return { profiles: [{ profile: { id: "standard", class: "phone" } }] };
     case "diagnostics.list":

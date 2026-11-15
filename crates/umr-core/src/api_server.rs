@@ -168,6 +168,7 @@ pub fn required_scope(method: &str) -> Option<Scope> {
         | methods::PROJECT_STOP
         | methods::ADAPTER_CHECK => Some(Scope::Control),
         methods::DEVICE_INPUT
+        | methods::DEVICE_FINGERPRINT
         | methods::DEVICE_POSTURE
         | methods::DEVICE_ROTATE
         | methods::PREVIEW_OPEN
@@ -248,6 +249,8 @@ fn is_slow(method: &str) -> bool {
             | methods::DEVICE_UI
             | methods::DEVICE_INPUT
             | methods::DEVICE_POSTURE
+            | methods::DEVICE_FINGERPRINT
+            | methods::DEVICE_AUTH_STATE
             | methods::APP_INSTALL
             | methods::APP_LAUNCH
             | methods::APP_STOP
@@ -328,6 +331,14 @@ fn dispatch_checked(state: &ApiState, conn: &mut Connection, req: &Request) -> R
         }),
         methods::DEVICE_INPUT => with_params(id, &req.params, |id, p: InputParams| {
             crate::app_api::input(state, id, &p)
+        }),
+        methods::DEVICE_FINGERPRINT => with_params(
+            id,
+            &req.params,
+            |id, p: umr_api::methods::FingerprintParams| crate::app_api::fingerprint(state, id, &p),
+        ),
+        methods::DEVICE_AUTH_STATE => with_target(id, &req.params, |id, p: TargetParams| {
+            crate::app_api::auth_state(state, id, &p)
         }),
         methods::DEVICE_POSTURE => with_params(id, &req.params, |id, p: PostureParams| {
             crate::app_api::posture(state, id, &p)

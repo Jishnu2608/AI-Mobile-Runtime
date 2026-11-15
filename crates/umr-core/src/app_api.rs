@@ -7,6 +7,8 @@
 
 use std::path::{Path, PathBuf};
 
+use serde_json::{json, Value};
+
 use umr_api::methods::{
     AppParams, InputAction, InputParams, InstallAppParams, PostureParams, TargetParams,
 };
@@ -282,6 +284,117 @@ fn profile_of_avd(avd: &str) -> Option<&'static umr_device::catalog::Profile> {
     umr_device::catalog::find(id)
 }
 
+/// What `dumpsys window` and `dumpsys fingerprint` say about locking (PRV-016).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct AuthState {
+    pub locked: bool,
+    pub sensor_active: bool,
+    pub enrolled: u32,
+}
+
+/// Parses the output of [`AUTH_STATE_CMD`].
+pub(crate) fn parse_auth_state(out: &str) -> AuthState {
+    let locked = out
+        .lines()
+        .any(|l| l.trim() == "isKeyguardShowing=true" || l.trim() == "mKeyguardShowing=true");
+    // BiometricScheduler: an authenticate / detect / enrol operation is listening for a finger
+    let sensor_active = out.lines().any(|l| {
+        l.trim()
+            .strip_prefix("Current operation:")
+            .is_some_and(|v| !v.trim().is_empty() && v.trim() != "null")
+    });
+    // `{"service":…,"prints":[{"id":0,"count":N,…}]}`: N enrolled fingers per user
+    let enrolled = out
+        .lines()
+        .filter_map(|l| serde_json::from_str::<Value>(l.trim()).ok())
+        .filter_map(|v| v["prints"].as_array().cloned())
+        .flatten()
+        .filter_map(|p| p["count"].as_u64())
+        .map(|n| u32::try_from(n).unwrap_or(u32::MAX))
+        .sum();
+    AuthState {
+        locked,
+        sensor_active,
+        enrolled,
+    }
+}
+
+/// One shell call: lock screen, fingerprint operation, enrolled count, lock screen disabled.
+const AUTH_STATE_CMD: &str = "dumpsys window | grep -E 'isKeyguardShowing='; \
+     dumpsys fingerprint | grep -E 'Current operation:|\"prints\"'; \
+     echo lock_disabled=$(cmd lock_settings get-disabled 2>/dev/null)";
+
+/// `device.auth_state` (PRV-016).
+pub fn auth_state(state: &ApiState, id: Id, p: &TargetParams) -> Response {
+    let r = target(state, p.target.as_deref()).and_then(|t| {
+        let out = umr_device::adb::shell(state.adb_port, &t.serial, AUTH_STATE_CMD)
+            .map_err(|e| failed(e.to_string()))?;
+        let a = parse_auth_state(&out);
+        Ok(json!({
+            "serial": t.serial,
+            "locked": a.locked,
+            "sensor_active": a.sensor_active,
+            "enrolled": a.enrolled,
+            "lock_disabled": out.contains("lock_disabled=true"),
+        }))
+    });
+    match r {
+        Ok(v) => ok(id, &v),
+        Err(e) => Response::err(Some(id), e),
+    }
+}
+
+/// `device.fingerprint` (PRV-016).
+pub fn fingerprint(state: &ApiState, id: Id, p: &umr_api::methods::FingerprintParams) -> Response {
+    if !(1..=10).contains(&p.id) {
+        return Response::err(
+            Some(id),
+            RpcError::new(codes::INVALID_PARAMS, "finger id must be 1-10"),
+        );
+    }
+    let r = target(state, p.target.as_deref()).and_then(|t| {
+        let Some(g) = &t.grpc else {
+            return Err(unavailable(
+                "the fingerprint sensor needs an emulator started by the product (gRPC)",
+            ));
+        };
+        match p.touch.as_str() {
+            "down" => g.fingerprint(true, p.id).map_err(failed)?,
+            "up" => g.fingerprint(false, p.id).map_err(failed)?,
+            "tap" => {
+                g.fingerprint(true, p.id).map_err(failed)?;
+                std::thread::sleep(std::time::Duration::from_millis(300));
+                g.fingerprint(false, p.id).map_err(failed)?;
+            }
+            other => {
+                return Err(RpcError::new(
+                    codes::INVALID_PARAMS,
+                    format!("unknown touch '{other}': tap, down or up"),
+                ))
+            }
+        }
+        // what the touch did (unlocked? prompt answered?): the lock screen takes a moment to go
+        // away, so read again for up to ~1.6 s until nothing is locked or waiting any more
+        let mut after = None;
+        for _ in 0..4 {
+            std::thread::sleep(std::time::Duration::from_millis(400));
+            let Ok(out) = umr_device::adb::shell(state.adb_port, &t.serial, AUTH_STATE_CMD) else {
+                break;
+            };
+            let a = parse_auth_state(&out);
+            after = Some(json!({ "locked": a.locked, "sensor_active": a.sensor_active, "enrolled": a.enrolled }));
+            if p.touch != "tap" || (!a.locked && !a.sensor_active) {
+                break;
+            }
+        }
+        Ok(json!({ "serial": t.serial, "id": p.id, "touch": p.touch, "after": after }))
+    });
+    match r {
+        Ok(v) => ok(id, &v),
+        Err(e) => Response::err(Some(id), e),
+    }
+}
+
 pub fn posture(state: &ApiState, id: Id, p: &PostureParams) -> Response {
     let Some(want) = umr_device::catalog::Posture::parse(&p.posture) else {
         return Response::err(
@@ -440,6 +553,29 @@ pub fn uninstall(state: &ApiState, id: Id, p: &AppParams) -> Response {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn auth_state_is_read_from_dumpsys() {
+        // captured from an API 36 emulator: unlocked, nothing listening, no finger enrolled
+        let idle = "    isKeyguardShowing=false\nCurrent operation: null\n{\"service\":\"FingerprintProvider/default\",\"prints\":[{\"id\":0,\"count\":0,\"accept\":0}]}\nlock_disabled=true\n";
+        assert_eq!(
+            parse_auth_state(idle),
+            AuthState {
+                locked: false,
+                sensor_active: false,
+                enrolled: 0
+            }
+        );
+        let locked = "    isKeyguardShowing=true\nCurrent operation: {[2] FingerprintDetectClient, proto=6}\n{\"prints\":[{\"id\":0,\"count\":2}]}\n";
+        assert_eq!(
+            parse_auth_state(locked),
+            AuthState {
+                locked: true,
+                sensor_active: true,
+                enrolled: 2
+            }
+        );
+    }
 
     #[test]
     fn png_header_and_profile_names() {

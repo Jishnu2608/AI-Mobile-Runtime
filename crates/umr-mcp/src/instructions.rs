@@ -8,7 +8,8 @@ AI Mobile Runtime runs the user's Android app (Kotlin/Java, Flutter, React Nativ
 emulator and reports what happens. Loop: edit code → saved files reload by themselves (Flutter hot \
 reload, Metro Fast Refresh, an incremental Gradle rebuild for Kotlin/Java) → call runtime_status → if it shows \
 new problems, get_diagnostic <fp> → fix → runtime_status again. Use screenshot (or ui_tree for exact \
-coordinates) to check what the user sees; tap/swipe/type_text take device pixels. runtime_status \
+coordinates) to check what the user sees; tap/swipe/type_text take device pixels; fingerprint \
+touches the fingerprint sensor (lock screen, BiometricPrompt). runtime_status \
 remembers its cursor, so each call shows only what changed. Problems say whether they are in the \
 app's code (origin app) or the toolchain/device/network (origin environment): do not edit app code \
 for environment problems — tell the user. run_project and switch_device may wait for the user's \

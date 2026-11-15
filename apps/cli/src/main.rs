@@ -356,6 +356,24 @@ enum DeviceAction {
         #[arg(long)]
         target: Option<String>,
     },
+    /// Touch the emulator's fingerprint sensor: unlocks the lock screen and answers an app's
+    /// biometric prompt once a finger is enrolled (Settings, with a screen lock set). `down` /
+    /// `up` hold the finger, e.g. while Settings enrols it.
+    Fingerprint {
+        /// tap (default), down or up.
+        #[arg(default_value = "tap")]
+        touch: String,
+        /// Enrolled finger, 1-10.
+        #[arg(long, default_value_t = 1)]
+        finger: i32,
+        #[arg(long)]
+        target: Option<String>,
+    },
+    /// Lock screen and fingerprint state: locked, sensor waiting for a finger, fingers enrolled.
+    Auth {
+        #[arg(long)]
+        target: Option<String>,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -640,6 +658,22 @@ fn main() -> ExitCode {
                     json,
                 } => session_cmd::use_profile(&target, &profile, api, cold, apk, package, json).await,
                 DeviceAction::Rotate { direction } => preview_cmd::rotate(&target, &direction).await,
+                DeviceAction::Fingerprint { touch, finger, target: t } => {
+                    session_cmd::call_print(
+                        &target,
+                        methods::DEVICE_FINGERPRINT,
+                        serde_json::json!({ "touch": touch, "id": finger, "target": t }),
+                    )
+                    .await
+                }
+                DeviceAction::Auth { target: t } => {
+                    session_cmd::call_print(
+                        &target,
+                        methods::DEVICE_AUTH_STATE,
+                        serde_json::json!({ "target": t }),
+                    )
+                    .await
+                }
                 DeviceAction::Posture { posture, target: t } => {
                     session_cmd::call_print(
                         &target,

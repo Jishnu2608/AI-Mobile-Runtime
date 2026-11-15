@@ -196,7 +196,7 @@ fn spawn_frames(
             Err(e) => {
                 let _ = out
                     .send(Message::Text(
-                        serde_json::json!({ "type": "error", "message": e }).to_string(),
+                        serde_json::json!({ "type": "note", "message": e }).to_string(),
                     ))
                     .await;
                 return;
@@ -336,6 +336,14 @@ async fn handle(stream: TcpStream, inner: Arc<Inner>) {
                             }
                             ClientMsg::Stats(ui) => {
                                 inner.stats.lock().unwrap_or_else(PoisonError::into_inner).ui = *ui;
+                            }
+                            ClientMsg::Finger { down, id } => {
+                                // viewing-only windows cannot touch the sensor either
+                                if interact {
+                                    if let Err(e) = emu.fingerprint_async(*down, *id).await {
+                                        let _ = out.send(Message::Text(serde_json::json!({ "type": "note", "message": e }).to_string())).await;
+                                    }
+                                }
                             }
                             _ => {
                                 if let (Some(tx), Some(ev)) = (&input, protocol::to_input(&msg, device)) {

@@ -1,8 +1,10 @@
 // Phase 4 preview window: frames from the Core's preview server drawn with WebGL2 (PRV-009),
 // pointer / wheel / keyboard input sent back (PRV-010, PRV-004), toolbar (PRV-005) and device
 // switcher (PRV-007). The window reports its own timing so the Core can check NFR-02a / NFR-03.
+// PRV-016: the screen sits in a phone body (thin bezel, punch-hole camera) and shows an
+// in-display fingerprint sensor while the lock screen or an app's biometric prompt waits for one.
 import { useCallback, useEffect, useRef, useState } from "react";
-import { call } from "./api";
+import { call, inTauri } from "./api";
 import { FrameRenderer, percentiles } from "./gl";
 import { Approvals, DiagnosticsPanel, useProblems } from "./Problems";
 
@@ -14,6 +16,14 @@ interface Hello {
   width: number;
   height: number;
   interact: boolean;
+}
+
+/** `device.auth_state` (PRV-016). */
+interface AuthState {
+  locked: boolean;
+  sensor_active: boolean;
+  enrolled: number;
+  lock_disabled?: boolean;
 }
 
 interface Profile {
@@ -47,6 +57,11 @@ export function Preview() {
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [panel, setPanel] = useState(false);
+  const stageRef = useRef<HTMLDivElement>(null);
+  const [stage, setStage] = useState({ w: 0, h: 0 });
+  const [landscape, setLandscape] = useState(false);
+  const [auth, setAuth] = useState<AuthState | null>(null);
+  const [finger, setFinger] = useState(false);
   const problems = useProblems();
   const errors = problems.filter((p) => p.severity === "error").length;
 
@@ -104,6 +119,8 @@ export function Preview() {
           } else if (m.type === "waiting") {
             setDevice(null);
             setStatus("No device is running. Start one with `umr run` or pick a device above.");
+          } else if (m.type === "note") {
+            setNote(m.message);
           } else if (m.type === "error") {
             setStatus(`Preview error: ${m.message}`);
           }
@@ -118,6 +135,7 @@ export function Preview() {
         hops.current.push(Math.max(0, Date.now() - sentUs / 1000));
         if (hops.current.length > 600) hops.current.shift();
         frameSize.current = { w, h };
+        setLandscape(w > h);
         pending.current = { data: new Uint8Array(buf, FRAME_HEADER), w, h };
       };
       ws.onclose = () => {
@@ -142,6 +160,8 @@ export function Preview() {
     requestAnimationFrame(drawLoop);
     const ro = new ResizeObserver(() => sendResize());
     ro.observe(c);
+    const so = new ResizeObserver(([e]) => setStage({ w: e.contentRect.width, h: e.contentRect.height }));
+    if (stageRef.current) so.observe(stageRef.current);
     connect();
     call<{ profiles: Profile[] }>("device.profiles").then((v) => setProfiles(v.profiles ?? [])).catch(() => {});
     // the window's timing → Core (NFR-02a / NFR-03), and the fps badge
@@ -155,9 +175,39 @@ export function Preview() {
     return () => {
       clearInterval(timer);
       ro.disconnect();
+      so.disconnect();
       wsRef.current?.close();
     };
   }, [connect, drawLoop, sendResize]);
+
+  // PRV-016: is the lock screen up, or is an app (or Settings) waiting for a fingerprint?
+  useEffect(() => {
+    if (!device && inTauri) {
+      setAuth(null);
+      return;
+    }
+    let busy = false;
+    const poll = () => {
+      if (busy || document.hidden) return;
+      busy = true;
+      call<AuthState>("device.auth_state", {})
+        .then(setAuth)
+        .catch(() => setAuth(null))
+        .finally(() => (busy = false));
+    };
+    poll();
+    const t = setInterval(poll, 1000);
+    return () => clearInterval(t);
+  }, [device]);
+
+  const onFinger = (down: boolean) => (e: React.PointerEvent<HTMLDivElement>) => {
+    e.stopPropagation();
+    e.preventDefault();
+    if (down) e.currentTarget.setPointerCapture(e.pointerId);
+    else if (!finger) return;
+    setFinger(down);
+    send({ t: "finger", down, id: 1 });
+  };
 
   /** Pointer position → device pixels (rotation-aware: frames come in the screen's orientation). */
   const toDevice = (e: { clientX: number; clientY: number }): { x: number; y: number } | null => {
@@ -279,23 +329,94 @@ export function Preview() {
         <span className="pv-fps" title="Frames drawn per second">{device ? `${fps} fps` : ""}</span>
       </div>
       <Approvals />
-      <div className="pv-stage">
-        <canvas
-          ref={canvasRef}
-          className="pv-canvas"
-          tabIndex={0}
-          onPointerDown={onPointer("down")}
-          onPointerMove={onPointer("move")}
-          onPointerUp={onPointer("up")}
-          onPointerCancel={onPointer("up")}
-          onWheel={onWheel}
-          onKeyDown={onKey}
-          onContextMenu={(e) => e.preventDefault()}
-        />
-        {status && <div className="pv-overlay">{status}</div>}
+      <div className="pv-stage" ref={stageRef}>
+        <div className={landscape ? "pv-phone land" : "pv-phone"} style={phoneStyle(stage, device, landscape)}>
+          <canvas
+            ref={canvasRef}
+            className="pv-canvas"
+            tabIndex={0}
+            onPointerDown={onPointer("down")}
+            onPointerMove={onPointer("move")}
+            onPointerUp={onPointer("up")}
+            onPointerCancel={onPointer("up")}
+            onWheel={onWheel}
+            onKeyDown={onKey}
+            onContextMenu={(e) => e.preventDefault()}
+          />
+          <div className="pv-camera" aria-hidden="true" />
+          {auth && (auth.locked || auth.sensor_active) && (device?.interact ?? !inTauri) && (
+            <div
+              className={finger ? "pv-fp on" : "pv-fp"}
+              role="button"
+              aria-label="Fingerprint sensor"
+              title={
+                auth.enrolled
+                  ? "Fingerprint sensor: hold to touch it with enrolled finger 1"
+                  : "Fingerprint sensor. No fingerprint is enrolled yet: set a screen lock (PIN), then Settings > Security & privacy > Device unlock > Fingerprint, and hold here each time it asks"
+              }
+              onPointerDown={onFinger(true)}
+              onPointerUp={onFinger(false)}
+              onPointerCancel={onFinger(false)}
+              onContextMenu={(e) => e.preventDefault()}
+            >
+              <FingerprintGlyph />
+            </div>
+          )}
+          {status && <div className="pv-overlay">{status}</div>}
+        </div>
       </div>
       {panel && <DiagnosticsPanel problems={problems} onClose={() => setPanel(false)} />}
       {note && <div className="pv-note" onClick={() => setNote("")}>{note}</div>}
     </div>
+  );
+}
+
+/**
+ * Phone body size for the stage: the screen keeps the device's aspect (so the frame fills the
+ * canvas), a thin bezel around it, corner radii that follow the screen size. CSS variables drive
+ * the camera hole and the sensor so they scale with the phone.
+ */
+function phoneStyle(stage: { w: number; h: number }, device: Hello | null, landscape: boolean): React.CSSProperties {
+  const short = device ? Math.min(device.device_width, device.device_height) : 1080;
+  const long = device ? Math.max(device.device_width, device.device_height) : 2400;
+  const [aw, ah] = landscape ? [long, short] : [short, long];
+  const margin = 14;
+  // fit screen + bezel into the stage
+  let w = Math.max(40, stage.w - 2 * margin);
+  let h = (w * ah) / aw;
+  if (h > stage.h - 2 * margin) {
+    h = Math.max(40, stage.h - 2 * margin);
+    w = (h * aw) / ah;
+  }
+  const b = Math.max(4, Math.min(9, Math.round(Math.min(w, h) * 0.02)));
+  const screenShort = Math.min(w, h) - 2 * b;
+  const radius = Math.round(screenShort * 0.085);
+  return {
+    width: Math.round(w),
+    height: Math.round(h),
+    padding: b,
+    borderRadius: radius + b,
+    ["--screen-r" as string]: `${radius}px`,
+    ["--short" as string]: `${screenShort}px`,
+  };
+}
+
+/** The in-display sensor's mark: ridges drawn as nested arcs (own artwork). */
+function FingerprintGlyph() {
+  const ridges = [
+    "M12 4.2c-3.9 0-7 2.6-7.6 6.2",
+    "M19.6 10.4C19 6.8 15.9 4.2 12 4.2",
+    "M7.4 18.6c-.9-1.5-1.4-3.2-1.4-5 0-3.3 2.7-6 6-6s6 2.7 6 6v.6",
+    "M10 20.4c-1.3-1.9-2-4.1-2-6.8 0-2.2 1.8-4 4-4s4 1.8 4 4c0 1-.8 1.8-1.8 1.8",
+    "M12.9 20.8c-1.8-1.9-2.9-4.4-2.9-7.2 0-1.1.9-2 2-2s2 .9 2 2c0 2.4 1.5 4.4 3.6 5.2",
+    "M15.8 19.8c-1.9-1.4-3.8-3.4-3.8-6.2",
+    "M18 16.4c.4-1 .4-2 .4-2.8",
+  ];
+  return (
+    <svg viewBox="0 0 24 24" className="pv-fp-glyph" aria-hidden="true">
+      {ridges.map((d) => (
+        <path key={d} d={d} fill="none" stroke="currentColor" strokeWidth="1.15" strokeLinecap="round" />
+      ))}
+    </svg>
   );
 }

@@ -83,7 +83,7 @@ async fn the_catalogue_is_well_formed() {
         .await
         .unwrap();
     let list = r["result"]["tools"].as_array().unwrap();
-    assert_eq!(list.len(), 16);
+    assert_eq!(list.len(), 17);
     for t in list {
         let name = t["name"].as_str().unwrap();
         assert!(

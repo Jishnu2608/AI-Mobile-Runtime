@@ -43,7 +43,16 @@ umr trust .        # once per folder: allows its build scripts to run
 umr run            # builds, boots a phone, installs, launches, opens the preview
 ```
 
-The preview docks on the right of your screen. Click and type in it like on a phone; the toolbar has back, home, recents, rotate, screenshot, reload, and **☰ / ⚠** for problems and logs.
+The preview docks on the right of your screen, inside a phone body with thin bezels and a punch-hole front camera. Click and type in it like on a phone; the toolbar has back, home, recents, rotate, screenshot, reload, and **☰ / ⚠** for problems and logs.
+
+### Fingerprint login
+When the phone shows its lock screen, or your app asks for a fingerprint (`BiometricPrompt`), an in-display fingerprint sensor appears near the bottom of the screen. Hold it with the mouse to put a finger on the sensor; it lights up while touched and disappears again once the phone is unlocked. To test fingerprint login in your app:
+
+1. Set a screen lock on the emulator (Settings › Security & privacy › Device unlock › Screen lock, a PIN is enough).
+2. Settings › Device unlock › Fingerprint: each time it says *Touch the sensor*, hold the sensor in the preview (or run `umr device fingerprint`). Three touches enrol finger 1.
+3. Lock the phone (power key) or open your app's fingerprint prompt, then touch the sensor: it unlocks or passes authentication.
+
+`umr device auth` shows whether the phone is locked, whether something waits for a finger, and how many are enrolled; `umr device fingerprint down` / `up` hold the finger. Agents use the `fingerprint` tool. The emulator's own image keeps its sensor "on the back of the phone" in Settings texts; the preview draws it on the screen, as on current phones.
 Saved files reload by themselves: Flutter hot reload, Metro Fast Refresh, and for Kotlin/Java an incremental Gradle rebuild and reinstall (about 15–20 s). `umr reload full` forces a rebuild.
 
 ![The Problems panel of the preview window, with a "How to fix" link for each category](images/preview-problems.png)

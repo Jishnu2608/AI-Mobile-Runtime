@@ -11,6 +11,7 @@
 //! * `{"t":"touch","x":..,"y":..,"p":1|0,"id":0}` — pressure 0 = finger up
 //! * `{"t":"key","key":"GoBack","e":"press"|"down"|"up"}`, `{"t":"text","text":".."}`
 //! * `{"t":"wheel","dx":0,"dy":-120}`
+//! * `{"t":"finger","down":true,"id":1}` — finger on / off the fingerprint sensor (PRV-016)
 //! * `{"t":"resize","w":..,"h":..}` — stream at this size (the window's canvas size)
 //! * `{"t":"stats", "draw_p50":.., "draw_p95":.., "hop_p95":.., "fps":..}` — the window's timing
 
@@ -64,7 +65,17 @@ pub enum ClientMsg {
         w: u32,
         h: u32,
     },
+    /// The in-display fingerprint sensor of the preview (PRV-016).
+    Finger {
+        down: bool,
+        #[serde(default = "first_finger")]
+        id: i32,
+    },
     Stats(crate::stats::UiStats),
+}
+
+fn first_finger() -> i32 {
+    1
 }
 
 /// Keys the window may send (W3C names the emulator maps; anything else is refused).
@@ -122,7 +133,7 @@ pub fn to_input(m: &ClientMsg, device: (u32, u32)) -> Option<InputEvent> {
             (*dx).clamp(-1200, 1200),
             (*dy).clamp(-1200, 1200),
         )),
-        ClientMsg::Resize { .. } | ClientMsg::Stats(_) => None,
+        ClientMsg::Resize { .. } | ClientMsg::Stats(_) | ClientMsg::Finger { .. } => None,
     }
 }
 
@@ -173,6 +184,9 @@ mod tests {
         );
         let bad: ClientMsg = serde_json::from_str(r#"{"t":"key","key":"LaunchMissiles"}"#).unwrap();
         assert!(to_input(&bad, (1, 1)).is_none());
+        let f: ClientMsg = serde_json::from_str(r#"{"t":"finger","down":true}"#).unwrap();
+        assert_eq!(f, ClientMsg::Finger { down: true, id: 1 });
+        assert!(to_input(&f, (1, 1)).is_none(), "not a touch on the screen");
         let r: ClientMsg = serde_json::from_str(r#"{"t":"resize","w":400,"h":800}"#).unwrap();
         assert!(to_input(&r, (1, 1)).is_none());
         assert!(serde_json::from_str::<ClientMsg>(r#"{"t":"shell","cmd":"rm"}"#).is_err());
