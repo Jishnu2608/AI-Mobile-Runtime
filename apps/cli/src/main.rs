@@ -20,6 +20,7 @@ mod mcp_cmd;
 mod plan_print;
 mod preview_cmd;
 mod project_cmd;
+mod rpc_cmd;
 mod run_cmd;
 mod session_cmd;
 mod update_cmd;
@@ -191,6 +192,14 @@ enum Command {
         /// One JSON object per line.
         #[arg(long)]
         json: bool,
+    },
+    /// The VS Code extension's connection to the Runtime Core: JSON requests on stdin, answers
+    /// on stdout (a fixed set of preview, run and problem methods).
+    #[command(hide = true)]
+    Rpc {
+        /// Serve newline-delimited JSON on stdin / stdout.
+        #[arg(long)]
+        stdio: bool,
     },
     /// MCP server for an AI coding agent on stdin/stdout (the agent starts it; see
     /// `umr agent setup`).
@@ -724,6 +733,7 @@ fn main() -> ExitCode {
                 ExitCode::SUCCESS
             }
             Command::Mcp { client, .. } => mcp_cmd::run(&target, &client).await,
+            Command::Rpc { .. } => rpc_cmd::stdio(&target).await,
             Command::Agent { action } => match action {
                 AgentAction::Setup { agent, project, scope, remove, print, yes, dry_run, json } => {
                     let o = agent_setup::SetupOptions { project, scope, yes, dry_run, remove, print, json };

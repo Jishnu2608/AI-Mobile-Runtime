@@ -85,10 +85,17 @@ fn query<'a>(q: &'a str, key: &str) -> Option<&'a str> {
         .find_map(|kv| kv.strip_prefix(key)?.strip_prefix('='))
 }
 
-/// Whether a browser origin may connect (`None`: not a browser, e.g. a test client).
+/// Whether a browser origin may connect (`None`: not a browser, e.g. a test client). VS Code
+/// web views (the extension's Mobile Preview panel, VSC-001) have a `vscode-webview://<id>`
+/// origin that no web page can claim.
 #[must_use]
 pub fn origin_allowed(origin: Option<&str>) -> bool {
-    origin.is_none_or(|o| ORIGINS.contains(&o))
+    origin.is_none_or(|o| {
+        ORIGINS.contains(&o)
+            || o.strip_prefix("vscode-webview://").is_some_and(|id| {
+                !id.is_empty() && id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')
+            })
+    })
 }
 
 impl PreviewServer {
@@ -378,6 +385,9 @@ mod tests {
         assert!(origin_allowed(Some("http://tauri.localhost")));
         assert!(!origin_allowed(Some("https://evil.example")));
         assert!(!origin_allowed(Some("http://127.0.0.1:8080")));
+        assert!(origin_allowed(Some("vscode-webview://1a2b3c-4d5e")));
+        assert!(!origin_allowed(Some("vscode-webview://")));
+        assert!(!origin_allowed(Some("vscode-webview://x.evil.example/")));
         assert_eq!(query("a=1&token=abc&w=2", "token"), Some("abc"));
         assert_eq!(query("tokenx=1", "token"), None);
         assert_eq!(token().len(), 32);

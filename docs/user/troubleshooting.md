@@ -122,10 +122,10 @@ Start with `umr problems` (or ☰ in the preview window). Every problem has a **
 
 | | |
 |---|---|
-| Symptoms | `filename … too long`. |
-| Likely cause | The Windows path limit of 260 characters. |
-| How to check | Count the project path plus the deepest `node_modules` or `build` folder. |
-| Fix | `umr admin enable-long-paths`, or move the project to a shorter path. |
+| Symptoms | `filename … too long`, or `ninja: error: Stat(…): Filename longer than 260 characters` from `buildCMakeDebug`. |
+| Likely cause | The Windows path limit of 260 characters. React Native native modules (for example `react-native-safe-area-context`) compile C++ files into very deep `android/app/.cxx` paths, and ninja ignores the long-paths setting. |
+| How to check | Count the project path plus the deepest `node_modules`, `build` or `.cxx` folder. |
+| Fix | Move the project to a shorter path (such as `C:\dev\app`), then delete `android/app/.cxx` and run again. `umr admin enable-long-paths` helps Gradle and Node, not ninja. |
 
 
 ## Network

@@ -19,6 +19,13 @@ $steps = @(
     @{ Name = 'UI build';  Cmd = { npm --prefix apps/desktop/ui ci --no-audit --no-fund; if ($LASTEXITCODE -eq 0) { npm --prefix apps/desktop/ui run build } } },
     @{ Name = 'Clippy';    Cmd = { cargo clippy --workspace --all-targets --locked } },
     @{ Name = 'Test';      Cmd = { cargo test --workspace --locked --no-fail-fast } },
+    # VS Code extension (VSC-001): compile, unit tests, package (needs the UI build above).
+    @{ Name = 'VS Code ext'; Cmd = {
+        $v = 'apps/vscode'
+        npm --prefix $v ci --no-audit --no-fund
+        if ($LASTEXITCODE -eq 0) { npm --prefix $v run package }
+        if ($LASTEXITCODE -eq 0) { npm --prefix $v test }
+    } },
     # Website (Phase 9, webapp/frontend): isolated npm project; static export + link check.
     @{ Name = 'Website';   Cmd = {
         $w = 'webapp/frontend'

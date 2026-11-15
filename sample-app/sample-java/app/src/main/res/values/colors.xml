@@ -1,0 +1,7 @@
+<resources>
+    <color name="background">#FF101318</color>
+    <color name="digit">#FF262B33</color>
+    <color name="function">#FF3A414C</color>
+    <color name="accent">#FFFF9F0A</color>
+    <color name="muted">#FF9AA4B2</color>
+</resources>

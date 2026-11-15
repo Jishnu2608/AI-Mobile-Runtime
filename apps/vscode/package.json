@@ -1,0 +1,154 @@
+{
+  "name": "umr-vscode",
+  "displayName": "AI Mobile Runtime",
+  "description": "Run your Android app (Kotlin, Java, Flutter, React Native) on an emulator inside VS Code: live phone preview, build errors and crashes in the Problems panel, Copilot agent tools.",
+  "version": "0.1.0",
+  "publisher": "ai-mobile-runtime",
+  "private": true,
+  "license": "SEE LICENSE IN README.md",
+  "icon": "media/icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Jishnu2608/AI-Mobile-Runtime"
+  },
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Other",
+    "Debuggers",
+    "Testing"
+  ],
+  "keywords": [
+    "android",
+    "emulator",
+    "flutter",
+    "react native",
+    "kotlin"
+  ],
+  "main": "./out/extension.js",
+  "activationEvents": [
+    "workspaceContains:**/AndroidManifest.xml",
+    "workspaceContains:pubspec.yaml",
+    "workspaceContains:app.json",
+    "workspaceContains:settings.gradle.kts",
+    "workspaceContains:settings.gradle"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false,
+      "description": "Running a project builds it with its own scripts (Gradle, npm, Flutter)."
+    }
+  },
+  "contributes": {
+    "commands": [
+      {
+        "command": "umr.run",
+        "title": "Run on Emulator",
+        "category": "AI Mobile Runtime",
+        "icon": "$(play)"
+      },
+      {
+        "command": "umr.reload",
+        "title": "Reload (hot)",
+        "category": "AI Mobile Runtime",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "umr.restart",
+        "title": "Restart the App",
+        "category": "AI Mobile Runtime"
+      },
+      {
+        "command": "umr.rebuild",
+        "title": "Rebuild and Reinstall",
+        "category": "AI Mobile Runtime"
+      },
+      {
+        "command": "umr.stop",
+        "title": "Stop the App",
+        "category": "AI Mobile Runtime",
+        "icon": "$(debug-stop)"
+      },
+      {
+        "command": "umr.openPreview",
+        "title": "Open Mobile Preview",
+        "category": "AI Mobile Runtime",
+        "icon": "$(device-mobile)"
+      },
+      {
+        "command": "umr.connectCopilot",
+        "title": "Connect Copilot (agent mode)",
+        "category": "AI Mobile Runtime"
+      },
+      {
+        "command": "umr.locate",
+        "title": "Locate umr.exe",
+        "category": "AI Mobile Runtime"
+      },
+      {
+        "command": "umr.menu",
+        "title": "Show Actions",
+        "category": "AI Mobile Runtime"
+      }
+    ],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "umr.run",
+          "group": "navigation@90",
+          "when": "umr.active && !umr.running"
+        },
+        {
+          "command": "umr.reload",
+          "group": "navigation@90",
+          "when": "umr.active && umr.running"
+        },
+        {
+          "command": "umr.openPreview",
+          "group": "navigation@91",
+          "when": "umr.active"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "umr.menu",
+          "when": "false"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "AI Mobile Runtime",
+      "properties": {
+        "umr.path": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Full path of `umr.exe`. Empty: found on `PATH` or in the default install folder (`%LOCALAPPDATA%\\AI Mobile Runtime`).",
+          "scope": "machine"
+        },
+        "umr.openPreviewOnRun": {
+          "type": "boolean",
+          "default": true,
+          "description": "Open the Mobile Preview panel when a run starts."
+        },
+        "umr.problems": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show the runtime's build errors, runtime errors and crashes in the Problems panel."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "ui": "node scripts/copy-ui.mjs",
+    "compile": "tsc -p .",
+    "package": "npm run ui && npm run compile && node -e \"require('fs').mkdirSync('dist',{recursive:true})\" && vsce package --skip-license --allow-missing-repository -o dist/umr-vscode.vsix",
+    "test": "node --test \"out/test/**/*.test.js\""
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/vscode": "~1.90.0",
+    "@vscode/vsce": "^3.2.0",
+    "typescript": "^5.6.0"
+  }
+}

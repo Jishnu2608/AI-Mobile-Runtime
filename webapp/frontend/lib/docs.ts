@@ -63,6 +63,13 @@ export const docs: DocPage[] = [
     source: { kind: "generated", file: "agents.md", format: "md" },
   },
   {
+    slug: ["guides", "vscode"],
+    title: "VS Code",
+    description: "The extension: run on the emulator, the phone preview in a panel, problems, Copilot agent mode.",
+    group: "Guides",
+    source: { kind: "generated", file: "vscode.md", format: "md" },
+  },
+  {
     slug: ["guides", "device-profiles"],
     title: "Device profiles",
     description: "Phone, foldable and tablet sizes, and switching between them.",

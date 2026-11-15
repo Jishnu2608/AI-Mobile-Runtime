@@ -45,6 +45,8 @@ umr run            # builds, boots a phone, installs, launches, opens the previe
 
 The preview docks on the right of your screen, inside a phone body with thin bezels and a punch-hole front camera. Click and type in it like on a phone; the toolbar has back, home, recents, rotate, screenshot, reload, and **☰ / ⚠** for problems and logs.
 
+Working in VS Code? The [VS Code extension](vscode.md) does the same from the Command Palette and shows the phone in a panel beside your code.
+
 ### Fingerprint login
 When the phone shows its lock screen, or your app asks for a fingerprint (`BiometricPrompt`), an in-display fingerprint sensor appears near the bottom of the screen. Hold it with the mouse to put a finger on the sensor; it lights up while touched and disappears again once the phone is unlocked. To test fingerprint login in your app:
 

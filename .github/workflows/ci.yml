@@ -41,6 +41,11 @@ jobs:
         run: |
           npm --prefix apps/desktop/ui ci --no-audit --no-fund
           npm --prefix apps/desktop/ui run build
+      - name: VS Code extension
+        run: |
+          npm --prefix apps/vscode ci --no-audit --no-fund
+          npm --prefix apps/vscode run package
+          npm --prefix apps/vscode test
       - name: Clippy
         run: cargo clippy --workspace --all-targets --locked
       - name: Test

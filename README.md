@@ -16,7 +16,9 @@ umr agent setup claude-code      # or codex: connect your agent (shows the chang
 - **Zero-config toolchain** — detects what your project needs (JDK, Android SDK packages, emulator image, Flutter, Node) and installs only that, from the official publishers, verified, into its own folder. Your `PATH`, `JAVA_HOME`, `ANDROID_HOME` and Android Studio are never touched.
 - **Live preview beside your agent** — the real app on a real emulator, 40+ fps, mouse and keyboard input, phone / foldable / tablet sizes, hot reload for Flutter and React Native, rebuilds for Kotlin/Java.
 - **Diagnostics an agent can use** — build errors, crashes, ANRs and runtime exceptions, classified (build, runtime, crash, environment, device, network), deduplicated, located at file and line, and marked as *your code* or *environment*.
-- **Agent integration** — an MCP server with 16 tools (status digest, problems, logs, screenshot, UI tree, input, reload, run) plus a CLI; per-agent permissions, approvals for new folders and device switches, an audit log, and sanitised output.
+- **Agent integration** — an MCP server with 17 tools (status digest, problems, logs, screenshot, UI tree, input, reload, run) plus a CLI; per-agent permissions, approvals for new folders and device switches, an audit log, and sanitised output.
+
+- **VS Code extension** — `apps/vscode`: run on the emulator, the phone preview in a panel, runtime problems in the Problems panel, Copilot agent mode. Sample apps to try it: `sample-app/` (a calculator in Kotlin, Java, Dart and React Native).
 
 It is **not** an IDE, an AI agent or an emulator of its own: it orchestrates Google's official tools and the frameworks' own CLIs.
 
@@ -28,6 +30,7 @@ Download the installer (`AI-Mobile-Runtime_<version>_x64-setup.exe`), check its 
 | [Getting started](docs/user/getting-started.md) | install → setup wizard → first app → connect an agent |
 | [Requirements](docs/user/requirements.md) | Windows 11 x64, virtualization, 16 GB RAM recommended, 8–15 GB disk |
 | [Agents](docs/user/agents.md) | Claude Code, Codex, other MCP clients; tools and permissions |
+| [VS Code](docs/user/vscode.md) | The extension: run, phone preview panel, Problems panel, Copilot agent mode |
 | [Troubleshooting](docs/user/troubleshooting.md) · [Privacy and security](docs/user/privacy-and-security.md) · [Uninstall](docs/user/uninstall-and-data.md) · [Command reference](docs/user/cli-reference.md) | |
 
 ## Scope

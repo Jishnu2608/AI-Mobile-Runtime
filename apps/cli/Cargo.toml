@@ -24,7 +24,7 @@ umr-elevate = { path = "../../helpers/elevated-helper" }
 # Command-line parsing (subcommands, --help, --version).
 clap = { version = "4", features = ["derive"] }
 serde_json = { version = "1", features = ["preserve_order"] }
-tokio = { version = "1", features = ["rt", "time", "signal", "macros"] }
+tokio = { version = "1", features = ["rt", "time", "signal", "macros", "io-std", "io-util", "sync"] }
 
 [dev-dependencies]
 serde_json = "1"

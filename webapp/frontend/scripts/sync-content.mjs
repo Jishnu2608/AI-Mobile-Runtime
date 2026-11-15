@@ -16,6 +16,7 @@ mkdirSync(out, { recursive: true });
 const files = [
   ["docs/user/getting-started.md", "getting-started.md"],
   ["docs/user/agents.md", "agents.md"],
+  ["docs/user/vscode.md", "vscode.md"],
   ["docs/user/uninstall-and-data.md", "uninstall-and-data.md"],
   ["docs/user/privacy-and-security.md", "privacy-and-security.md"],
   ["docs/user/cli-reference.md", "cli-reference.md"],

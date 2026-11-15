@@ -4,9 +4,39 @@ import { invoke } from "@tauri-apps/api/core";
 import { mockCall } from "./mock";
 import { mockAgent } from "./mockAgents";
 
+// VSC-001: inside the VS Code extension's Mobile Preview panel the page talks to the extension,
+// which forwards to the Runtime Core (`umr rpc --stdio`).
+interface VsCodeApi {
+  postMessage(m: unknown): void;
+}
+declare const acquireVsCodeApi: undefined | (() => VsCodeApi);
+const vscode: VsCodeApi | null = typeof acquireVsCodeApi === "function" ? acquireVsCodeApi() : null;
+const pending = new Map<number, { resolve: (v: any) => void; reject: (e: unknown) => void }>();
+let nextId = 1;
+if (vscode) {
+  window.addEventListener("message", (ev: MessageEvent) => {
+    const m = ev.data as { type?: string; id?: number; result?: unknown; error?: string };
+    if (m?.type !== "rpc" || m.id === undefined) return;
+    const p = pending.get(m.id);
+    if (!p) return;
+    pending.delete(m.id);
+    if (m.error !== undefined) p.reject(m.error);
+    else p.resolve(m.result);
+  });
+}
+
 export const inTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+/** Inside a real app (desktop window or VS Code panel), not the browser mock. */
+export const inApp = inTauri || vscode !== null;
 
 export async function call<T = any>(method: string, params: unknown = null): Promise<T> {
+  if (vscode) {
+    const id = nextId++;
+    return new Promise<T>((resolve, reject) => {
+      pending.set(id, { resolve, reject });
+      vscode.postMessage({ type: "rpc", id, method, params });
+    });
+  }
   if (!inTauri) return mockCall(method, params) as Promise<T>;
   return invoke<T>("core_call", { method, params });
 }
@@ -27,6 +57,11 @@ const DOCS_BASE = "https://github.com/Jishnu2608/AI-Mobile-Runtime/blob/main/doc
 
 /** Opens a guide page in the browser. */
 export async function openDocs(page: DocsPage, anchor?: string): Promise<void> {
+  if (vscode) {
+    // the extension opens it in the browser (web views cannot open windows)
+    vscode.postMessage({ type: "openDocs", url: `${DOCS_BASE}${page}.md${anchor ? `#${anchor}` : ""}` });
+    return;
+  }
   if (!inTauri) {
     window.open(`${DOCS_BASE}${page}.md${anchor ? `#${anchor}` : ""}`, "_blank", "noopener");
     return;

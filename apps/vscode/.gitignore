@@ -1,0 +1,5 @@
+node_modules/
+out/
+dist/
+# copied from the desktop UI build by `npm run ui`
+media/ui/

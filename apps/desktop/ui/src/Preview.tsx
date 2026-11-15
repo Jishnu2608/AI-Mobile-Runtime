@@ -4,7 +4,7 @@
 // PRV-016: the screen sits in a phone body (thin bezel, punch-hole camera) and shows an
 // in-display fingerprint sensor while the lock screen or an app's biometric prompt waits for one.
 import { useCallback, useEffect, useRef, useState } from "react";
-import { call, inTauri } from "./api";
+import { call, inApp } from "./api";
 import { FrameRenderer, percentiles } from "./gl";
 import { Approvals, DiagnosticsPanel, useProblems } from "./Problems";
 
@@ -182,7 +182,7 @@ export function Preview() {
 
   // PRV-016: is the lock screen up, or is an app (or Settings) waiting for a fingerprint?
   useEffect(() => {
-    if (!device && inTauri) {
+    if (!device && inApp) {
       setAuth(null);
       return;
     }
@@ -344,7 +344,7 @@ export function Preview() {
             onContextMenu={(e) => e.preventDefault()}
           />
           <div className="pv-camera" aria-hidden="true" />
-          {auth && (auth.locked || auth.sensor_active) && (device?.interact ?? !inTauri) && (
+          {auth && (auth.locked || auth.sensor_active) && (device?.interact ?? !inApp) && (
             <div
               className={finger ? "pv-fp on" : "pv-fp"}
               role="button"
