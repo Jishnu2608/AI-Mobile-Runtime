@@ -38,8 +38,7 @@ export default async function PrivacyPage() {
             can run the runtime. The result is shown to you and not stored or sent.
           </li>
           <li>
-            <strong>Policy still open.</strong> Whether the site will ever collect anonymous usage data is open decision W7 (DEC-027). Until
-            it is decided, the answer is no.
+            <strong>No analytics.</strong> The site collects no usage data, uses no trackers and sets no cookies.
           </li>
         </ul>
       </DocSection>

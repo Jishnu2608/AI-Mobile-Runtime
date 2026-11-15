@@ -4,7 +4,7 @@ AI Mobile Runtime includes the following third-party software. Each package is u
 
 Tools the runtime downloads at the user's request (JDK, Android SDK and emulator, Flutter, Node.js, Gradle and others) are not part of this distribution; their licences are shown in the app before they are installed.
 
-## Rust crates (348)
+## Rust crates (349)
 
 | Crate | Version | Licence | Source |
 |---|---|---|---|
@@ -202,6 +202,7 @@ Tools the runtime downloads at the user's request (JDK, Android SDK and emulator
 | regex-automata | 0.4.18 | MIT OR Apache-2.0 | https://github.com/rust-lang/regex |
 | regex-syntax | 0.8.11 | MIT OR Apache-2.0 | https://github.com/rust-lang/regex |
 | reqwest | 0.12.28 | MIT OR Apache-2.0 | https://github.com/seanmonstar/reqwest |
+| rfd | 0.15.4 | MIT | https://github.com/PolyMeilex/rfd |
 | roxmltree | 0.20.0 | MIT OR Apache-2.0 | https://github.com/RazrFalcon/roxmltree |
 | rusqlite | 0.42.0 | MIT | https://github.com/rusqlite/rusqlite |
 | rustc-hash | 2.1.3 | Apache-2.0 OR MIT | https://github.com/rust-lang/rustc-hash |

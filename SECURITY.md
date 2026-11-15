@@ -11,7 +11,7 @@ Only the latest release receives security fixes.
 ## Scope
 In scope: the Runtime Core, `umr`, the desktop app, the elevation helper, the installer and updater, the MCP server, and how they handle downloads, archives, the local API, the preview connection, project trust, agent permissions and logs.
 
-Out of scope: vulnerabilities in third-party tools the runtime downloads at the user's request (Android SDK, emulator, JDK, Flutter, Node, Gradle) — report those to their publishers; and actions of an agent that the user allowed to run arbitrary shell commands (see the threat model).
+Out of scope: vulnerabilities in third-party tools the runtime downloads at the user's request (Android SDK, emulator, JDK, Flutter, Node, Gradle) — report those to their publishers; and actions of an agent that the user allowed to run arbitrary shell commands.
 
 ## Design and review
-The threat model (T1–T12) and the latest review are in [`docs/security/`](docs/security/review-v1.md). Releases list their SHA-256 checksums; code signing is planned.
+Every release lists the SHA-256 checksum of each file; code signing is planned.

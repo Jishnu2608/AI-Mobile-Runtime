@@ -69,6 +69,37 @@ export async function openDocs(page: DocsPage, anchor?: string): Promise<void> {
   await invoke("open_docs", { page, anchor: anchor ?? null });
 }
 
+/**
+ * Windows' own folder picker (the app's `pick_folder` command); `null` when cancelled. The page gets
+ * the chosen path only, no file system access. In a plain browser: a sample path (UI development).
+ */
+export async function pickFolder(start?: string): Promise<string | null> {
+  if (!inTauri) return "D:\\Work\\my-app";
+  return invoke<string | null>("pick_folder", { start: start ?? null });
+}
+
+/** UPD-001: a newer version on the configured update channel (`available` null: up to date). */
+export interface UpdateInfo {
+  current: string;
+  configured?: boolean;
+  available?: { version: string; date?: string; notes_url?: string; signed?: boolean } | null;
+}
+
+export async function checkUpdate(): Promise<UpdateInfo> {
+  if (!inTauri) {
+    // `?update=1` shows the banner in a plain browser
+    const demo = new URLSearchParams(window.location.search).get("update") === "1";
+    return { current: "0.1.0", available: demo ? { version: "0.1.1", notes_url: "" } : null };
+  }
+  return invoke<UpdateInfo>("update_check");
+}
+
+/** Downloads, verifies and installs the update; the app closes and opens again by itself. */
+export async function applyUpdate(): Promise<void> {
+  if (!inTauri) return;
+  await invoke("update_apply");
+}
+
 /** Opens the docked live preview window. */
 export async function openPreview(): Promise<void> {
   if (!inTauri) return;

@@ -72,7 +72,14 @@ fn describe(r: &Release) -> String {
     )
 }
 
-pub async fn run(target: &CoreTarget, check_only: bool, yes: bool, json_out: bool) -> ExitCode {
+#[allow(clippy::fn_params_excessive_bools)] // one per command-line flag
+pub async fn run(
+    target: &CoreTarget,
+    check_only: bool,
+    yes: bool,
+    relaunch: bool,
+    json_out: bool,
+) -> ExitCode {
     let (url, channel, require_signed) = match settings(target) {
         Ok(s) => s,
         Err(e) => return fail(&e),
@@ -162,7 +169,7 @@ pub async fn run(target: &CoreTarget, check_only: bool, yes: bool, json_out: boo
         .stderr(Stdio::null())
         .status();
     crate::stop_quiet(target).await;
-    match spawn_installer(&installer, &dir) {
+    match spawn_installer(&installer, &dir, relaunch) {
         Ok(()) => {
             println!("Installing {} in the background (about a minute). Run `umr --version` afterwards to check.", rel.version);
             ExitCode::SUCCESS
@@ -171,11 +178,37 @@ pub async fn run(target: &CoreTarget, check_only: bool, yes: bool, json_out: boo
     }
 }
 
+/// PowerShell that runs the installer silently into `dir`, waits for it, then opens the desktop
+/// app again. NSIS wants `/D=` last and unquoted, so the arguments are one string.
+fn relaunch_script(installer: &Path, dir: &Path) -> String {
+    let q = |p: &Path| p.display().to_string().replace('\'', "''");
+    format!(
+        "Start-Process -FilePath '{}' -ArgumentList '/S /D={}' -Wait; Start-Process -FilePath '{}'",
+        q(installer),
+        q(dir),
+        q(&dir.join("umr-desktop.exe"))
+    )
+}
+
 /// Runs the installer silently into the same folder, detached so it can replace this umr.exe
-/// after we exit.
-fn spawn_installer(installer: &Path, dir: &Path) -> std::io::Result<()> {
-    let mut cmd = Command::new(installer);
-    cmd.arg("/S").arg(format!("/D={}", dir.display()));
+/// after we exit; with `relaunch`, the desktop app opens again afterwards.
+fn spawn_installer(installer: &Path, dir: &Path, relaunch: bool) -> std::io::Result<()> {
+    let mut cmd = if relaunch {
+        let mut c = Command::new("powershell");
+        c.args([
+            "-NoProfile",
+            "-NonInteractive",
+            "-WindowStyle",
+            "Hidden",
+            "-Command",
+            &relaunch_script(installer, dir),
+        ]);
+        c
+    } else {
+        let mut c = Command::new(installer);
+        c.arg("/S").arg(format!("/D={}", dir.display()));
+        c
+    };
     cmd.stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null());
@@ -187,4 +220,23 @@ fn spawn_installer(installer: &Path, dir: &Path) -> std::io::Result<()> {
         cmd.creation_flags(DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP);
     }
     cmd.spawn().map(|_| ())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn relaunch_runs_the_installer_then_the_app() {
+        let s = relaunch_script(
+            Path::new(r"C:\Temp\it's\setup.exe"),
+            Path::new(r"C:\Users\u\AppData\Local\AI Mobile Runtime"),
+        );
+        assert!(s.contains(r"-FilePath 'C:\Temp\it''s\setup.exe'"), "{s}");
+        assert!(
+            s.contains(r"-ArgumentList '/S /D=C:\Users\u\AppData\Local\AI Mobile Runtime' -Wait"),
+            "{s}"
+        );
+        assert!(s.ends_with(r"Start-Process -FilePath 'C:\Users\u\AppData\Local\AI Mobile Runtime\umr-desktop.exe'"), "{s}");
+    }
 }

@@ -2,6 +2,7 @@
 // `umr agent … --json` through the desktop app (agents.rs), so the page shows exactly what the
 // CLI would do: the files it changes, as a diff, before anything is written.
 import { useEffect, useState } from "react";
+import { Why } from "./why";
 import { agentCli } from "./api";
 
 type ClientRow = {
@@ -33,6 +34,7 @@ export function AgentsStep({ project, onBack }: { project: string; onBack: () =>
   return (
     <section>
       <h2>Connect your coding agent</h2>
+      <Why step="agents" />
       <p>
         Your agent starts the runtime's MCP server on this PC and gets the screen, the problems and the controls. Connecting writes
         one entry into the agent's own settings; you see every change before it is made, and <strong>Disconnect</strong> takes it out

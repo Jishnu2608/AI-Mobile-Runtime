@@ -170,7 +170,6 @@ const linkMap: Record<string, string> = {
   "SECURITY.md": "/security/",
   "CONTRIBUTING.md": "/open-source/#contributing",
   "CODE_OF_CONDUCT.md": "/open-source/#code-of-conduct",
-  "review-v1.md": "/security/#review",
   "THIRD_PARTY_NOTICES.md": "/licences/",
 };
 

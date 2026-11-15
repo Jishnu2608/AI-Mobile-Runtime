@@ -30,7 +30,7 @@ async function detect(): Promise<Seen> {
 /**
  * Says whether this computer can run the runtime. Only reads the browser's own platform hints;
  * nothing is stored or sent. Without script the static requirement line above stays as it is.
- * What macOS and Linux visitors are offered beyond this notice is open decision W10 (DEC-043).
+ * macOS and Linux visitors see this notice only.
  */
 export function OsNotice() {
   const [seen, setSeen] = useState<Seen | null>(null);

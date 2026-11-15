@@ -86,7 +86,7 @@ pub fn arguments(r: &AgentRequest) -> Result<Vec<String>, String> {
 }
 
 /// The `umr.exe` installed next to this program.
-fn umr_exe() -> Result<PathBuf, String> {
+pub(crate) fn umr_exe() -> Result<PathBuf, String> {
     let me = std::env::current_exe().map_err(|e| e.to_string())?;
     let exe = me.with_file_name("umr.exe");
     if exe.is_file() {

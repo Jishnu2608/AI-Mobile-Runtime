@@ -276,6 +276,10 @@ enum Command {
         /// Do not ask.
         #[arg(long)]
         yes: bool,
+        /// Open the desktop app again once the new version is installed (the app's Update now
+        /// button uses this).
+        #[arg(long)]
+        relaunch: bool,
         #[arg(long)]
         json: bool,
     },
@@ -387,13 +391,12 @@ enum DeviceAction {
 
 #[derive(Debug, Subcommand)]
 enum PreviewAction {
-    /// Frames, windows and the time the product adds (NFR-02a).
+    /// Frames, windows and the time the runtime adds.
     Status {
         #[arg(long)]
         json: bool,
     },
-    /// Touch → visible latency and frame rate on the device (NFR-02b / NFR-03); taps the home
-    /// screen.
+    /// Touch-to-screen latency and frame rate on the device; taps the home screen.
     Selftest {
         #[arg(long, default_value_t = 20)]
         taps: u32,
@@ -727,7 +730,7 @@ fn main() -> ExitCode {
             Command::Logs { source, level, grep, lines, follow, json } => {
                 diag_cmd::logs(&target, source, level, grep, lines, follow, json).await
             }
-            Command::Update { check, yes, json } => update_cmd::run(&target, check, yes, json).await,
+            Command::Update { check, yes, relaunch, json } => update_cmd::run(&target, check, yes, relaunch, json).await,
             Command::Mcp { list_tools: true, .. } => {
                 println!("{}", serde_json::to_string_pretty(&umr_mcp::tools::catalogue()).unwrap_or_default());
                 ExitCode::SUCCESS

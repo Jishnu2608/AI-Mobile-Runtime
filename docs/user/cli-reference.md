@@ -396,8 +396,8 @@ The live preview window (docked beside your terminal), its status and the latenc
 Usage: umr preview [OPTIONS] [COMMAND]
 
 Commands:
-  status    Frames, windows and the time the product adds (NFR-02a)
-  selftest  Touch → visible latency and frame rate on the device (NFR-02b / NFR-03); taps the home screen
+  status    Frames, windows and the time the runtime adds
+  selftest  Touch-to-screen latency and frame rate on the device; taps the home screen
   help      Print this message or the help of the given subcommand(s)
 
 Options:
@@ -408,7 +408,7 @@ Options:
 ### umr preview status
 
 ```text
-Frames, windows and the time the product adds (NFR-02a)
+Frames, windows and the time the runtime adds
 
 Usage: umr preview status [OPTIONS]
 
@@ -420,7 +420,7 @@ Options:
 ### umr preview selftest
 
 ```text
-Touch → visible latency and frame rate on the device (NFR-02b / NFR-03); taps the home screen
+Touch-to-screen latency and frame rate on the device; taps the home screen
 
 Usage: umr preview selftest [OPTIONS]
 
@@ -1028,10 +1028,11 @@ Check for a newer version and install it (installed copies; portable copies get 
 Usage: umr update [OPTIONS]
 
 Options:
-      --check  Only check, do not install
-      --yes    Do not ask
-      --json   
-  -h, --help   Print help
+      --check     Only check, do not install
+      --yes       Do not ask
+      --relaunch  Open the desktop app again once the new version is installed (the app's Update now button uses this)
+      --json      
+  -h, --help      Print help
 ```
 
 ## umr clean

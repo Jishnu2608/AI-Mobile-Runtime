@@ -6,19 +6,17 @@ import { formatSize, loadManifest, sortReleases } from "@/lib/releases";
 
 export const metadata: Metadata = {
   title: "Releases",
-  description: "Published releases with their files and checksums, and the development milestones reached so far.",
+  description: "Published releases with their files and checksums, and what the first release brings.",
 };
 
-/** Development milestones from the build plan. These are not releases: nothing here was published. */
-const milestones = [
-  { id: "M0", date: "2026-11-11", title: "Proof of concept: go", body: "Provisioning, preview stream and framework adapters proven feasible on Windows 11." },
-  { id: "M1", date: "2026-11-12", title: "Clean Windows to a ready SDK", body: "Environment scan, verified installs, licence flow, repair and the setup wizard." },
-  { id: "M2", date: "2026-11-12", title: "Emulator boots from the runtime", body: "Six device profiles; large profile cold boot 27.6 s, warm 5.8 s; 100 of 100 boot loops healthy." },
-  { id: "M3", date: "2026-11-13", title: "Kotlin, Flutter and Expo templates run", body: "One command runs each template; Flutter hot reload 0.67 to 1.8 s, Expo Fast Refresh 0.36 to 0.50 s." },
-  { id: "M4", date: "2026-11-13", title: "Docked interactive preview", body: "40 to 42 frames per second; input to screen p50 51 to 72 ms." },
-  { id: "M5", date: "2026-11-13", title: "Problems panel", body: "Six categories; 76 seeded failures classified, category 94.7 % on the first run." },
-  { id: "M6", date: "2026-11-13", title: "Agents over MCP", body: "Claude Code fixed a seeded Flutter bug alone through 16 MCP tools. Codex is still to be checked." },
-  { id: "M8", date: "2026-11-14", title: "Release build ready, four items open", body: "Installer, updater, security review and docs are done; signing, clean-VM test, licence and the 1.0 tag are open." },
+/** What the first release brings, in product terms. */
+const highlights = [
+  { title: "Setup from the project", body: "Reads your project and installs only what it still needs: JDK, Android SDK, emulator image, Flutter, Node and Git, all verified." },
+  { title: "A phone beside your code", body: "A live, interactive emulator in a phone frame, docked next to your editor or agent, with an in-display fingerprint sensor." },
+  { title: "Four frameworks", body: "Kotlin, Java, Flutter and React Native / Expo, each built with its own tools; saved files apply themselves." },
+  { title: "Problems you can act on", body: "Build errors, runtime errors and crashes, classified and located at file and line, in the app and in VS Code." },
+  { title: "Agents that check their work", body: "Claude Code, Codex, Cursor, Claude Desktop and VS Code connect over MCP, with permissions, approvals and an audit log." },
+  { title: "Updates in place", body: "A new version installs over the old one with one click; your settings, toolchains and emulators stay." },
 ];
 
 export default function ReleasesPage() {
@@ -26,8 +24,8 @@ export default function ReleasesPage() {
   return (
     <PageShell
       eyebrow="Releases"
-      title="Releases and milestones"
-      lead="Published releases come from the same manifest the app's updater reads. Below them are the development milestones reached so far, which are not releases."
+      title="Releases"
+      lead="Every published version with its files and checksums. The list comes from the same release manifest the app's updater reads."
     >
       <section aria-labelledby="published-title">
         <h2 id="published-title" className="t-section">
@@ -35,9 +33,9 @@ export default function ReleasesPage() {
         </h2>
         {releases.length === 0 ? (
           <div className="mt-6 rounded-lg border border-dashed border-line-strong bg-bg-alt p-6">
-            <Status kind="pending">None yet</Status>
+            <Status kind="info">Coming soon</Status>
             <p className="t-body mt-4 max-w-[var(--reading-max)]">
-              No release has been published yet. Releases will be published on GitHub Releases; code signing is open decision W8.
+              The first public release is being prepared. It will be published here and on the project&apos;s GitHub Releases page.
             </p>
           </div>
         ) : (
@@ -67,23 +65,18 @@ export default function ReleasesPage() {
         </p>
       </section>
 
-      <section aria-labelledby="milestones-title" className="mt-20 border-t border-line pt-14">
-        <h2 id="milestones-title" className="t-section">
-          Development milestones
+      <section aria-labelledby="highlights-title" className="mt-20 border-t border-line pt-14">
+        <h2 id="highlights-title" className="t-section">
+          What the first release brings
         </h2>
-        <p className="t-body mt-4 max-w-[var(--reading-max)]">Measured on the development machine. Milestone M7 (macOS and iOS) is not planned in this release.</p>
-        <ol className="relative mt-10 grid gap-8 border-l border-line pl-8">
-          {milestones.map((m) => (
-            <li key={m.id} className="relative">
-              <span aria-hidden className="absolute -left-[2.3rem] top-1.5 size-2.5 rounded-full border-2 border-bg bg-lime ring-1 ring-line" />
-              <p className="t-meta t-num">
-                <span className="font-mono font-semibold text-ink">{m.id}</span> · {m.date}
-              </p>
-              <h3 className="mt-1 font-semibold text-ink">{m.title}</h3>
-              <p className="t-desc mt-1 max-w-2xl">{m.body}</p>
+        <ul className="mt-10 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {highlights.map((h) => (
+            <li key={h.title} className="rounded-lg border border-line bg-surface p-6">
+              <h3 className="font-semibold text-ink">{h.title}</h3>
+              <p className="t-desc mt-2">{h.body}</p>
             </li>
           ))}
-        </ol>
+        </ul>
       </section>
     </PageShell>
   );

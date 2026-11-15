@@ -5,7 +5,7 @@ import { Status } from "@/components/ui/Status";
 import { Workflow } from "./Workflow";
 import { Architecture } from "./Architecture";
 import { stages } from "./workflow-data";
-import { pendingDecisions, site } from "@/lib/site";
+import { site } from "@/lib/site";
 
 function SectionHead({ id, eyebrow, title, lead }: { id: string; eyebrow: string; title: string; lead?: string }) {
   return (
@@ -70,30 +70,6 @@ export function Pillars() {
           ))}
         </ul>
       </Reveal>
-    </section>
-  );
-}
-
-/* ---------------------------------------------------- recording placeholder */
-
-/** WEB-003: a real screen recording is not made yet. The frame says so instead of faking a UI. */
-export function RecordingSlot() {
-  return (
-    <section aria-labelledby="recording-title" className="section pt-0">
-      <div className="wrap">
-        <figure className="relative grid min-h-[18rem] w-full place-items-center py-12 sm:aspect-[21/9] sm:min-h-0 overflow-hidden rounded-lg border border-dashed border-line-strong bg-bg-alt">
-          <div className="max-w-md px-6 text-center">
-            <Status kind="pending">Recording pending</Status>
-            <h2 id="recording-title" className="t-sub mt-5">
-              A screen recording of the docked preview goes here
-            </h2>
-            <p className="t-desc mt-3">
-              It will show a real session: a Flutter app running beside Claude Code, an error, the fix and the reload. Nothing in this
-              frame is a mock-up.
-            </p>
-          </div>
-        </figure>
-      </div>
     </section>
   );
 }
@@ -294,7 +270,7 @@ export function Privacy() {
         </ul>
         <div className="mt-12 flex flex-wrap gap-3" data-reveal>
           <Link href="/privacy/" className="btn h-11 px-5">Read the privacy notes</Link>
-          <Link href="/security/" className="btn btn-ghost h-11 px-5">See the security review</Link>
+          <Link href="/security/" className="btn btn-ghost h-11 px-5">How the runtime protects you</Link>
         </div>
       </Reveal>
     </section>
@@ -303,40 +279,46 @@ export function Privacy() {
 
 /* ------------------------------------------------------------ open source */
 
+const openLinks = [
+  { title: "Source code", body: "Every part of the runtime, from the Core to the desktop app and the VS Code extension.", href: site.repository, external: true },
+  { title: "Contributing", body: "How to build it, run the tests and propose a change.", href: "/open-source/#contributing" },
+  { title: "Third-party licences", body: "Every component the runtime ships with, and its licence.", href: "/licences/" },
+];
+
 export function OpenSource() {
   return (
     <section aria-labelledby="oss-title" className="section border-t border-line">
       <Reveal className="wrap grid gap-10 lg:grid-cols-12">
-        <div className="lg:col-span-6">
+        <div className="lg:col-span-5">
           <SectionHead
             id="oss-title"
             eyebrow="Open source"
-            title="The licence is not chosen yet"
-            lead="The source is public on GitHub. Until a licence is chosen it is all rights reserved: you can read it, but not reuse it. The third-party licences the runtime ships with are already listed."
+            title="Built in the open"
+            lead="The source code is on GitHub: read how the runtime works, follow its development and report what you find."
           />
         </div>
-        <ul className="grid content-start gap-3 lg:col-span-5 lg:col-start-8" data-reveal>
-          {pendingDecisions
-            .filter((d) => ["W1", "W3", "W5"].includes(d.w))
-            .map((d) => (
-              <li key={d.w} className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-line bg-surface px-4 py-3">
-                <span className="font-medium text-ink">{d.what}</span>
-                <Status kind="pending">Pending decision</Status>
-              </li>
-            ))}
-          <li className="pt-3">
-            <a href={site.repository} className="link font-medium" rel="noreferrer">
-              Source on GitHub
-            </a>
-            <span className="text-ink-2"> · </span>
-            <Link href="/open-source/#open-decisions" className="link font-medium">
-              See every open decision
-            </Link>
-            <span className="text-ink-2"> · </span>
-            <Link href="/licences/" className="link font-medium">
-              Third-party licences
-            </Link>
-          </li>
+        <ul className="grid content-start gap-3 lg:col-span-6 lg:col-start-7" data-reveal>
+          {openLinks.map((l) => (
+            <li key={l.title}>
+              {l.external ? (
+                <a href={l.href} rel="noreferrer" className="group flex items-start justify-between gap-4 rounded-md border border-line bg-surface px-5 py-4 transition-colors hover:border-line-strong">
+                  <span>
+                    <span className="font-semibold text-ink">{l.title}</span>
+                    <span className="mt-1 block text-[0.95rem] text-ink-2">{l.body}</span>
+                  </span>
+                  <ArrowRight aria-hidden className="mt-1 size-4 shrink-0 text-ink-2 transition-transform group-hover:translate-x-0.5" />
+                </a>
+              ) : (
+                <Link href={l.href} className="group flex items-start justify-between gap-4 rounded-md border border-line bg-surface px-5 py-4 transition-colors hover:border-line-strong">
+                  <span>
+                    <span className="font-semibold text-ink">{l.title}</span>
+                    <span className="mt-1 block text-[0.95rem] text-ink-2">{l.body}</span>
+                  </span>
+                  <ArrowRight aria-hidden className="mt-1 size-4 shrink-0 text-ink-2 transition-transform group-hover:translate-x-0.5" />
+                </Link>
+              )}
+            </li>
+          ))}
         </ul>
       </Reveal>
     </section>
@@ -347,6 +329,7 @@ export function OpenSource() {
 
 const faq = [
   { q: "Does it replace Android Studio?", a: "No. It runs next to it. It uses its own adb server and its own SDK folder, so Android Studio and your existing SDKs keep working as before." },
+  { q: "Does it work in VS Code?", a: "Yes. The AI Mobile Runtime extension runs your app on the emulator from the Command Palette, shows the phone in a Mobile Preview panel beside your code, puts build errors and crashes in the Problems panel and connects Copilot's agent mode. It is coming to the VS Code Marketplace; until then it installs from a .vsix file. It needs the runtime installed." },
   { q: "Can it run iOS apps?", a: "No. The iOS Simulator needs macOS and Xcode. This runtime is for Windows 11 x64 and Android today." },
   { q: "Which coding agents does it work with?", a: "Claude Code, Codex, Cursor, Claude Desktop and VS Code each connect with one command, umr agent setup, and umr agent doctor checks the connection. Any other MCP client can start umr mcp by hand. The claude.ai website and mobile app cannot reach a program on your PC." },
   { q: "Does my code leave my machine?", a: "No. The runtime has no cloud service. It downloads tools from their official publishers and nothing else, unless you run umr update." },

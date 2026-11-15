@@ -90,7 +90,7 @@ pub async fn status(target: &CoreTarget, json: bool) -> ExitCode {
         s["dropped"]
     );
     println!(
-        "  ours (NFR-02a, p95): input {} ms + frame {} ms + hop {} ms + draw {} ms = {} ms (target ≤ 20)",
+        "  added by the runtime (p95): input {} ms + frame {} ms + hop {} ms + draw {} ms = {} ms (target ≤ 20)",
         s["input"]["p95_ms"], s["frame"]["p95_ms"], s["ui"]["hop_p95"], s["ui"]["draw_p95"], s["pipeline_p95_ms"]
     );
     println!("  window: {} fps drawn", s["ui"]["fps"]);
@@ -127,13 +127,13 @@ pub async fn selftest(target: &CoreTarget, taps: u32, json: bool) -> ExitCode {
         t["detected"], t["taps"], t["latency"]["p50_ms"], t["latency"]["p95_ms"]
     );
     println!(
-        "  NFR-02b end to end (window): p50 {} ms, p95 {} ms (≤ 80 / ≤ 150) — {}",
+        "  touch to screen (window): p50 {} ms, p95 {} ms (≤ 80 / ≤ 150) — {}",
         r["nfr_02b"]["p50_ms"],
         r["nfr_02b"]["p95_ms"],
         mark(&r["nfr_02b"]["met"])
     );
     println!(
-        "  NFR-02a ours: {} ms p95 (≤ 20) — {}{}",
+        "  added by the runtime: {} ms p95 (≤ 20) — {}{}",
         r["nfr_02a"]["pipeline_p95_ms"],
         mark(&r["nfr_02a"]["met"]),
         if r["nfr_02a"]["window_measured"] == true {
@@ -143,7 +143,7 @@ pub async fn selftest(target: &CoreTarget, taps: u32, json: bool) -> ExitCode {
         }
     );
     println!(
-        "  NFR-03 frame rate: {} fps (≥ 30) — {}",
+        "  frame rate: {} fps (≥ 30) — {}",
         r["nfr_03"]["fps"],
         mark(&r["nfr_03"]["met"])
     );

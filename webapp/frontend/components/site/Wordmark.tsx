@@ -25,7 +25,7 @@ export function LogoMark({ className = "size-7" }: { className?: string }) {
   );
 }
 
-/** Mark + the working name (the public name is still open decision W1). */
+/** Mark + product name. */
 export function Wordmark() {
   return (
     <span className="inline-flex items-center gap-2.5 font-semibold tracking-[-0.02em] text-ink">

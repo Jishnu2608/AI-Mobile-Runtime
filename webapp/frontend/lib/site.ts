@@ -3,36 +3,33 @@
  * A `null` here is a pending decision: pages show a labelled placeholder, never a guess.
  */
 export const site = {
-  /** W1 / DEC-037 pending: the name the app uses today, shown as a working name. */
   name: "AI Mobile Runtime",
-  nameIsWorking: true,
-  /** W2 / DEC-038 pending: no domain, so no absolute URLs, sitemap or canonical links. */
+  /** No domain yet: no absolute URLs, sitemap or canonical links. */
   domain: null as string | null,
-  /** W3 / DEC-025 pending: no product licence yet. */
+  /** The product licence, once published. */
   licence: null as string | null,
-  /** W5 / DEC-040: release files on GitHub Releases (owner, 2026-11-14); where the website itself
-   *  is hosted is still open, so the site stays a static export with no host-specific config. */
+  /** Where the website is hosted (release files are on GitHub Releases). */
   hosting: null as string | null,
   releasesHost: "GitHub Releases",
-  /** The source repository is public (owner, 2026-11-14). It has no licence yet (W3). */
   repositoryPublic: true,
   repository: "https://github.com/Jishnu2608/AI-Mobile-Runtime",
   platform: "Windows 11 (x64)",
   frameworks: ["Kotlin", "Java", "Flutter", "React Native", "Expo"] as const,
   agents: ["Claude Code", "Codex"] as const,
+  /** The VS Code extension: set `published: true` once each store listing is live. */
+  vscode: {
+    id: "ai-mobile-runtime.umr-vscode",
+    vsix: "umr-vscode.vsix",
+    marketplace: {
+      url: "https://marketplace.visualstudio.com/items?itemName=ai-mobile-runtime.umr-vscode",
+      published: false as boolean,
+    },
+    openVsx: {
+      url: "https://open-vsx.org/extension/ai-mobile-runtime/umr-vscode",
+      published: false as boolean,
+    },
+  },
 } as const;
-
-/** The ten Phase 9 decisions, for the pending-decisions notice and the open-source page. */
-export const pendingDecisions = [
-  { w: "W1", id: "DEC-037", what: "Public product name (the logo is set)" },
-  { w: "W2", id: "DEC-038", what: "Domain" },
-  { w: "W3", id: "DEC-025", what: "Product licence" },
-  { w: "W5", id: "DEC-040", what: "Website hosting (release files: GitHub Releases, decided)" },
-  { w: "W7", id: "DEC-027", what: "Website telemetry policy" },
-  { w: "W8", id: "DEC-011 + DEC-033", what: "Release signing and key custody" },
-  { w: "W9", id: "DEC-042", what: "Installer PATH option default" },
-  { w: "W10", id: "DEC-043", what: "macOS / Linux visitor experience" },
-] as const;
 
 export const nav = [
   { href: "/docs/getting-started/", label: "Docs" },

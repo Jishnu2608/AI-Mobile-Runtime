@@ -18,6 +18,19 @@ powershell -File scripts\ci-local.ps1      # what CI runs: fmt, clippy (pedantic
 ```
 The desktop UI alone: `npm --prefix apps/desktop/ui run dev` (sample data in a browser).
 
+## Repository layout
+| Folder | |
+|---|---|
+| `crates/` | The Runtime Core and its parts (`umr-core`, `-api`, `-storage`, `-env`, `-resolver`, `-installer`, `-supervisor`, `-device`, `-session`, `-stream`, `-diagnostics`, `-mcp`, `-platform`) |
+| `adapters/` | The adapter contract (`sdk`) and the Gradle, Flutter and React Native adapters |
+| `apps/` | `cli` (`umr`), `desktop` (Tauri app with the React UI), `vscode` (the VS Code extension) |
+| `helpers/` | `elevated-helper` (the two administrator actions) |
+| `knowledge-pack/` | Version compatibility rules |
+| `sample-app/` | The calculator sample in Kotlin, Java, Dart and React Native |
+| `webapp/frontend/` | The website |
+| `tests/` | Failure corpus and environment matrix |
+| `docs/` | User guides |
+
 ## Rules for changes
 1. **Tests with every change.** Unit tests always; where a change touches devices or tools, an integration test (marked `#[ignore]` if it needs an emulator) or a recorded manual check in the pull request.
 2. **`scripts\ci-local.ps1` must pass.** Clippy runs with `pedantic` and `-D warnings`; `unsafe` only in `crates/umr-platform`, each block with a `// SAFETY:` comment.
@@ -28,4 +41,4 @@ The desktop UI alone: `npm --prefix apps/desktop/ui run dev` (sample data in a b
 7. One topic per pull request; describe what you checked and how.
 
 ## Licence of contributions
-The project's licence is not decided yet. Until it is, contributions cannot be accepted under a licence; please open issues and discussions instead of pull requests with substantial code.
+The project's licence is published with the first public release, and contributions will be accepted under it. Until then, please share ideas and larger changes as issues or discussions rather than pull requests with substantial code.

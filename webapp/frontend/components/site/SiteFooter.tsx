@@ -57,7 +57,7 @@ export function SiteFooter() {
       </div>
       <div className="border-t border-line">
         <p className="wrap py-5 text-[0.8125rem] text-ink-2">
-          Working name, pending a decision. Android is a trademark of Google LLC; this project is not affiliated with Google.
+          Android is a trademark of Google LLC; this project is not affiliated with or endorsed by Google.
           Product names are trademarks of their owners.
         </p>
       </div>

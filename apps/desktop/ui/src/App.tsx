@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { call, DocsPage, inTauri, loadWizard, openDocs, openPreview, saveWizard, size, Step, WizardState } from "./api";
+import { Stage } from "./Stage";
+import { applyUpdate, call, checkUpdate, DocsPage, inTauri, loadWizard, openDocs, openPreview, pickFolder, saveWizard, size, Step, UpdateInfo, WizardState } from "./api";
 import { AgentsStep } from "./Agents";
+import { STEP_WHY, Why } from "./why";
 // the product mark, shared with the website and the app icon (brand/)
 import logo from "../../../../brand/logo-mark.svg";
 
@@ -78,6 +80,7 @@ export function App() {
   const index = STEPS.findIndex((s) => s.id === state.step);
 
   return (
+    <div className="layout">
     <div className="shell">
       <header>
         <h1 className="brand">
@@ -86,12 +89,23 @@ export function App() {
         </h1>
         <p className="sub">Set up everything your project needs to run on the Android emulator.</p>
         {!inTauri && <p className="demo">Browser preview with sample data — open the desktop app for real results.</p>}
+        <UpdateBanner />
       </header>
       <ol className="steps" aria-label="Setup steps">
         {STEPS.map((s, i) => (
-          <li key={s.id} className={i < index ? "done" : i === index ? "current" : ""} aria-current={i === index ? "step" : undefined}>
-            <span className="dot">{i < index ? "✓" : i + 1}</span>
-            {s.label}
+          <li key={s.id} className={i < index ? "done" : i === index ? "current" : ""} aria-current={i === index ? "step" : undefined} title={STEP_WHY[s.id]}>
+            {i < index ? (
+              // UI-008: finished steps are links back; later steps cannot be skipped to
+              <button type="button" className="step-back" onClick={() => go({ step: s.id, jobId: undefined })} aria-label={`Back to ${s.label}`}>
+                <span className="dot">✓</span>
+                {s.label}
+              </button>
+            ) : (
+              <>
+                <span className="dot">{i + 1}</span>
+                {s.label}
+              </>
+            )}
           </li>
         ))}
       </ol>
@@ -108,6 +122,54 @@ export function App() {
         {state.step === "agents" && <AgentsStep project={state.projectPath} onBack={() => go({ step: "ready" })} />}
         <StepDocs step={state.step} />
       </main>
+    </div>
+    <Stage step={state.step} />
+    </div>
+  );
+}
+
+/**
+ * UPD-001: "a new version is available" with Update now. The update downloads and verifies the
+ * installer, installs it over this copy (settings, toolchains and emulators stay) and reopens the
+ * app. Checked once at start, only when an update channel is configured.
+ */
+function UpdateBanner() {
+  const [info, setInfo] = useState<UpdateInfo | null>(null);
+  const [state, setState] = useState<"idle" | "updating" | "later">("idle");
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    checkUpdate().then(setInfo).catch(() => undefined);
+  }, []);
+  const next = info?.available;
+  if (!next || state === "later") return null;
+  return (
+    <div className="update" role="status">
+      <span>
+        <strong>Version {next.version} is available</strong> <span className="muted">· you have {info?.current}</span>
+        {error && <span className="warn"> · {error}</span>}
+      </span>
+      <span className="update-actions">
+        {state === "updating" ? (
+          <span className="muted">Downloading and installing… the app closes and opens again by itself.</span>
+        ) : (
+          <>
+            <button className="link" onClick={() => setState("later")}>Later</button>
+            <button
+              className="primary"
+              onClick={() => {
+                setState("updating");
+                setError(null);
+                applyUpdate().catch((e) => {
+                  setError(String(e));
+                  setState("idle");
+                });
+              }}
+            >
+              Update now
+            </button>
+          </>
+        )}
+      </span>
     </div>
   );
 }
@@ -144,6 +206,7 @@ function ScanStep({ onNext }: { onNext: () => void }) {
   return (
     <section>
       <h2>This computer</h2>
+      <Why step="scan" />
       <div className="facts">
         <Fact label="Windows" value={`build ${r.host.windows_build}${r.host.windows_11 ? " (Windows 11)" : ""}`} ok={r.host.windows_11} />
         <Fact label="Memory" value={size(r.host.ram_total_bytes)} ok={r.host.ram_total_bytes >= 8 * 1073741824} />
@@ -194,6 +257,17 @@ function ProjectStep({ path, onBack, onNext }: { path: string; onBack: () => voi
   useEffect(() => {
     if (path) detect(path);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const [typing, setTyping] = useState(false);
+  const choose = async () => {
+    const p = await pickFolder(input.trim() || undefined).catch((e) => {
+      setError(String(e));
+      return null;
+    });
+    if (p) {
+      setInput(p);
+      detect(p);
+    }
+  };
   const trust = () => {
     if (!window.confirm("Building runs the project's own code (Gradle scripts, npm install scripts, Flutter plugins). Trust this folder?")) return;
     call("project.trust", { path: input.trim(), trusted: true }).then(() => detect(input));
@@ -202,13 +276,31 @@ function ProjectStep({ path, onBack, onNext }: { path: string; onBack: () => voi
   return (
     <section>
       <h2>Your project</h2>
-      <label htmlFor="path">Project folder (full path)</label>
-      <div className="row">
-        <input id="path" value={input} placeholder="D:\Work\my-app" onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && detect(input)} />
-        <button className="secondary" onClick={() => detect(input)} disabled={!input.trim() || busy}>
-          {busy ? "Checking…" : "Check"}
+      <Why step="project" />
+      <div className="picker">
+        <button className="primary" onClick={choose} disabled={busy}>
+          {input.trim() ? "Choose another folder…" : "Choose your app's folder…"}
         </button>
+        {input.trim() && !typing && (
+          <span className="picked" title={input}>
+            📁 <code>{input}</code>
+            {busy && <span className="muted"> · checking…</span>}
+          </span>
+        )}
       </div>
+      <p className="small muted">The folder with your app's <code>pubspec.yaml</code>, <code>package.json</code> or <code>settings.gradle</code>.</p>
+      {typing ? (
+        <div className="row">
+          <input id="path" aria-label="Project folder (full path)" value={input} placeholder="D:\Work\my-app" onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && detect(input)} autoFocus />
+          <button className="secondary" onClick={() => detect(input)} disabled={!input.trim() || busy}>
+            {busy ? "Checking…" : "Check"}
+          </button>
+        </div>
+      ) : (
+        <p className="small">
+          <button className="link" onClick={() => setTyping(true)}>Type a path instead</button>
+        </p>
+      )}
       {error && <Problem text={error} />}
       {d && (
         <div className="card">
@@ -268,6 +360,7 @@ function PlanStep({ path, onBack, onNext }: { path: string; onBack: () => void; 
   return (
     <section>
       <h2>What this project needs</h2>
+      <Why step="plan" />
       <table className="plan">
         <tbody>
           {plan.items.map((i: any) => (
@@ -345,6 +438,7 @@ function LicenceStep({ path, onBack, onNext }: { path: string; onBack: () => voi
   return (
     <section>
       <h2>Licences</h2>
+      <Why step="licences" />
       <p>Read each licence. Nothing is installed until you accept them.</p>
       {failure && <Problem text={failure} />}
       {licences.map((l: any) => (
@@ -423,6 +517,7 @@ function InstallStep({ path, jobId, onJob, onBack, onDone }: { path: string; job
   return (
     <section>
       <h2>Installing</h2>
+      <Why step="install" />
       <ul className="progress">
         {status.items.map((i: any) => {
           const pct = i.bytes_total ? Math.min(100, Math.round((i.bytes_done / i.bytes_total) * 100)) : i.state === "done" || i.state === "already-installed" ? 100 : 0;
@@ -464,6 +559,7 @@ function ReadyStep({ path, onRestart, onNext }: { path: string; onRestart: () =>
   return (
     <section>
       <h2>{broken.length ? "Almost ready" : "Ready"}</h2>
+      <Why step="ready" />
       <p>
         {r.components.length} components installed and checked ({size(r.disk.total_bytes)}).
         {broken.length > 0 && <strong className="warn"> {broken.length} need repair — run setup again.</strong>}
@@ -497,6 +593,7 @@ function RunStep({ path, onBack, onNext }: { path: string; onBack: () => void; o
   return (
     <section>
       <h2>Run your app</h2>
+      <Why step="run" />
       <p>
         The runtime starts the emulator, builds <code>{path || "your project"}</code>, installs it and opens the live preview beside
         your other windows. Saved files reload by themselves.

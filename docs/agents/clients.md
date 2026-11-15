@@ -1,6 +1,6 @@
 # Coding-agent clients — how each one loads the runtime's MCP server
 
-Phase 10.1 (CON-001). Checked against each client's own documentation on **2026-11-14**. The same
+Checked against each client's own documentation in November 2026. The same
 facts are in code, in `apps/cli/src/agent_clients.rs` (one entry per client); `umr agent clients`
 shows which of them are installed and connected on a PC.
 
@@ -30,26 +30,25 @@ The config entry holds no secret. The client's token stays in `%USERPROFILE%\.um
 - Three scopes. **Local** (default of `claude mcp add`): private, one project, stored in `~/.claude.json` under that project. **Project**: `.mcp.json` in the project root, shared through version control; Claude Code asks once to approve it (`/mcp` turns it on later). **User**: all projects, private, in `~/.claude.json`.
 - If one name exists in several scopes, local beats project beats user; the winning entry is used whole (fields are not merged).
 - Claude Code does not read `~/.claude/.mcp.json`.
-- `umr agent setup claude-code` writes the project scope today; a user-scope option is DEC-031 / CON-002.
+- `umr agent setup claude-code` writes the project scope by default; `--scope user` writes the user scope.
 - Source: [Claude Code MCP docs](https://code.claude.com/docs/en/mcp).
 
 ### Codex
 - `[mcp_servers.<name>]` tables in `~/.codex/config.toml`; a project can add `.codex/config.toml`, read only in trusted projects.
 - `command` selects stdio, `url` selects HTTP; mixing them in one table is rejected. Optional `args`, `env`, `startup_timeout_sec`, `tool_timeout_sec` (setup writes 30 s and 600 s, because builds can be long).
 - `codex mcp add <name> -- <command>` does the same from the command line.
-- Not yet run live with the runtime (MCP-007 / CON-007).
 - Source: [Codex MCP docs](https://developers.openai.com/codex/mcp).
 
 ### Cursor
 - `.cursor/mcp.json` in the project, `~/.cursor/mcp.json` for all projects; top-level `mcpServers`.
 - Stdio entry: `type: "stdio"`, `command` (on `PATH` or a full path), optional `args`, `env`, `envFile`. Variables `${env:NAME}`, `${userHome}`, `${workspaceFolder}` are expanded.
 - Rules: `.mdc` files in `.cursor/rules` with front matter (`description`, `globs`, `alwaysApply`); `alwaysApply: true` loads the rule in every chat. A plain `.md` file there is ignored.
-- One-click install links exist (`cursor://anysphere.cursor-deeplink/mcp/install?name=…&config=<base64>`) — CON-006, blocked by DEC-055 (the full path differs per PC).
+- One-click install links exist (`cursor://anysphere.cursor-deeplink/mcp/install?name=…&config=<base64>`); `umr agent link cursor` makes one for your PC, because it carries the full path of your `umr.exe`.
 - Sources: [Cursor MCP docs](https://cursor.com/docs/mcp), [Cursor rules](https://cursor.com/docs/rules), [install links](https://cursor.com/docs/context/mcp/install-links).
 
 ### Claude Desktop
 - Local servers go in `claude_desktop_config.json` under `mcpServers` (Settings → Developer → Edit Config). Restart the app after a change. Remote servers in this file are ignored; they are added as connectors in the app instead.
-- **Where the file is on Windows (checked on a real install, Claude 5.11492, 2026-11-14).** The packaged app keeps its settings in `%LOCALAPPDATA%\Claude-Data\<package family, e.g. claude_pzs8sxrjxfjjc>\claude_desktop_config.json`, and leaves a `.user-data-left.<package>` marker in the folders it used before: `%APPDATA%\Claude` and the MSIX package's `LocalCache\Roaming\Claude` (the location a public bug report describes for older builds). The runtime picks the first candidate that already has the file, otherwise the first one without such a marker, otherwise `%APPDATA%\Claude`. The live check that Claude Desktop loads the server is CON-007.
+- **Where the file is on Windows (checked on a real install, Claude 5.11492, 2026-11-14).** The packaged app keeps its settings in `%LOCALAPPDATA%\Claude-Data\<package family, e.g. claude_pzs8sxrjxfjjc>\claude_desktop_config.json`, and leaves a `.user-data-left.<package>` marker in the folders it used before: `%APPDATA%\Claude` and the MSIX package's `LocalCache\Roaming\Claude` (the location a public bug report describes for older builds). The runtime picks the first candidate that already has the file, otherwise the first one without such a marker, otherwise `%APPDATA%\Claude`.
 - The file also holds the app's own settings (`preferences`, …); setup adds `mcpServers` and keeps everything else in its order.
 - User-wide: every project the agent opens still needs your approval the first time.
 - No instructions file: the agent gets the MCP `instructions` sent at start-up.
@@ -62,12 +61,12 @@ The config entry holds no secret. The client's token stays in `%USERPROFILE%\.um
 - Sources: [VS Code MCP configuration reference](https://code.visualstudio.com/docs/agents/reference/mcp-configuration), [custom instructions](https://code.visualstudio.com/docs/agent-customization/custom-instructions).
 
 ## Not covered here
-claude.ai web and mobile connectors: they connect from Anthropic's cloud to a public HTTPS endpoint and cannot reach a program on your PC. A hosted runtime for them is decision DEC-053, outside Phase 10.
+claude.ai web and mobile connectors: they connect from Anthropic's cloud to a public HTTPS endpoint and cannot reach a program on your PC.
 
 ## Setup, removal and checks
-`umr agent setup <id> [--scope project|user] [--remove] [--print]` and `umr agent doctor [id] [--fix]` work for all five clients (CON-002…004). Default scope: project for Claude Code, Cursor and VS Code; user for Codex and Claude Desktop.
+`umr agent setup <id> [--scope project|user] [--remove] [--print]` and `umr agent doctor [id] [--fix]` work for all five clients. Default scope: project for Claude Code, Cursor and VS Code; user for Codex and Claude Desktop.
 
-## Stop hooks (HOOK-001)
+## Stop hooks
 `umr agent setup` also registers `umr agent hook <client>` as the agent's stop hook, so build errors and crashes left after the agent's turn go back to it (user guide: `docs/user/agents.md`, *Problems go back to the agent*). Formats checked against each client's documentation on 2026-11-15:
 
 | Client | File (project / user) | Entry | Keeps the agent going with |
@@ -76,16 +75,13 @@ claude.ai web and mobile connectors: they connect from Anthropic's cloud to a pu
 | Codex | `.codex/hooks.json` / `%CODEX_HOME%\hooks.json` | `hooks.Stop[].hooks[]`: `{type: "command", command: "\"<umr.exe>\" agent hook codex", timeout: 150}`; new hooks must be trusted once (`/hooks`) | stdout `{"decision":"block","reason":…}` (the reason becomes the next prompt) |
 | Cursor | `.cursor/hooks.json` / `~/.cursor/hooks.json` | `{version: 1, hooks: {stop: [{command: "& '<umr.exe>' agent hook cursor", timeout: 150, loop_limit: 3}]}}` (PowerShell on Windows) | stdout `{"followup_message":…}` |
 
-Live: Claude Code 2.1.310 passed 2026-11-15 (Kotlin demo, seeded compile error). Codex and Cursor: not run yet (HOOK-002); Cursor has known forum reports of `followup_message` being ignored on Windows in some versions.
+Some Cursor versions on Windows are reported to ignore `followup_message`; there the agent stops as usual and the problems stay in `umr problems`.
 
-## Install links (CON-006)
-`umr agent link cursor|vscode [--json]` prints a link made on the PC, because it carries that PC's `umr.exe` path (the reason the website has no install buttons, DEC-055):
+## Install links
+`umr agent link cursor|vscode [--json]` prints a link made on the PC, because it carries that PC's `umr.exe` path (which is why the website has no install buttons):
 - Cursor: `cursor://anysphere.cursor-deeplink/mcp/install?name=umr&config=<URL-encoded base64 of the server entry>` ([docs](https://cursor.com/docs/mcp/install-links)).
 - VS Code: `vscode:mcp/install?<URL-encoded JSON entry with "name": "umr">` ([docs](https://code.visualstudio.com/api/extension-guides/ai/mcp)).
-The link creates the agent's client first; it adds only the server entry, not the instructions file. Claude Code, Codex and Claude Desktop have no install links; a Claude Code plugin is not built (it needs a public name and a place to publish it, W1 / W5).
+The link creates the agent's client first; it adds only the server entry, not the instructions file. Claude Code, Codex and Claude Desktop have no install links;
 
-## Desktop app (CON-005)
+## Desktop app
 The wizard's last step lists these clients and connects, checks or disconnects each one by running `umr agent clients|setup|doctor --json` (the installed `umr.exe` next to the app, fixed argument lists, no shell).
-
-## Still to confirm live (CON-007)
-Whether each client shows screenshot results as images, its tool time-out with long builds, and that Claude Desktop, Cursor and VS Code load the server from the files setup writes (the files, the program path and an MCP handshake are already checked by `umr agent doctor`).

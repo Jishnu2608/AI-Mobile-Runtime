@@ -45,3 +45,4 @@ skills-lock.json
 # Brand work files (previews, icon renders); the artwork itself is committed
 /brand/.*
 /.playwright-mcp/
+.checkpoints/

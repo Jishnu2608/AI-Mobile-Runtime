@@ -1,101 +1,89 @@
-# AI Mobile Runtime
+<p align="center">
+  <img src="brand/logo-mark.svg" width="96" height="96" alt="AI Mobile Runtime logo" />
+</p>
 
-A local desktop runtime that lets you **see and test your Android app while an AI coding agent writes it**.
+<h1 align="center">AI Mobile Runtime</h1>
 
-Open a mobile project, run one command, and a phone preview docks beside your coding agent. The runtime prepares the Android toolchain, boots an emulator, builds and launches the app, and keeps it updated as the code changes. Your agent (Claude Code, Codex or any MCP client) gets the same view you have: the screen, the errors with file and line, and the controls.
+<p align="center">
+  <strong>See and test your Android app while an AI coding agent builds it.</strong><br />
+  A live emulator beside your code, errors your agent can act on, and a toolchain that sets itself up.
+</p>
 
-> **Status: 1.0 release candidate** (Phases 1–6 and 8 built; see [Status](#status)). Windows 11 x64 and Android only.
+<p align="center">
+  Windows 11 · Kotlin · Java · Flutter · React Native · Expo · Claude Code · Codex · Cursor · VS Code
+</p>
+
+---
+
+## Why AI Mobile Runtime
+
+AI coding agents write mobile code quickly, but they cannot see the app they are building, and setting up Android tooling by hand takes hours. AI Mobile Runtime closes that gap.
+
+Open a project and run it. The runtime installs exactly what the project needs, boots an Android emulator, builds and launches your app, and shows it live in a phone frame beside your editor. Your coding agent gets the same view you have: the screen, the errors with file and line, and the controls to tap, reload and check its own work.
+
+## Highlights
+
+- **Setup from your project.** It reads the project and installs only what is missing — JDK, Android SDK, emulator image, Flutter, Node.js, Git — from the official publishers, each download verified. Your existing tools and settings are never changed.
+- **A real phone beside your code.** A live, interactive emulator in a phone frame with a punch-hole camera and an in-display fingerprint sensor. Click and type in it like on a phone, rotate it, switch between phone, foldable and tablet sizes.
+- **Every framework, one workflow.** Kotlin, Java, Flutter and React Native / Expo, each built with its own tools. Saved files apply themselves: hot reload for Flutter, Fast Refresh for React Native, a quick rebuild for Kotlin and Java.
+- **Problems your agent can act on.** Build errors, runtime errors and crashes are classified, de-duplicated and located at file and line — and marked as your code or the environment.
+- **Agents that check their own work.** Claude Code, Codex, Cursor, Claude Desktop and VS Code connect in one command. When an agent finishes, the runtime hands back any error it left, so it fixes it before stopping.
+- **Built for VS Code too.** Run on the emulator from the Command Palette, see the phone in a panel beside your code, and find runtime problems in the Problems panel.
+- **Private by design.** Everything runs on your computer. No account, no cloud service, no telemetry.
+
+## Get started
+
+1. **Install** — download the installer and run it. It installs for your Windows user, without administrator rights.
+2. **Set up** — the setup wizard scans your PC, lets you choose your app's folder, and shows exactly what will be installed before anything downloads.
+3. **Run** — one click (or `umr run`) boots the emulator, builds your app and opens the live preview.
+4. **Connect your agent** — one click (or `umr agent setup claude-code`) gives your coding agent the runtime's tools.
 
 ```powershell
-umr trust .                      # once per project folder
-umr run                          # toolchain check → emulator → build → app in the docked preview
-umr agent setup claude-code      # or codex: connect your agent (shows the changes, asks first)
+umr run                          # build, launch and preview the app in this folder
+umr agent setup claude-code      # or codex, cursor, claude-desktop, vscode
 ```
 
-## What it does
-- **Zero-config toolchain** — detects what your project needs (JDK, Android SDK packages, emulator image, Flutter, Node) and installs only that, from the official publishers, verified, into its own folder. Your `PATH`, `JAVA_HOME`, `ANDROID_HOME` and Android Studio are never touched.
-- **Live preview beside your agent** — the real app on a real emulator, 40+ fps, mouse and keyboard input, phone / foldable / tablet sizes, hot reload for Flutter and React Native, rebuilds for Kotlin/Java.
-- **Diagnostics an agent can use** — build errors, crashes, ANRs and runtime exceptions, classified (build, runtime, crash, environment, device, network), deduplicated, located at file and line, and marked as *your code* or *environment*.
-- **Agent integration** — an MCP server with 17 tools (status digest, problems, logs, screenshot, UI tree, input, reload, run) plus a CLI; per-agent permissions, approvals for new folders and device switches, an audit log, and sanitised output.
+The full walk-through is in the **[getting-started guide](docs/user/getting-started.md)**.
 
-- **VS Code extension** — `apps/vscode`: run on the emulator, the phone preview in a panel, runtime problems in the Problems panel, Copilot agent mode. Sample apps to try it: `sample-app/` (a calculator in Kotlin, Java, Dart and React Native).
+## Requirements
 
-It is **not** an IDE, an AI agent or an emulator of its own: it orchestrates Google's official tools and the frameworks' own CLIs.
+| | |
+|---|---|
+| Operating system | Windows 11 x64 (build 22000 or later) |
+| Processor | Virtualization (VT-x / AMD-V) turned on in the firmware |
+| Memory | 16 GB recommended, 8 GB minimum |
+| Disk | About 60 MB for the app, plus 8–15 GB for toolchains and one emulator image |
 
-## Install
-Download the installer (`AI-Mobile-Runtime_<version>_x64-setup.exe`), check its SHA-256, and run it — per user, no administrator rights. A portable ZIP and a CLI-only ZIP are also published. Requirements and the full walk-through: **[docs/user](docs/user/README.md)**.
+The app tells you if anything is missing and turns on Windows Hypervisor Platform for you when needed. Details: [requirements](docs/user/requirements.md).
+
+## Try it with the samples
+
+[`sample-app/`](sample-app) contains the same small calculator built four ways — [Kotlin](sample-app/sample-kotlin), [Java](sample-app/sample-java), [Dart / Flutter](sample-app/sample-dart) and [React Native](sample-app/sample-react-native). Open one and run it to see the runtime at work.
+
+## Documentation
 
 | Guide | |
 |---|---|
-| [Getting started](docs/user/getting-started.md) | install → setup wizard → first app → connect an agent |
-| [Requirements](docs/user/requirements.md) | Windows 11 x64, virtualization, 16 GB RAM recommended, 8–15 GB disk |
-| [Agents](docs/user/agents.md) | Claude Code, Codex, other MCP clients; tools and permissions |
-| [VS Code](docs/user/vscode.md) | The extension: run, phone preview panel, Problems panel, Copilot agent mode |
-| [Troubleshooting](docs/user/troubleshooting.md) · [Privacy and security](docs/user/privacy-and-security.md) · [Uninstall](docs/user/uninstall-and-data.md) · [Command reference](docs/user/cli-reference.md) | |
+| [Getting started](docs/user/getting-started.md) | Install, set up, run your first app and connect an agent |
+| [Coding agents](docs/user/agents.md) | Connecting Claude Code, Codex, Cursor and other MCP clients; tools and permissions |
+| [VS Code](docs/user/vscode.md) | The extension: run on the emulator, phone preview panel, Problems panel, Copilot |
+| [Troubleshooting](docs/user/troubleshooting.md) | Common problems and how to fix them |
+| [Privacy and security](docs/user/privacy-and-security.md) | What the runtime does on your computer, and what it never does |
+| [Command reference](docs/user/cli-reference.md) | Every `umr` command |
+| [Uninstall and your data](docs/user/uninstall-and-data.md) | Where everything is kept and how to remove it |
 
-## Scope
-| Area | 1.0 |
-|---|---|
-| Host | Windows 11 x64 (macOS / Linux later) |
-| Target | Android emulator (physical devices later) |
-| Frameworks | Kotlin, Java, Flutter, React Native, Expo |
-| Agents | Claude Code, Codex, any MCP client |
-| iOS | Out of scope (needs macOS, Xcode and Apple's licences) |
+## Privacy and security
 
-## Architecture
-```
- coding agent ──(MCP: umr mcp · CLI: umr)──┐
-                                           ▼
- desktop preview window ◀──────▶ Runtime Core (Rust background service, per user)
- (Tauri 2 + React, WebGL2)       • environment scan, install plans, verified installer
-                                 • devices, sessions, supervised processes
-                                 • framework adapters: Gradle · Flutter · React Native/Expo
-                                 • diagnostics (classifier, dedupe, sanitiser)
-                                 • preview stream (emulator gRPC frames → WebSocket)
-                                 • agent permissions, approvals, audit
-```
-The CLI, the desktop app and the MCP server are thin clients of the Core over a user-only named pipe. Sessions survive closing the window or the agent. Everything runs locally; nothing about your code or app leaves your machine.
+The runtime has no account and no telemetry, and it goes online only to download the tools you approved and to check for updates. Toolchains live in their own folder; your `PATH`, `JAVA_HOME`, `ANDROID_HOME` and Android Studio stay untouched. Agents get their own limited permissions, ask you before running a new folder, and every call is recorded.
 
-## Status
-| Phase | | |
-|---|---|---|
-| 1 Foundation + provisioning | ✅ | environment scan, Knowledge Pack, plans, verified transactional installer, setup wizard |
-| 2 Android runtime | ✅ | private adb server, device catalogue, emulator boot + health, supervisor, sessions |
-| 3 Framework adapters | ✅ | Kotlin/Java (Gradle), Flutter, React Native / Expo, file watching |
-| 4 Preview | ✅ | docked window, 40–42 fps, our pipeline 12–17 ms p95 |
-| 5 Diagnostics | ✅ | 76-case failure corpus: category 100 %, file:line 96.6 % |
-| 6 Agents | ✅ | MCP server; Claude Code fixed a seeded bug through it on its own |
-| 8 Release readiness | ✅ except signing and licence | per-user installer (6 MB), updates, security review, docs |
-| 9 Website + distribution | planned | |
+Found a vulnerability? Please report it privately as described in [SECURITY.md](SECURITY.md).
 
-Open before a public 1.0: the product licence, a code-signing certificate, and the Codex live check.
+## Contributing
 
-## Building from source
-Windows 11, Rust (MSVC; the version is pinned in `rust-toolchain.toml`), Visual Studio Build Tools, Node.js 20+.
-
-```powershell
-cargo build --release                         # Core, CLI, desktop app, helpers
-powershell -File scripts\ci-local.ps1         # the same checks as CI: fmt, clippy, tests, release build
-powershell -File scripts\release.ps1          # installer, portable ZIP, CLI ZIP, SHA256SUMS, releases.json → dist\
-```
-
-| Folder | |
-|---|---|
-| `crates/` | Runtime Core and its parts (`umr-core`, `-api`, `-storage`, `-env`, `-resolver`, `-installer`, `-supervisor`, `-device`, `-session`, `-stream`, `-diagnostics`, `-mcp`, `-platform`) |
-| `adapters/` | adapter contract (`sdk`) and the Gradle, Flutter and React Native adapters |
-| `apps/` | `cli` (`umr`), `desktop` (Tauri app + React UI) |
-| `helpers/` | `elevated-helper` (the two administrator actions) |
-| `knowledge-pack/` | version compatibility rules |
-| `tests/` | failure corpus, environment matrix |
-| `docs/` | user guide, security review |
-| `poc/` | Phase 0 experiments and their measured reports (frozen) |
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) to contribute and [SECURITY.md](SECURITY.md) to report a vulnerability.
-
-## Third-party components
-Shipped: the Rust crates and npm packages listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Downloaded at the user's request and never redistributed: Android SDK components, the emulator and Android CLI (Google, Android SDK License Agreement — <https://developer.android.com/studio/terms>, shown in the app for acceptance), Eclipse Temurin JDK (GPLv2 + Classpath Exception), Flutter (BSD-3-Clause), Node.js (MIT).
-
-Android is a trademark of Google LLC. This project is not affiliated with or endorsed by Google.
+Contributions are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) explains how to build the project, run the checks and propose a change.
 
 ## Licence
-Not decided yet. All rights reserved until a licence is added.
+
+The licence will be published with the first public release. Third-party components and their licences are listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Android SDK components, the emulator, the JDK, Flutter and Node.js are downloaded from their publishers at your request and are never redistributed.
+
+Android is a trademark of Google LLC. This project is not affiliated with or endorsed by Google.

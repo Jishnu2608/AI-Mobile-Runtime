@@ -15,6 +15,7 @@
 
 mod agents;
 mod links;
+mod updates;
 
 use serde_json::Value;
 use tokio::sync::Mutex;
@@ -37,6 +38,7 @@ const ALLOWED: &[&str] = &[
     methods::SESSION_STATUS,
     methods::SESSION_START,
     methods::PROJECT_RELOAD,
+    methods::PROJECT_STOP,
     methods::PROJECT_STATUS,
     // wizard step "Run" (Phase 9.6)
     methods::PROJECT_RUN,
@@ -152,6 +154,39 @@ fn open_docs(page: String, anchor: Option<String>) -> Result<(), String> {
 }
 
 /// Opens the docked live preview window.
+/// UPD-001: is a newer version published on the configured channel?
+#[tauri::command]
+async fn update_check() -> Result<Value, String> {
+    tokio::task::spawn_blocking(updates::check)
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+/// UPD-001: download, verify and install the newer version; the app closes and opens again.
+#[tauri::command]
+fn update_apply() -> Result<(), String> {
+    updates::apply()
+}
+
+/// Windows' own folder picker for the project step; `None` when cancelled. The page receives the
+/// chosen path only (no file system access for the web view).
+#[tauri::command]
+async fn pick_folder(
+    window: tauri::WebviewWindow,
+    start: Option<String>,
+) -> Result<Option<String>, String> {
+    let mut dialog = rfd::AsyncFileDialog::new()
+        .set_title("Choose your app's project folder")
+        .set_parent(&window);
+    if let Some(dir) = start.map(std::path::PathBuf::from).filter(|p| p.is_dir()) {
+        dialog = dialog.set_directory(dir);
+    }
+    Ok(dialog
+        .pick_folder()
+        .await
+        .map(|f| f.path().display().to_string()))
+}
+
 #[tauri::command]
 fn open_preview_window() -> Result<(), String> {
     links::open_preview()
@@ -288,7 +323,10 @@ fn main() {
             wizard_save,
             agent_cli,
             open_docs,
-            open_preview_window
+            open_preview_window,
+            pick_folder,
+            update_check,
+            update_apply
         ])
         .run(tauri::generate_context!())
         .unwrap_or_else(|e| eprintln!("umr-desktop: {e}"));

@@ -4,6 +4,7 @@
 // PRV-016: the screen sits in a phone body (thin bezel, punch-hole camera) and shows an
 // in-display fingerprint sensor while the lock screen or an app's biometric prompt waits for one.
 import { useCallback, useEffect, useRef, useState } from "react";
+import { ArrowLeft, Camera, Gauge, House, Layers, RefreshCw, RotateCwSquare, ScrollText, Square, TriangleAlert } from "lucide-react";
 import { call, inApp } from "./api";
 import { FrameRenderer, percentiles } from "./gl";
 import { Approvals, DiagnosticsPanel, useProblems } from "./Problems";
@@ -290,10 +291,14 @@ export function Preview() {
             <option key={p.profile.id} value={p.profile.id}>{p.profile.id}</option>
           ))}
         </select>
-        <button title="Back" onClick={() => send({ t: "key", key: "GoBack" })}>◀</button>
-        <button title="Home" onClick={() => send({ t: "key", key: "GoHome" })}>●</button>
-        <button title="Recent apps" onClick={() => send({ t: "key", key: "AppSwitch" })}>■</button>
-        <button title="Rotate" disabled={busy} onClick={() => act("Rotate", () => call("device.rotate", {}))}>⟲</button>
+        {/* UI-005: phone keys | device | app | tools, each with a recognisable icon */}
+        <span className="pv-group" role="group" aria-label="Phone keys">
+          <IconButton label="Back" onClick={() => send({ t: "key", key: "GoBack" })}><ArrowLeft /></IconButton>
+          <IconButton label="Home" onClick={() => send({ t: "key", key: "GoHome" })}><House /></IconButton>
+          <IconButton label="Recent apps" onClick={() => send({ t: "key", key: "AppSwitch" })}><Layers /></IconButton>
+        </span>
+        <span className="pv-group" role="group" aria-label="Device">
+          <IconButton label="Rotate the phone" disabled={busy} onClick={() => act("Rotate", () => call("device.rotate", {}))}><RotateCwSquare /></IconButton>
         {foldable && (
           <select
             className="pv-select"
@@ -311,21 +316,44 @@ export function Preview() {
             <option value="closed">closed</option>
           </select>
         )}
-        <button title="Screenshot" disabled={busy} onClick={() => act("Screenshot", async () => {
-          const r = await call<{ path: string }>("device.screenshot", {});
-          return `Saved ${r.path}`;
-        })}>⧉</button>
-        <button title="Reload the app" disabled={busy} onClick={() => act("Reload", () => call("project.reload", { kind: "hot" }))}>↻</button>
-        <button title="Latency self-test" disabled={busy} onClick={() => act("Self-test", async () => {
-          const r = await call<any>("preview.selftest", { taps: 20 });
-          const v = r.verdict;
-          return `touch→visible p50 ${v.nfr_02b.p50_ms} / p95 ${v.nfr_02b.p95_ms} ms · ${v.nfr_03.fps} fps · ours ${v.nfr_02a.pipeline_p95_ms} ms${v.host_overloaded ? " · host overloaded" : ""}`;
-        })}>⏱</button>
-        <button
-          className={errors ? "pv-problems has" : "pv-problems"}
-          title="Problems and logs of the current run"
-          onClick={() => setPanel(!panel)}
-        >{errors ? `⚠ ${errors}` : "☰"}</button>
+          <IconButton label="Screenshot" disabled={busy} onClick={() => act("Screenshot", async () => {
+            const r = await call<{ path: string }>("device.screenshot", {});
+            return `Saved ${r.path}`;
+          })}><Camera /></IconButton>
+        </span>
+        <span className="pv-group" role="group" aria-label="App">
+          <IconButton label="Reload the app (apply saved changes)" disabled={busy} onClick={() => act("Reload", () => call("project.reload", { kind: "hot" }))}><RefreshCw /></IconButton>
+          {/* UI-006: stop the running app and its build tools; the emulator stays on */}
+          <IconButton
+            className="pv-stop"
+            label="Stop the app (the emulator stays on)"
+            disabled={busy}
+            onClick={() =>
+              act("Stop", async () => {
+                const r = await call<{ stopped: { package?: string } | null }>("project.stop", {});
+                return r.stopped ? `Stopped ${r.stopped.package ?? "the app"}. Run it again with umr run.` : "Nothing was running.";
+              })
+            }
+          >
+            <Square />
+          </IconButton>
+        </span>
+        <span className="pv-group" role="group" aria-label="Tools">
+          <IconButton label="Latency self-test" disabled={busy} onClick={() => act("Self-test", async () => {
+            const r = await call<any>("preview.selftest", { taps: 20 });
+            const v = r.verdict;
+            return `touch→visible p50 ${v.nfr_02b.p50_ms} / p95 ${v.nfr_02b.p95_ms} ms · ${v.nfr_03.fps} fps · ours ${v.nfr_02a.pipeline_p95_ms} ms${v.host_overloaded ? " · host overloaded" : ""}`;
+          })}><Gauge /></IconButton>
+          <IconButton
+            className={errors ? "pv-problems has" : "pv-problems"}
+            label={errors ? `${errors} problem${errors === 1 ? "" : "s"} — open problems and logs` : "Problems and logs of the current run"}
+            pressed={panel}
+            onClick={() => setPanel(!panel)}
+          >
+            {errors ? <TriangleAlert /> : <ScrollText />}
+            {errors > 0 && <span className="pv-count">{errors}</span>}
+          </IconButton>
+        </span>
         <span className="pv-fps" title="Frames drawn per second">{device ? `${fps} fps` : ""}</span>
       </div>
       <Approvals />
@@ -418,5 +446,36 @@ function FingerprintGlyph() {
         <path key={d} d={d} fill="none" stroke="currentColor" strokeWidth="1.15" strokeLinecap="round" />
       ))}
     </svg>
+  );
+}
+
+/** A toolbar button: an icon with its name as tooltip and accessible label. */
+function IconButton({
+  label,
+  onClick,
+  disabled,
+  className,
+  pressed,
+  children,
+}: {
+  label: string;
+  onClick: () => void;
+  disabled?: boolean;
+  className?: string;
+  pressed?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      className={className ? `pv-icon ${className}` : "pv-icon"}
+      title={label}
+      aria-label={label}
+      aria-pressed={pressed}
+      disabled={disabled}
+      onClick={onClick}
+    >
+      {children}
+    </button>
   );
 }

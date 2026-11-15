@@ -1,13 +1,12 @@
 import type { Metadata } from "next";
 import { PageShell, DocSection } from "@/components/site/PageShell";
-import { Status } from "@/components/ui/Status";
 import { readGenerated } from "@/lib/docs";
 import { renderMarkdown } from "@/lib/mdx";
-import { pendingDecisions } from "@/lib/site";
+import { site } from "@/lib/site";
 
 export const metadata: Metadata = {
   title: "Open source",
-  description: "The decisions still open before the public release, how to contribute and the code of conduct.",
+  description: "Where the source code is, how to contribute and the code of conduct.",
 };
 
 export default async function OpenSourcePage() {
@@ -16,50 +15,22 @@ export default async function OpenSourcePage() {
   return (
     <PageShell
       eyebrow="Open source"
-      title="Open source and open decisions"
-      lead="The source is public on GitHub. It has no licence yet, so it is all rights reserved until one is chosen. These are the decisions still to be made before the public release, and the rules contributions will follow."
+      title="Open source"
+      lead="The source code of the runtime is public on GitHub. This page explains how to contribute and the rules every contribution follows."
     >
-      <section aria-labelledby="open-decisions-title" id="open-decisions" className="scroll-mt-28">
-        <h2 id="open-decisions-title" className="t-section">
-          Open decisions
-        </h2>
-        <p className="t-body mt-4 max-w-[var(--reading-max)]">
-          Until each is decided, this site shows a labelled placeholder instead of a guess: a working name, no domain, no licence, no
-          hosting and no signature.
+      <DocSection id="source" title="Source code">
+        <p>
+          The repository holds the Runtime Core, the command line, the desktop app, the VS Code extension, this website and the user
+          guides: <a href={site.repository} rel="noreferrer">{site.repository.replace("https://", "")}</a>.
         </p>
-        <div className="table-wrap mt-8" role="region" aria-label="Open decisions" tabIndex={0}>
-          <table className="w-full min-w-[34rem] text-left text-[0.95rem]">
-            <thead>
-              <tr className="border-b border-line-strong">
-                <th scope="col" className="t-label py-3 pr-6 font-medium">Item</th>
-                <th scope="col" className="t-label py-3 pr-6 font-medium">Decision</th>
-                <th scope="col" className="t-label py-3 font-medium">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {pendingDecisions.map((d) => (
-                <tr key={d.w} className="border-b border-line">
-                  <th scope="row" className="py-3 pr-6 font-mono font-semibold">
-                    {d.w} <span className="font-normal text-ink-2">{d.id}</span>
-                  </th>
-                  <td className="py-3 pr-6 text-ink">{d.what}</td>
-                  <td className="py-3">
-                    <Status kind="pending">Pending decision</Status>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
-      <div className="mt-16">
-        <DocSection id="contributing" title="Contributing">
-          {contributing}
-        </DocSection>
-        <DocSection id="code-of-conduct" title="Code of conduct">
-          {conduct}
-        </DocSection>
-      </div>
+        <p>The licence is published with the first public release.</p>
+      </DocSection>
+      <DocSection id="contributing" title="Contributing">
+        {contributing}
+      </DocSection>
+      <DocSection id="code-of-conduct" title="Code of conduct">
+        {conduct}
+      </DocSection>
     </PageShell>
   );
 }

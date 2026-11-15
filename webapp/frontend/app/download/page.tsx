@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Download, FileArchive, PackageCheck, Terminal } from "lucide-react";
+import { Download, FileArchive, PackageCheck, Puzzle, Terminal } from "lucide-react";
+import { MarketplaceButton } from "@/components/home/VsCode";
+import { site } from "@/lib/site";
 import { OsNotice } from "@/components/download/OsNotice";
 import { Status } from "@/components/ui/Status";
 import { CodeBlock } from "@/components/docs/CodeBlock";
@@ -36,6 +38,8 @@ export default function DownloadPage() {
 
       {latest ? <Latest release={latest} /> : <NoRelease />}
 
+      <VsCodeExtension />
+
       <section aria-labelledby="verify-title" className="mt-20 grid gap-8 border-t border-line pt-14 lg:grid-cols-12">
         <div className="lg:col-span-4">
           <h2 id="verify-title" className="t-sub">
@@ -50,8 +54,8 @@ export default function DownloadPage() {
             <code>{`Get-FileHash .\\${latest?.files.find((f) => f.kind === "installer")?.name ?? "<downloaded file>"} -Algorithm SHA256`}</code>
           </CodeBlock>
           <p className="t-desc mt-4">
-            Signature: builds are not code-signed yet (open decision W8), so Windows SmartScreen may warn on first run. The checksum is the
-            check that applies until signing is in place.
+            Builds are not code-signed yet, so Windows SmartScreen may show a warning the first time you run the installer. Choose More info,
+            then Run anyway, once the checksum matches.
           </p>
         </div>
       </section>
@@ -117,13 +121,13 @@ function Latest({ release }: { release: Release }) {
         <div className="mt-8 rounded-md border border-line bg-bg-alt p-5">
           <p className="font-semibold text-ink">Licence</p>
           <p className="t-desc mt-2">
-            The product licence is not chosen yet (open decision W3). The components the app installs come with their own licences, which
-            the setup wizard shows you one by one before anything downloads. The ones shipped inside the app are on the{" "}
+            The product licence is published with the first public release. The components the app installs come with their own licences,
+            which the setup wizard shows you one by one before anything downloads. The ones shipped inside the app are on the{" "}
             <Link className="link" href="/licences/">licences page</Link>.
           </p>
           <label className="mt-4 flex min-h-11 cursor-pointer items-start gap-3 text-[0.95rem] text-ink">
             <input type="checkbox" className="mt-1 size-4 accent-[var(--ink)]" />
-            <span>I have read the licence notes and understand that this build is a preview without a product licence.</span>
+            <span>I have read the licence notes above.</span>
           </label>
         </div>
 
@@ -190,17 +194,64 @@ function FileFacts({ file, release, compact }: { file: ReleaseFile; release: Rel
   );
 }
 
+/** The VS Code extension, from the Marketplace (once published) or as a .vsix file. */
+function VsCodeExtension() {
+  const ovsx = site.vscode.openVsx;
+  return (
+    <section id="vscode" aria-labelledby="vscode-dl-title" className="mt-20 grid gap-8 border-t border-line pt-14 lg:grid-cols-12">
+      <div className="lg:col-span-4">
+        <Puzzle aria-hidden className="size-5 text-icon" strokeWidth={1.75} />
+        <h2 id="vscode-dl-title" className="t-sub mt-4">
+          VS Code extension
+        </h2>
+        <p className="t-desc mt-3">
+          Run on Emulator, the phone in a Mobile Preview panel, runtime problems in the Problems panel, and Copilot agent mode. For
+          Kotlin, Java, Flutter and React Native. Needs the runtime installed (above).
+        </p>
+        <p className="mt-4">
+          <Link className="link" href="/docs/guides/vscode/">VS Code guide</Link>
+        </p>
+      </div>
+      <div className="lg:col-span-8">
+        <div className="flex flex-wrap items-center gap-3">
+          <MarketplaceButton />
+          {ovsx.published ? (
+            <a className="btn h-12 px-5 text-base" href={ovsx.url} rel="noopener">Open VSX</a>
+          ) : (
+            <span className="btn h-12 cursor-not-allowed px-5 text-base opacity-70" aria-disabled="true">Open VSX · coming soon</span>
+          )}
+        </div>
+        <div className="mt-6 flex flex-wrap items-center gap-3">
+          <Status kind="info">Coming soon to the Marketplace</Status>
+          <span className="t-desc">Extension ID <code>{site.vscode.id}</code></span>
+        </div>
+        <p className="t-body mt-6">
+          Until the listing is live, install the <code>{site.vscode.vsix}</code> file. It will be attached to each release next to the
+          installer; you can also build it from the repository (<code>npm --prefix apps/vscode run package</code>).
+        </p>
+        <CodeBlock data-language="powershell">
+          <code>{`code --install-extension ${site.vscode.vsix}`}</code>
+        </CodeBlock>
+        <p className="t-desc mt-3">
+          Or in VS Code: Extensions › … › Install from VSIX…. Then open your app&apos;s folder and click <strong>Mobile</strong> in the status
+          bar.
+        </p>
+      </div>
+    </section>
+  );
+}
+
 function NoRelease() {
   return (
     <section aria-labelledby="none-title" className="mt-14 rounded-lg border border-dashed border-line-strong bg-bg-alt p-6 sm:p-10">
-      <Status kind="pending">No public release yet</Status>
+      <Status kind="info">Coming soon</Status>
       <h2 id="none-title" className="t-section mt-5 max-w-2xl">
-        There is nothing to download yet
+        The first release is on its way
       </h2>
       <p className="t-body mt-4 max-w-2xl">
-        Release builds exist and will be published on the project&apos;s GitHub Releases page, but none is published yet, and they are not
-        code-signed yet (W8). When
-        the first release is published, this page lists it from the same release manifest the app&apos;s updater reads.
+        The installer, a portable ZIP and a command-line ZIP will be published here and on the project&apos;s GitHub Releases page. Each
+        release lists the file size, the SHA-256 checksum and the supported Windows build, from the same manifest the app&apos;s updater
+        reads.
       </p>
       <p className="mt-8 font-semibold text-ink">Each release will show</p>
       <ul className="mt-3 grid gap-2 text-[0.95rem] text-ink-2 sm:grid-cols-2 lg:grid-cols-3">
@@ -213,7 +264,7 @@ function NoRelease() {
       </ul>
       <div className="mt-8 flex flex-wrap gap-3">
         <Link href="/docs/requirements/" className="btn h-11 px-5">Check the requirements</Link>
-        <Link href="/releases/" className="btn btn-ghost h-11 px-5">See the release timeline</Link>
+        <Link href="/releases/" className="btn btn-ghost h-11 px-5">See releases</Link>
       </div>
     </section>
   );

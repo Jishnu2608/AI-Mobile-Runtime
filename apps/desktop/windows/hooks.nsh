@@ -9,6 +9,12 @@
   IfFileExists "$INSTDIR\umr.exe" 0 +2
     nsExec::Exec '"$INSTDIR\umr.exe" stop'
   nsExec::Exec 'taskkill /F /IM umr-core.exe'
+  ; UPD-003: other umr.exe processes from this folder (the VS Code extension's `umr rpc` bridge,
+  ; agents' `umr mcp` servers) keep umr.exe locked, and the silent installer would leave the old
+  ; one in place. They restart on their own after the update. Only this folder's copy is ended;
+  ; the updater itself has exited by now (it starts the installer and returns).
+  Sleep 1000
+  nsExec::Exec `powershell -NoProfile -NonInteractive -Command "Get-Process umr -ErrorAction SilentlyContinue | Where-Object { $$_.Path -eq '$INSTDIR\umr.exe' } | Stop-Process -Force"`
   Sleep 500
 !macroend
 

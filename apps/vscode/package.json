@@ -1,32 +1,57 @@
 {
   "name": "umr-vscode",
   "displayName": "AI Mobile Runtime",
-  "description": "Run your Android app (Kotlin, Java, Flutter, React Native) on an emulator inside VS Code: live phone preview, build errors and crashes in the Problems panel, Copilot agent tools.",
-  "version": "0.1.0",
+  "description": "Run your Android app on an emulator right inside VS Code: a live phone preview beside your code, build errors and crashes in the Problems panel, and Copilot agent tools. Kotlin, Java, Flutter and React Native.",
+  "version": "0.1.1",
   "publisher": "ai-mobile-runtime",
-  "private": true,
-  "license": "SEE LICENSE IN README.md",
+  "preview": true,
+  "pricing": "Free",
+  "license": "SEE LICENSE IN LICENSE.md",
   "icon": "media/icon.png",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Jishnu2608/AI-Mobile-Runtime"
+    "url": "https://github.com/Jishnu2608/AI-Mobile-Runtime.git",
+    "directory": "apps/vscode"
+  },
+  "homepage": "https://github.com/Jishnu2608/AI-Mobile-Runtime/blob/main/docs/user/vscode.md",
+  "bugs": {
+    "url": "https://github.com/Jishnu2608/AI-Mobile-Runtime/issues"
+  },
+  "qna": false,
+  "galleryBanner": {
+    "color": "#151716",
+    "theme": "dark"
   },
   "engines": {
     "vscode": "^1.90.0"
   },
   "categories": [
-    "Other",
+    "Testing",
     "Debuggers",
-    "Testing"
+    "Other"
   ],
   "keywords": [
     "android",
     "emulator",
+    "mobile",
+    "preview",
     "flutter",
+    "dart",
     "react native",
-    "kotlin"
+    "expo",
+    "kotlin",
+    "java",
+    "jetpack compose",
+    "gradle",
+    "copilot",
+    "mcp",
+    "ai agent",
+    "hot reload"
   ],
   "main": "./out/extension.js",
+  "extensionKind": [
+    "ui"
+  ],
   "activationEvents": [
     "workspaceContains:**/AndroidManifest.xml",
     "workspaceContains:pubspec.yaml",
@@ -38,7 +63,8 @@
     "untrustedWorkspaces": {
       "supported": false,
       "description": "Running a project builds it with its own scripts (Gradle, npm, Flutter)."
-    }
+    },
+    "virtualWorkspaces": false
   },
   "contributes": {
     "commands": [
@@ -142,13 +168,17 @@
   "scripts": {
     "ui": "node scripts/copy-ui.mjs",
     "compile": "tsc -p .",
-    "package": "npm run ui && npm run compile && node -e \"require('fs').mkdirSync('dist',{recursive:true})\" && vsce package --skip-license --allow-missing-repository -o dist/umr-vscode.vsix",
+    "vscode:prepublish": "npm run ui && npm run compile",
+    "package": "node -e \"require('fs').mkdirSync('dist',{recursive:true})\" && vsce package --target win32-x64 -o dist/umr-vscode.vsix",
+    "publish:marketplace": "vsce publish --target win32-x64 --packagePath dist/umr-vscode.vsix",
+    "publish:openvsx": "ovsx publish dist/umr-vscode.vsix",
     "test": "node --test \"out/test/**/*.test.js\""
   },
   "devDependencies": {
     "@types/node": "^20.11.0",
     "@types/vscode": "~1.90.0",
     "@vscode/vsce": "^3.2.0",
-    "typescript": "^5.6.0"
+    "typescript": "^5.6.0",
+    "ovsx": "^0.10.0"
   }
 }

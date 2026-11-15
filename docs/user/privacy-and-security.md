@@ -8,4 +8,4 @@
 - **Agents.** Limited permissions, approvals for new folders and device switches, an audit log, and sanitised output — see [Agents](agents.md).
 - **Logs and records.** Logs are kept in `%USERPROFILE%\.umr\logs`; old ones are removed by `umr clean`. The database (`umr.db`) is readable only by your Windows user (and SYSTEM / Administrators); audit-log entries and environment scans older than 90 days are deleted when the Runtime Core starts (`[storage] retention_days` in `config.toml`, 0 = keep them).
 
-Report a vulnerability as described in `SECURITY.md` in the repository. The latest security review is in `docs/security/`.
+Report a vulnerability privately, as described in `SECURITY.md` in the repository.

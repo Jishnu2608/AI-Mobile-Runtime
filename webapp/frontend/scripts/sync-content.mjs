@@ -22,7 +22,6 @@ const files = [
   ["docs/user/cli-reference.md", "cli-reference.md"],
   ["docs/user/troubleshooting.md", "troubleshooting.md"],
   ["docs/agents/clients.md", "agent-clients.md"],
-  ["docs/security/review-v1.md", "security-review.md"],
   ["SECURITY.md", "SECURITY.md"],
   ["CONTRIBUTING.md", "CONTRIBUTING.md"],
   ["CODE_OF_CONDUCT.md", "CODE_OF_CONDUCT.md"],

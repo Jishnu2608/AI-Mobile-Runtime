@@ -4,7 +4,6 @@ import "./globals.css";
 import { ThemeScript } from "@/components/theme/ThemeScript";
 import { SiteHeader } from "@/components/site/SiteHeader";
 import { SiteFooter } from "@/components/site/SiteFooter";
-import { PendingBanner } from "@/components/site/PendingBanner";
 import { site } from "@/lib/site";
 import { latestStable, loadManifest } from "@/lib/releases";
 
@@ -22,13 +21,13 @@ const geistMono = localFont({
   display: "swap",
 });
 
-// No metadataBase, canonical URL or sitemap: the domain is not decided (W2 / DEC-038).
+// No metadataBase, canonical URL or sitemap until the site has its domain.
 export const metadata: Metadata = {
   title: { default: `${site.name} — Android runtime for AI coding agents`, template: `%s · ${site.name}` },
   description:
     "A local Windows runtime that prepares the Android toolchain, runs the emulator, shows your app beside Claude Code or Codex, and gives the agent the screen, the errors and the controls.",
   applicationName: site.name,
-  robots: { index: false, follow: false }, // until the public name and domain are decided (W1, W2)
+  robots: { index: false, follow: false }, // until the site has its public name and domain
 };
 
 export const viewport: Viewport = {
@@ -52,7 +51,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         >
           Skip to content
         </a>
-        <PendingBanner />
         <SiteHeader hasRelease={hasRelease} />
         <main id="main" className="flex-1" tabIndex={-1}>
           {children}

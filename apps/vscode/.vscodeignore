@@ -6,3 +6,5 @@ dist/**
 tsconfig.json
 .gitignore
 **/*.map
+PUBLISHING.md
+.vscode-test/**

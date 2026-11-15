@@ -10,6 +10,8 @@
   notes link then points at .../releases/tag/v<version>. Default: a placeholder.
 .PARAMETER Channel
   stable or beta.
+.PARAMETER SkipVscode
+  Do not build the VS Code extension (.vsix) into the release.
 
 .NOTES
   Signing: set UMR_SIGN_THUMBPRINT to the SHA-1 thumbprint of a code-signing certificate in the
@@ -20,7 +22,8 @@
 param(
   [string]$BaseUrl = "https://example.invalid/releases",
   [ValidateSet("stable", "beta")][string]$Channel = "stable",
-  [switch]$SkipBuild
+  [switch]$SkipBuild,
+  [switch]$SkipVscode
 )
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
@@ -123,8 +126,22 @@ $cli = Join-Path $out "umr-cli_$($version)_x64.zip"
 Compress-Archive -Path $stage -DestinationPath $cli -CompressionLevel Optimal
 Remove-Item (Join-Path $out "cli-stage") -Recurse -Force
 
+# VS Code extension (.vsix, Windows x64 target): the same file the Marketplace gets
+$vsix = $null
+if (-not $SkipVscode) {
+  Step "VS Code extension"
+  npm --prefix apps/vscode ci --no-audit --no-fund
+  if ($LASTEXITCODE -ne 0) { throw "npm ci for the VS Code extension failed" }
+  npm --prefix apps/vscode run package
+  if ($LASTEXITCODE -ne 0) { throw "packaging the VS Code extension failed" }
+  $extVersion = (Get-Content apps\vscode\package.json -Raw | ConvertFrom-Json).version
+  $vsix = Join-Path $out "umr-vscode-$($extVersion)-win32-x64.vsix"
+  Copy-Item apps\vscode\dist\umr-vscode.vsix $vsix
+}
+
 Step "Checks"
 $files = @(Get-Item $installer, $zip, $cli)
+if ($vsix) { $files += Get-Item $vsix }
 foreach ($f in $files) {
   $mb = [math]::Round($f.Length / 1MB, 1)
   Write-Host ("{0,-50} {1,6} MB" -f $f.Name, $mb)
@@ -139,6 +156,7 @@ Step "SHA256SUMS and releases.json"
 $sums = foreach ($f in $files) { "{0}  {1}" -f (Get-FileHash $f.FullName -Algorithm SHA256).Hash.ToLower(), $f.Name }
 [System.IO.File]::WriteAllText((Join-Path $out "SHA256SUMS"), (($sums -join "`n") + "`n"), [System.Text.UTF8Encoding]::new($false))
 $kinds = @{ $installer = "installer"; $zip = "portable"; $cli = "cli" }
+if ($vsix) { $kinds[$vsix] = "vscode" }
 $entries = foreach ($f in $files) {
   [ordered]@{
     kind   = $kinds[$f.FullName]

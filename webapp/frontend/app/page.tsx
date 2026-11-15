@@ -1,4 +1,5 @@
 import { Hero } from "@/components/home/Hero";
+import { VsCode } from "@/components/home/VsCode";
 import {
   Agents,
   ArchitectureSection,
@@ -9,7 +10,6 @@ import {
   OpenSource,
   Pillars,
   Privacy,
-  RecordingSlot,
 } from "@/components/home/Sections";
 import { loadTools } from "@/components/docs/McpToolTable";
 import { latestStable, loadManifest } from "@/lib/releases";
@@ -20,11 +20,11 @@ export default function Home() {
   return (
     <>
       <Hero hasRelease={hasRelease} toolCount={tools.length} />
-      <RecordingSlot />
       <Pillars />
       <HowItWorks />
       <Frameworks />
       <Agents tools={tools} />
+      <VsCode />
       <ArchitectureSection />
       <Privacy />
       <OpenSource />
