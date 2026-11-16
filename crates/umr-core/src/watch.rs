@@ -57,6 +57,17 @@ pub fn decide(adapter: &dyn umr_adapter::Adapter, rels: &BTreeSet<String>) -> Op
         })
 }
 
+/// Saved JavaScript / TypeScript sources: a running React Native app re-renders with them.
+#[must_use]
+pub fn fast_refreshed(rels: &BTreeSet<String>) -> bool {
+    rels.iter().any(|r| {
+        let r = r.to_ascii_lowercase();
+        [".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs"]
+            .iter()
+            .any(|e| r.ends_with(e))
+    })
+}
+
 fn kind_name(k: ReloadKind) -> &'static str {
     match k {
         ReloadKind::Hot => "hot",
@@ -126,6 +137,15 @@ pub fn start(state: &ApiState, root: &Path, adapter_id: &str) -> Result<Watch, S
                 let files = std::mem::take(&mut pending);
                 let Some(state) = weak.upgrade() else { return };
                 let Some(kind) = decide(adapter.as_ref(), &files) else {
+                    // the framework applies these itself (React Native Fast Refresh): the new
+                    // code reports its own errors again, the old ones are gone (AUD-P0-2)
+                    if fast_refreshed(&files) {
+                        state
+                            .diag
+                            .lock()
+                            .unwrap_or_else(std::sync::PoisonError::into_inner)
+                            .reload_started();
+                    }
                     state.watch_busy.store(false, Ordering::SeqCst);
                     continue;
                 };
@@ -187,5 +207,13 @@ mod tests {
             Some("lib/main.dart")
         );
         assert_eq!(relative(Path::new(r"C:\p"), Path::new(r"D:\x")), None);
+    }
+
+    #[test]
+    fn only_saved_code_counts_as_fast_refreshed() {
+        let set = |v: &[&str]| v.iter().map(|s| (*s).to_string()).collect::<BTreeSet<_>>();
+        assert!(fast_refreshed(&set(&["App.tsx"])));
+        assert!(fast_refreshed(&set(&["README.md", "src/calc.ts"])));
+        assert!(!fast_refreshed(&set(&["README.md"])));
     }
 }

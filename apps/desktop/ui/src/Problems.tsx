@@ -1,6 +1,7 @@
 // DIA-004: Problems and Logs panels of the preview window. Problems come classified and
 // deduplicated from the Core (`diagnostics.list`), logs from `logs.tail`; both already sanitised.
 import { useEffect, useRef, useState } from "react";
+import { Check, ClipboardCopy, Copy } from "lucide-react";
 import { call, openDocs, troubleshootingAnchor } from "./api";
 
 export interface Problem {
@@ -12,11 +13,14 @@ export interface Problem {
   message: string;
   file?: string;
   line?: number;
+  column?: number;
   count: number;
   seq: number;
   first_seen_ms: number;
   stack_frames: number;
   stack?: string[];
+  /** The source lines around `file:line` (`diagnostics.get` only). */
+  code?: { first: number; line: number; lines: string[] };
 }
 
 interface LogLine {
@@ -31,31 +35,34 @@ interface LogLine {
 const ORDER = ["crash", "build", "runtime", "environment", "device", "network"];
 const KEEP_LOGS = 1500;
 
-/** Problems of the current run, kept current by polling with a cursor. */
+/** Identity of a list: which problems, how often, and when last seen. */
+export function listKey(entries: Problem[]): string {
+  return entries.map((e) => `${e.fingerprint}:${e.count}:${e.seq}`).join("|");
+}
+
+/**
+ * Problems of the current run, the same list `umr problems` shows (AUD-P1-3). Each poll reads the
+ * whole list instead of only what is new: problems that were fixed (dropped when a reload starts)
+ * leave the panel, and a run of another project, which starts with an empty list, replaces the
+ * old one. The list is small (at most 500, deduplicated) and comes from this PC.
+ */
 export function useProblems(): Problem[] {
-  const [items, setItems] = useState<Map<string, Problem>>(new Map());
+  const [items, setItems] = useState<Problem[]>([]);
   useEffect(() => {
-    let cursor = 0;
-    let known = new Map<string, Problem>();
+    let shown = "";
     let stop = false;
     const tick = async () => {
       try {
-        const r = await call<{ entries: Problem[]; cursor: number; total: number }>("diagnostics.list", { since: cursor, limit: 500 });
+        const r = await call<{ entries: Problem[] }>("diagnostics.list", { limit: 500 });
         if (stop) return;
-        // a new run starts empty: fetch everything again
-        if (r.total < known.size) {
-          known = new Map();
-          cursor = 0;
-          return tick();
+        const entries = r.entries ?? [];
+        const key = listKey(entries);
+        if (key !== shown) {
+          shown = key;
+          setItems(entries);
         }
-        if (r.entries.length) {
-          known = new Map(known);
-          for (const e of r.entries) known.set(e.fingerprint, e);
-          setItems(known);
-        }
-        cursor = r.cursor;
       } catch {
-        /* Core restarting: try again */
+        /* Core restarting: keep what is shown and try again */
       }
     };
     const loop = async () => {
@@ -69,7 +76,7 @@ export function useProblems(): Problem[] {
       stop = true;
     };
   }, []);
-  return [...items.values()].sort((a, b) => a.first_seen_ms - b.first_seen_ms);
+  return [...items].sort((a, b) => a.first_seen_ms - b.first_seen_ms);
 }
 
 function where(p: Problem) {
@@ -77,46 +84,152 @@ function where(p: Problem) {
   return p.line ? `${p.file}:${p.line}` : p.file;
 }
 
-function asText(p: Problem, stack: string[]) {
-  return [`${p.category} (${p.origin}) ${p.source}: ${p.message}`, where(p) && `at ${where(p)}`, ...stack.map((f) => `    ${f}`)]
-    .filter(Boolean)
-    .join("\n");
+const ORIGIN_TEXT: Record<string, string> = { app: "in your code", environment: "toolchain, device or network", unknown: "origin unknown" };
+
+/** React Native frames name the dev server's bundle URL with a long query: keep the bundle name. */
+export function shortFrame(f: string): string {
+  return f.replace(/https?:\/\/[^\s)]*?\/([\w.-]+\.bundle)[^\s)]*?(:\d+:\d+)(?=\))/g, "$1$2");
+}
+
+/** The code around the problem, numbered, with the problem's line marked `>`. */
+export function codeText(code: Problem["code"]): string[] {
+  if (!code?.lines.length) return [];
+  const width = String(code.first + code.lines.length - 1).length;
+  return code.lines.map((l, i) => {
+    const n = code.first + i;
+    return `${n === code.line ? ">" : " "} ${String(n).padStart(width)} | ${l}`;
+  });
+}
+
+/**
+ * AUD-P1-11: one problem as plain text for an agent, a forum or a colleague: what, where, how
+ * often, the stack and the code around it. `p` is the full entry from `diagnostics.get`.
+ */
+export function problemText(p: Problem): string {
+  const loc = where(p) && (p.column ? `${where(p)}:${p.column}` : where(p));
+  const out = [
+    `${p.category.toUpperCase()} · ${p.severity} · ${ORIGIN_TEXT[p.origin] ?? p.origin} · ${p.source}${p.count > 1 ? ` · seen ${p.count}×` : ""}`,
+    p.message,
+  ];
+  if (loc) out.push(`at ${loc}`);
+  const code = codeText(p.code);
+  if (code.length) out.push("", "Code:", ...code);
+  const stack = (p.stack ?? []).map(shortFrame);
+  if (stack.length) {
+    out.push("", "Stack:", ...stack.slice(0, 25).map((f) => `  ${f}`));
+    if (stack.length > 25) out.push(`  … ${stack.length - 25} more frames`);
+  }
+  return out.join("\n");
+}
+
+interface RunContext {
+  project?: string;
+  adapter?: string;
+  package?: string;
+  serial?: string;
+  avd?: string;
+  profile?: string;
+}
+
+/** All problems, with what someone outside needs to know about the app and the device. */
+export function reportText(problems: Problem[], run: RunContext, when = new Date()): string {
+  const head = [`AI Mobile Runtime — ${problems.length} problem${problems.length === 1 ? "" : "s"} in the current run`];
+  if (run.project) head.push(`Project: ${run.project}${run.adapter ? ` (${run.adapter})` : ""}`);
+  if (run.package) {
+    const device = [run.serial, run.avd && `emulator ${run.avd}`, run.profile && `${run.profile} size`].filter(Boolean).join(", ");
+    head.push(`App: ${run.package}${device ? ` on ${device}` : ""}`);
+  }
+  head.push(`Copied: ${when.toISOString().replace("T", " ").slice(0, 16)} UTC`);
+  const body = problems.map((p, i) => `${i + 1}. ${problemText(p).replace(/\n/g, "\n   ")}`);
+  return [head.join("\n"), ...body].join("\n\n") + "\n";
+}
+
+/** The full entry (stack and code) of a listed problem; the listed one if that fails. */
+async function full(p: Problem): Promise<Problem> {
+  try {
+    return { ...p, ...(await call<Problem>("diagnostics.get", { fingerprint: p.fingerprint })) };
+  } catch {
+    return p;
+  }
+}
+
+/** Copies `text`; true when the clipboard took it. */
+async function toClipboard(text: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Copy all problems with project, app and device (AUD-P1-11). */
+function CopyAll({ problems }: { problems: Problem[] }) {
+  const [state, setState] = useState<"idle" | "busy" | "done" | "failed">("idle");
+  const copy = async () => {
+    setState("busy");
+    const run: RunContext = {};
+    try {
+      const l = await call<{ run?: RunContext }>("diagnostics.list", { limit: 1 });
+      Object.assign(run, l.run ?? {});
+    } catch {
+      /* without the run: the problems alone */
+    }
+    try {
+      const s = await call<{ session?: { avd?: string; profile?: string } | null }>("session.status");
+      run.avd = s.session?.avd;
+      run.profile = s.session?.profile;
+    } catch {
+      /* without the device name */
+    }
+    const all: Problem[] = [];
+    for (const p of problems.slice(0, 50)) all.push(await full(p));
+    const ok = await toClipboard(reportText(all, run));
+    setState(ok ? "done" : "failed");
+    setTimeout(() => setState("idle"), 1600);
+  };
+  return (
+    <button className="dg-copyall" onClick={copy} disabled={state === "busy"} title="Copy every problem with the project, app, device, code and stack — to paste into an agent chat, an issue or a forum">
+      {state === "done" ? <Check aria-hidden /> : <ClipboardCopy aria-hidden />}
+      {state === "done" ? "Copied" : state === "failed" ? "Copy failed" : state === "busy" ? "Copying…" : "Copy all"}
+    </button>
+  );
 }
 
 function ProblemRow({ p }: { p: Problem }) {
   const [open, setOpen] = useState(false);
-  const [stack, setStack] = useState<string[] | null>(null);
-  const [copied, setCopied] = useState(false);
-  const toggle = async () => {
+  // the full entry (stack and code), fetched when the row opens or is copied
+  const [detail, setDetail] = useState<Problem | null>(null);
+  const [copied, setCopied] = useState<"" | "done" | "failed">("");
+  const load = async () => {
+    const d = await full(p);
+    setDetail(d);
+    return d;
+  };
+  const toggle = () => {
     setOpen(!open);
-    if (!open && stack === null && p.stack_frames > 0) {
-      try {
-        const full = await call<Problem>("diagnostics.get", { fingerprint: p.fingerprint });
-        setStack(full.stack ?? []);
-      } catch {
-        setStack([]);
-      }
-    }
+    if (!open && !detail) load();
   };
   const copy = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    try {
-      await navigator.clipboard.writeText(asText(p, stack ?? []));
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1200);
-    } catch {
-      /* clipboard refused */
-    }
+    const ok = await toClipboard(problemText(detail ?? (await load())));
+    setCopied(ok ? "done" : "failed");
+    setTimeout(() => setCopied(""), 1400);
   };
+  const code = codeText(detail?.code);
+  const stack = (detail?.stack ?? []).map(shortFrame);
   return (
     <div className={`dg-row ${p.severity}`} onClick={toggle}>
       <div className="dg-head">
-        <span className={`dg-origin ${p.origin}`} title={p.origin === "app" ? "in your code" : p.origin === "environment" ? "toolchain, device or network" : "origin unknown"}>
+        <span className={`dg-origin ${p.origin}`} title={ORIGIN_TEXT[p.origin] ?? p.origin}>
           {p.origin === "app" ? "code" : p.origin === "environment" ? "env" : "?"}
         </span>
         <span className="dg-msg">{p.message.split("\n")[0]}</span>
         {p.count > 1 && <span className="dg-count">×{p.count}</span>}
-        <button className="dg-copy" title="Copy (for your agent)" onClick={copy}>{copied ? "✓" : "⧉"}</button>
+        <button className={`dg-copy${copied ? " " + copied : ""}`} title="Copy this problem with its place, code and stack — for your agent, an issue or a forum" onClick={copy}>
+          {copied === "done" ? <Check aria-hidden /> : <Copy aria-hidden />}
+          {copied === "done" ? "Copied" : copied === "failed" ? "Failed" : "Copy"}
+        </button>
       </div>
       {(where(p) || open) && (
         <div className="dg-where">
@@ -128,7 +241,7 @@ function ProblemRow({ p }: { p: Problem }) {
       {open && (
         <pre className="dg-stack">
           {p.message.includes("\n") && p.message + "\n"}
-          {stack === null && p.stack_frames > 0 ? "loading…" : (stack ?? []).join("\n")}
+          {!detail ? "loading…" : [...(code.length ? [...code, ""] : []), ...stack].join("\n")}
         </pre>
       )}
     </div>
@@ -248,6 +361,7 @@ export function DiagnosticsPanel({ problems, onClose }: { problems: Problem[]; o
       <div className="dg-tabs">
         <button className={tab === "problems" ? "on" : ""} onClick={() => setTab("problems")}>Problems {problems.length ? `(${problems.length})` : ""}</button>
         <button className={tab === "logs" ? "on" : ""} onClick={() => setTab("logs")}>Logs</button>
+        {tab === "problems" && problems.length > 0 && <CopyAll problems={problems} />}
         <button className="dg-close" title="Close" onClick={onClose}>✕</button>
       </div>
       {tab === "problems" ? <ProblemsTab problems={problems} /> : <LogsTab />}

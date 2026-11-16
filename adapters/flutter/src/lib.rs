@@ -95,6 +95,14 @@ pub fn restart_request(id: u64, app_id: &str, full: bool) -> String {
     .to_string()
 }
 
+/// `app.callServiceExtension` request line: runs a Flutter service extension in the app.
+#[must_use]
+pub fn extension_request(id: u64, app_id: &str, method: &str, params: &Value) -> String {
+    json!([{ "id": id, "method": "app.callServiceExtension",
+             "params": { "appId": app_id, "methodName": method, "params": params } }])
+    .to_string()
+}
+
 #[must_use]
 pub fn stop_request(id: u64, app_id: &str) -> String {
     json!([{ "id": id, "method": "app.stop", "params": { "appId": app_id } }]).to_string()
@@ -593,6 +601,12 @@ fn launch_tool(
         .map(ToString::to_string)
         .collect(),
     };
+    if attach.is_none() {
+        // AUD-P0-1: `--machine` builds the app with structured errors on (for IDEs, which read
+        // `Flutter.Error` events); then Flutter prints no errors at all, and a red error screen
+        // reaches nobody. Printed errors are what the runtime reads.
+        args.push("--dart-define=flutter.inspector.structuredErrors=false".into());
+    }
     if attach.is_none() && pub_resolved(&ctx.project) {
         args.push("--no-pub".into());
     }
@@ -870,6 +884,7 @@ impl Adapter for Flutter {
             session: Some(s),
         };
         app.sync_after_attach(&sink);
+        app.errors_to_console(&sink);
         let pid = umr_device::app::pid(ctx.device.adb.port, &ctx.device.serial, &package);
         sink(Event::AppStarted { package, pid });
         Ok(Box::new(app))
@@ -913,6 +928,43 @@ impl FlutterApp {
 }
 
 impl FlutterApp {
+    /// AUD-P0-1: with "structured errors" on (as after `flutter attach` to an app the tool did
+    /// not start), Flutter reports a framework error only as a VM service event and prints
+    /// nothing, so the app shows a red screen while no problem is reported. Turning it off makes
+    /// every error print its full block, which [`problem_from_log`] reads. Best effort: an app
+    /// without the extension simply answers with an error.
+    fn errors_to_console(&mut self, sink: &Sink) {
+        let Some((id, app_id, state)) = self.session.as_mut().and_then(|s| {
+            let app_id = s
+                .state
+                .0
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .app_id
+                .clone()?;
+            let id = s.next_id;
+            s.next_id += 1;
+            Some((id, app_id, s.state.clone()))
+        }) else {
+            return;
+        };
+        let line = extension_request(
+            id,
+            &app_id,
+            "ext.flutter.inspector.structuredErrors",
+            &json!({ "enabled": "false" }),
+        );
+        if self.send(&line).is_ok() {
+            let answer = wait(&state, Duration::from_secs(5), |st| st.replies.remove(&id));
+            let text = match answer {
+                Ok((_, Some(e))) => format!("structured errors not switched off: {e}"),
+                Ok((r, None)) => format!("structured errors off: {}", r.unwrap_or(Value::Null)),
+                Err(e) => format!("structured errors not switched off: {e}"),
+            };
+            sink(Event::Log { line: text });
+        }
+    }
+
     fn send(&mut self, line: &str) -> Result<(), AdapterError> {
         let s = self
             .session
@@ -1043,6 +1095,10 @@ impl RunningApp for FlutterApp {
             }
             sink(Event::Log { line: message });
         }
+        if kind != ReloadKind::Hot {
+            // a restart starts a new isolate with the tool's default again
+            self.errors_to_console(sink);
+        }
         let took = start.elapsed();
         sink(Event::Reloaded {
             kind,
@@ -1097,6 +1153,24 @@ mod tests {
             )]
         );
         assert!(matches!(&decode("[not json")[0], Message::Text(_)));
+    }
+
+    #[test]
+    fn extension_request_turns_structured_errors_off() {
+        let r: Value = serde_json::from_str(&extension_request(
+            3,
+            "a1",
+            "ext.flutter.inspector.structuredErrors",
+            &json!({ "enabled": "false" }),
+        ))
+        .unwrap();
+        assert_eq!(r[0]["method"], "app.callServiceExtension");
+        assert_eq!(r[0]["params"]["appId"], "a1");
+        assert_eq!(
+            r[0]["params"]["methodName"],
+            "ext.flutter.inspector.structuredErrors"
+        );
+        assert_eq!(r[0]["params"]["params"]["enabled"], "false");
     }
 
     #[test]

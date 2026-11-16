@@ -310,6 +310,16 @@ pub async fn run<C: Core>(
             if frames.len() > 40 {
                 let _ = write!(out, "\n    … {} more frames", frames.len() - 40);
             }
+            // AUD-P1-11: the source lines around the location, when the Core could read them
+            if let Some(lines) = e["code"]["lines"].as_array() {
+                let first = e["code"]["first"].as_u64().unwrap_or(1);
+                let at = e["code"]["line"].as_u64().unwrap_or(0);
+                out.push_str("\ncode:");
+                for (n, l) in (first..).zip(lines) {
+                    let mark = if n == at { ">" } else { " " };
+                    let _ = write!(out, "\n{mark} {n:>5} | {}", l.as_str().unwrap_or(""));
+                }
+            }
             Ok(vec![text(&out)])
         }
         "get_logs" => {

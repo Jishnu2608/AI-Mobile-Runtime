@@ -459,6 +459,7 @@ pub(crate) fn run_inner(
                 &ctx.device.serial,
                 &package,
                 since_ms,
+                Path::new(&path),
             ));
             let watching = if watch {
                 match crate::watch::start(state, Path::new(&path), adapter.id()) {
@@ -554,13 +555,13 @@ pub(crate) fn reload_kind(state: &ApiState, kind: ReloadKind) -> Result<Value, R
         };
         let _ = session_api::apply(state, s, ev, Some(&format!("{kind:?}").to_lowercase()));
     }
-    // this build reports its own compile errors: the previous build's (at old lines, or already
-    // fixed) would otherwise stay listed until a build succeeds
+    // this build reports its own compile and runtime errors: the previous ones (at old lines,
+    // or already fixed) would otherwise stay listed
     state
         .diag
         .lock()
         .unwrap_or_else(PoisonError::into_inner)
-        .build_fixed();
+        .reload_started();
     let r = app.reload(kind, &sink);
     drop(guard);
     match r {

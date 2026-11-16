@@ -200,8 +200,15 @@ pre.licence { max-height: 260px; overflow: auto; white-space: pre-wrap; backgrou
 .dg-origin { flex: none; font-size: 10px; padding: 0 4px; border-radius: 4px; background: var(--line); color: var(--muted); }
 .dg-origin.app { background: var(--note-bg); color: var(--note-ink); }
 .dg-count { flex: none; color: var(--muted); }
-.dg-copy { flex: none; border: 0; background: transparent; color: var(--muted-2); cursor: pointer; font-size: 12px; }
-.dg-copy:hover { color: var(--text); }
+.dg-copy { flex: none; display: inline-flex; align-items: center; gap: 4px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--text-2); cursor: pointer; font: 600 11px/1 inherit; padding: 4px 7px; }
+.dg-copy svg { width: 12px; height: 12px; }
+.dg-copy:hover { border-color: var(--lime-deep); color: var(--text); }
+.dg-copy.done { border-color: var(--ok); color: var(--ok); }
+.dg-copy.failed { border-color: var(--bad); color: var(--bad); }
+.dg-copyall { display: inline-flex; align-items: center; gap: 5px; margin: 2px 0 4px auto; border: 1px solid var(--lime-deep) !important; border-radius: 6px; background: var(--lime) !important; color: var(--lime-ink) !important; font-weight: 600; padding: 3px 9px !important; }
+.dg-copyall svg { width: 13px; height: 13px; }
+.dg-copyall:disabled { opacity: 0.7; }
+.dg-tabs .dg-copyall + .dg-close { margin-left: 4px; }
 .dg-where { color: var(--muted-2); font-size: 11px; margin-top: 2px; overflow-wrap: anywhere; }
 .dg-stack { margin: 4px 0 0; padding: 6px; background: var(--code); border-radius: 4px; color: var(--text-2); font-size: 11px; white-space: pre-wrap; overflow-wrap: anywhere; }
 .dg-logs { flex: 1; min-height: 0; display: flex; flex-direction: column; }
@@ -296,7 +303,13 @@ pre.diff { margin: 4px 0 8px; max-height: 220px; overflow: auto; background: var
   box-shadow: 0 8px 20px rgb(0 0 0 / 0.14), inset 0 -3px 0 rgb(0 0 0 / 0.14), inset 0 2px 0 rgb(255 255 255 / 0.35);
   transition: filter 0.2s;
 }
-.stage .chip:hover { filter: brightness(1.08) saturate(1.1); }
+.stage .chip { cursor: grab; transition: filter 0.2s, translate 0.25s cubic-bezier(.2,.9,.3,1.4), scale 0.25s cubic-bezier(.2,.9,.3,1.4), box-shadow 0.25s; }
+.stage .chip:hover { filter: brightness(1.08) saturate(1.1); translate: 0 -4px; scale: 1.07; box-shadow: 0 14px 26px rgb(0 0 0 / 0.18), inset 0 -3px 0 rgb(0 0 0 / 0.14), inset 0 2px 0 rgb(255 255 255 / 0.35); }
+.stage.dragging .chip { cursor: grabbing; }
+.stage .chip-phys, .stage .chip-float, .stage .blob { will-change: transform; }
+.stage .chip-ring { position: absolute; inset: 0; border: 3px solid; border-radius: 30%; pointer-events: none; }
+.stage .chip-spark { position: absolute; left: 50%; top: 50%; width: 8px; height: 8px; margin: -4px 0 0 -4px; border-radius: 50%; pointer-events: none; }
+.stage .branch { fill: none; stroke: var(--c-pink); stroke-width: 3; stroke-linecap: round; opacity: 0; }
 .stage .chip svg { width: 52%; height: 52%; }
 .stage-svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
 .stage-svg .fig { pointer-events: auto; cursor: grab; }

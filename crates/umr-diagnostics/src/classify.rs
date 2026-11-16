@@ -18,6 +18,7 @@ use umr_adapter::{AdapterError, Problem, Severity};
 
 use crate::crash::{AnrEvent, CrashEvent, CrashKind};
 use crate::fingerprint::fingerprint;
+use crate::js::JsError;
 use crate::model::{Category, Diagnostic, Origin};
 
 /// Text patterns, matched case-insensitively against the message. First match wins.
@@ -305,6 +306,34 @@ pub fn from_crash(c: &CrashEvent) -> Diagnostic {
         line,
         None,
         c.stack.clone(),
+    )
+}
+
+/// A JavaScript error the React Native app logged (render error, uncaught exception,
+/// `console.error`). The location is the source line Metro mapped it to, when it could; the
+/// innermost app component is named in the message either way.
+#[must_use]
+pub fn from_js_error(e: &JsError) -> Diagnostic {
+    let message = match e.components.first() {
+        Some(c) => format!("{} (in component <{c}>)", e.message),
+        None => e.message.clone(),
+    };
+    let category = rule_category(&e.message).unwrap_or(Category::Runtime);
+    let located = e.file.as_deref().is_some_and(is_app_file);
+    make(
+        category,
+        located || !e.components.is_empty(),
+        if e.warning {
+            Severity::Warning
+        } else {
+            Severity::Error
+        },
+        "react-native",
+        &message,
+        e.file.clone(),
+        e.line,
+        e.column,
+        e.stack.clone(),
     )
 }
 

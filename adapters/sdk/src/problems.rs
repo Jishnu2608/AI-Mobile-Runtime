@@ -16,13 +16,32 @@ use std::path::Path;
 
 use crate::{Problem, Severity};
 
+/// `%20` and other `%XX` escapes of a file URI → the characters (Kotlin and Flutter report
+/// `file:///D:/My%20Projects/…`, which is neither a real path nor inside the project).
+#[must_use]
+pub fn percent_decode(s: &str) -> String {
+    let b = s.as_bytes();
+    let mut out = Vec::with_capacity(b.len());
+    let mut i = 0;
+    while i < b.len() {
+        if b[i] == b'%' && i + 2 < b.len() {
+            let hex = |c: u8| char::from(c).to_digit(16);
+            if let (Some(h), Some(l)) = (hex(b[i + 1]), hex(b[i + 2])) {
+                out.push(u8::try_from(h * 16 + l).unwrap_or(b'%'));
+                i += 3;
+                continue;
+            }
+        }
+        out.push(b[i]);
+        i += 1;
+    }
+    String::from_utf8(out).unwrap_or_else(|_| s.to_string())
+}
+
 /// `file:///C:/a/b` or `C:\a\b` → path relative to `root` when inside it.
 #[must_use]
 pub fn relative(path: &str, root: &Path) -> String {
-    let p = path
-        .strip_prefix("file:///")
-        .unwrap_or(path)
-        .replace('\\', "/");
+    let p = percent_decode(path.strip_prefix("file:///").unwrap_or(path)).replace('\\', "/");
     let r = root.display().to_string().replace('\\', "/");
     let r = r.trim_end_matches('/');
     if p.len() > r.len() && p[..r.len()].eq_ignore_ascii_case(r) && p.as_bytes()[r.len()] == b'/' {
@@ -325,13 +344,26 @@ pub fn flutter_exception(text: &str, root: &Path) -> Option<Problem> {
                 .trim_matches(|c: char| !c.is_alphanumeric() && c != ' ')
                 .trim()
                 .to_string();
-            // the first sentence after "The following … was thrown …:"
+            // what was thrown: the first line after "The following … was thrown …:", which
+            // Flutter may wrap over several lines (`building X(dirty, state:` / `_XState#1):`)
             let what = lines[i + 1..]
                 .iter()
-                .skip_while(|l| !l.starts_with("The following"))
-                .nth(1)
-                .map(|l| l.trim())
-                .filter(|l| !l.is_empty());
+                .position(|l| l.starts_with("The following"))
+                .and_then(|f| {
+                    let after = &lines[i + 1 + f..];
+                    // the sentence ends at a `:` outside parentheses (`state:` inside
+                    // `CalculatorScreen(dirty, state:` does not end it)
+                    let mut depth = 0i32;
+                    let end = after.iter().take(4).position(|l| {
+                        depth += i32::try_from(l.matches('(').count()).unwrap_or(0);
+                        depth -= i32::try_from(l.matches(')').count()).unwrap_or(0);
+                        depth <= 0 && l.trim_end().ends_with(':')
+                    })?;
+                    after[end + 1..]
+                        .iter()
+                        .map(|l| l.trim())
+                        .find(|l| !l.is_empty())
+                });
             (
                 i,
                 what.map_or_else(|| header.clone(), |w| format!("{header}: {w}")),
@@ -344,20 +376,21 @@ pub fn flutter_exception(text: &str, root: &Path) -> Option<Problem> {
             (i, lines[i][at..].trim().to_string())
         };
     let tail = &lines[start..];
-    // the widget that caused it, else the first app frame
-    let widget = tail
+    // where it was thrown (the first stack frame in the app's own code), else the widget that
+    // caused it (a layout overflow has only framework frames)
+    let thrown = tail
         .iter()
-        .position(|l| l.contains("relevant error-causing widget was"))
-        .and_then(|i| {
-            tail[i + 1..]
-                .iter()
-                .take(3)
-                .find_map(|l| dart_location(l, root))
-        });
-    let loc = widget.or_else(|| {
+        .filter(|l| l.trim_start().starts_with('#'))
+        .find_map(|l| dart_location(l, root));
+    let loc = thrown.or_else(|| {
         tail.iter()
-            .filter(|l| l.trim_start().starts_with('#'))
-            .find_map(|l| dart_location(l, root))
+            .position(|l| l.contains("relevant error-causing widget was"))
+            .and_then(|i| {
+                tail[i + 1..]
+                    .iter()
+                    .take(3)
+                    .find_map(|l| dart_location(l, root))
+            })
     });
     let (file, line, col) = match loc {
         Some((f, l, c)) => (Some(f), Some(l), c),
@@ -561,5 +594,70 @@ mod tests {
             Some("Execution failed for task ':app:compileDebugKotlin'. > Compilation error. See log for more details")
         );
         assert_eq!(relative("D:/other/x.kt", root()), "D:/other/x.kt");
+    }
+
+    /// The Flutter block captured live in the 2026-11-16 audit (`throw StateError` in a
+    /// `build` method, project in a folder with spaces; stack shortened).
+    const LIVE_WIDGET_ERROR: &str = "══╡ EXCEPTION CAUGHT BY WIDGETS LIBRARY ╞═══════════════════════════
+The following StateError was thrown building CalculatorScreen(dirty, state:
+_CalculatorScreenState#bb83f):
+Bad state: audit: runtime error in build
+The relevant error-causing widget was:
+  CalculatorScreen
+  CalculatorScreen:file:///D:/Projects/Mobile%20Runtime%20Companion/sample-app/sample-dart/lib/main.dart:18:13
+When the exception was thrown, this was the stack:
+#0      _CalculatorScreenState.build (package:sample_calculator_dart/main.dart:79:37)
+#1      StatefulElement.build (package:flutter/src/widgets/framework.dart:5949:27)
+(elided 3 frames from class _Timer and dart:async-patch)
+════════════════════════════════════════════════════════════════════";
+
+    #[test]
+    fn flutter_error_names_what_was_thrown_and_where() {
+        let root = Path::new(r"D:\Projects\Mobile Runtime Companion\sample-app\sample-dart");
+        let p = flutter_exception(LIVE_WIDGET_ERROR, root).unwrap();
+        assert_eq!(
+            p.message,
+            "EXCEPTION CAUGHT BY WIDGETS LIBRARY: Bad state: audit: runtime error in build"
+        );
+        // the line that threw, not the line that created the widget
+        assert_eq!(p.file.as_deref(), Some("lib/main.dart"));
+        assert_eq!((p.line, p.column), (Some(79), Some(37)));
+    }
+
+    #[test]
+    fn flutter_layout_error_without_app_frames_points_at_the_widget() {
+        let root = Path::new(r"D:\My Apps\demo");
+        let text = "══╡ EXCEPTION CAUGHT BY RENDERING LIBRARY ╞════
+The following assertion was thrown during layout:
+A RenderFlex overflowed by 42 pixels on the right.
+The relevant error-causing widget was:
+  Row Row:file:///D:/My%20Apps/demo/lib/home.dart:30:12
+When the exception was thrown, this was the stack:
+#0      RenderFlex.performLayout (package:flutter/src/rendering/flex.dart:1:1)
+════";
+        let p = flutter_exception(text, root).unwrap();
+        assert_eq!(
+            p.message,
+            "EXCEPTION CAUGHT BY RENDERING LIBRARY: A RenderFlex overflowed by 42 pixels on the right."
+        );
+        assert_eq!(
+            (p.file.as_deref(), p.line),
+            (Some("lib/home.dart"), Some(30))
+        );
+    }
+
+    #[test]
+    fn escaped_paths_are_decoded_and_made_relative() {
+        let root = Path::new(r"D:\Projects\Mobile Runtime Companion\sample-app\sample-kotlin");
+        let p = parse_line(
+            "e: file:///D:/Projects/Mobile%20Runtime%20Companion/sample-app/sample-kotlin/app/src/main/kotlin/x/MainActivity.kt:120:24 Initializer type mismatch.",
+            root,
+        )
+        .unwrap();
+        assert_eq!(
+            p.file.as_deref(),
+            Some("app/src/main/kotlin/x/MainActivity.kt")
+        );
+        assert_eq!(percent_decode("a%20b%2Fc%zz%2"), "a b/c%zz%2");
     }
 }

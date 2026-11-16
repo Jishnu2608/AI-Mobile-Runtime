@@ -242,6 +242,23 @@ async fn diagnostics_and_logs_are_compact() {
     assert_eq!(r["result"]["content"][0]["text"], "E logcat flutter: boom");
 }
 
+#[tokio::test]
+async fn one_diagnostic_shows_the_code_around_it() {
+    let mut s = server(vec![Ok(json!({
+        "fingerprint": "f1", "category": "runtime", "origin": "app", "source": "react-native",
+        "file": "App.tsx", "line": 80, "message": "Error: boom", "count": 1,
+        "stack": ["at App (http://x/App.bundle:92:40)"],
+        "code": { "first": 79, "line": 80, "lines": ["export default function App() {", "  throw new Error('boom');", "}"] }
+    }))]);
+    let r = s
+        .handle(&call("get_diagnostic", json!({"fingerprint": "f1"})))
+        .await
+        .unwrap();
+    let t = r["result"]["content"][0]["text"].as_str().unwrap();
+    assert!(t.contains("at App.tsx:80"), "{t}");
+    assert!(t.contains("\ncode:\n     79 | export default function App() {\n>    80 |   throw new Error('boom');\n     81 | }"), "{t}");
+}
+
 #[test]
 fn base64_matches_rfc_4648_vectors() {
     for (i, o) in [

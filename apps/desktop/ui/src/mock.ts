@@ -129,7 +129,13 @@ export async function mockCall(method: string, _params: unknown): Promise<any> {
         run: { project: "C:\work\demo" },
       };
     case "diagnostics.get":
-      return { ...sampleProblems[1], stack: ["at java.lang.Integer.parseInt(Integer.java:615)", "at com.example.demo.Calc.parse(Calc.kt:8)", "at com.example.demo.MainScreenKt.MainScreen(MainScreen.kt:94)"] };
+      return {
+        ...(sampleProblems.find((p) => p.fingerprint === (_params as any)?.fingerprint) ?? sampleProblems[1]),
+        stack: ["at java.lang.Integer.parseInt(Integer.java:615)", "at com.example.demo.Calc.parse(Calc.kt:8)", "at com.example.demo.MainScreenKt.MainScreen(MainScreen.kt:94)"],
+        code: { first: 92, line: 94, lines: ["  val total = remember { mutableStateOf(0) }", "  Column {", '    Text(text = Calc.parse(input).toString())', "  }", "}"] },
+      };
+    case "session.status":
+      return { session: { avd: "umr_standard_api36", profile: "standard", serial: "emulator-5554" } };
     case "logs.tail":
       if ((_params as any)?.since) return { lines: [], cursor: 4 };
       return {

@@ -46,3 +46,4 @@ skills-lock.json
 /brand/.*
 /.playwright-mcp/
 .checkpoints/
+desktop_emulator.md

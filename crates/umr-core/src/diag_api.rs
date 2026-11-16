@@ -10,7 +10,8 @@
 //!
 //! Everything a client reads is passed through the sanitiser first (DIA-005).
 
-use std::collections::{HashSet, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Duration;
@@ -86,6 +87,14 @@ impl DiagStore {
         if !self.problems.contains(&d.fingerprint) {
             self.problem(d);
         }
+    }
+
+    /// A reload or rebuild starts: the new code reports its own compile errors and, when it runs,
+    /// its own runtime errors again. Earlier ones (at old lines, or already fixed) would
+    /// otherwise stay listed after the fix (AUD-P0-1). Crashes stay: they are history.
+    pub fn reload_started(&mut self) {
+        self.problems
+            .retain(|e| !matches!(e.diagnostic.category, Category::Build | Category::Runtime));
     }
 
     /// A successful reload or rebuild compiled the code: its earlier build problems are fixed.
@@ -189,9 +198,98 @@ struct Poll {
     pid: Option<u32>,
     last_ms: u64,
     seen_at_last: HashSet<String>,
+    /// The project folder: React Native errors are located inside it (AUD-P0-2).
+    project: PathBuf,
+    /// Metro's answers per bundle position (`None`: not in the project / no answer), so an error
+    /// that repeats on every render is mapped once.
+    mapped: HashMap<umr_diagnostics::JsFrame, Option<(String, u32, Option<u32>)>>,
+}
+
+/// One `POST` to a server on this PC; the body of a 200 answer. Plain HTTP/1.1 with
+/// `Connection: close` (Metro is the only caller's peer), chunked answers decoded.
+fn post_local(port: u16, path: &str, body: &str, timeout: Duration) -> Option<String> {
+    use std::io::{Read, Write};
+    let addr = std::net::SocketAddr::from(([127, 0, 0, 1], port));
+    let mut s = std::net::TcpStream::connect_timeout(&addr, Duration::from_secs(1)).ok()?;
+    s.set_read_timeout(Some(timeout)).ok()?;
+    s.set_write_timeout(Some(timeout)).ok()?;
+    let req = format!(
+        "POST {path} HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+        body.len()
+    );
+    s.write_all(req.as_bytes()).ok()?;
+    let mut raw = Vec::new();
+    let _ = s.take(4 << 20).read_to_end(&mut raw); // a timeout still leaves what arrived
+    let text = String::from_utf8_lossy(&raw);
+    let (head, rest) = text.split_once("\r\n\r\n")?;
+    if !head.starts_with("HTTP/1.1 200") && !head.starts_with("HTTP/1.0 200") {
+        return None;
+    }
+    if head
+        .to_ascii_lowercase()
+        .contains("transfer-encoding: chunked")
+    {
+        Some(dechunk(rest))
+    } else {
+        Some(rest.to_string())
+    }
+}
+
+/// A chunked HTTP body → its content.
+fn dechunk(mut rest: &str) -> String {
+    let mut out = String::new();
+    while let Some((size, tail)) = rest.split_once("\r\n") {
+        let Ok(n) = usize::from_str_radix(size.trim(), 16) else {
+            break;
+        };
+        if n == 0 || tail.len() < n {
+            break;
+        }
+        out.push_str(&tail[..n]);
+        rest = tail[n..].strip_prefix("\r\n").unwrap_or(&tail[n..]);
+    }
+    out
+}
+
+/// A path Metro reported, relative to the project when inside it and outside `node_modules`.
+fn project_file(file: &str, project: &Path) -> Option<String> {
+    let rel = umr_adapter::problems::relative(file, project);
+    umr_diagnostics::classify::is_app_file(&rel).then_some(rel)
 }
 
 impl Poll {
+    /// Maps the error's innermost app frame in a Metro bundle to its source line (at most three
+    /// frames, each asked once). Without an answer the error keeps its component name only.
+    fn locate_js(&mut self, e: &mut umr_diagnostics::JsError) {
+        for f in umr_diagnostics::bundle_frames(e).into_iter().take(3) {
+            let found = if let Some(v) = self.mapped.get(&f) {
+                v.clone()
+            } else {
+                let v = umr_diagnostics::metro_port(&f.url)
+                    .and_then(|port| {
+                        post_local(
+                            port,
+                            "/symbolicate",
+                            &umr_diagnostics::symbolicate_body(&f),
+                            Duration::from_secs(3),
+                        )
+                    })
+                    .and_then(|b| umr_diagnostics::parse_symbolicated(&b))
+                    .and_then(|(file, l, c)| {
+                        project_file(&file, &self.project).map(|rel| (rel, l, c))
+                    });
+                self.mapped.insert(f, v.clone());
+                v
+            };
+            if let Some((file, line, column)) = found {
+                e.file = Some(file);
+                e.line = Some(line);
+                e.column = column;
+                return;
+            }
+        }
+    }
+
     fn shell(&self, cmd: &str) -> String {
         umr_device::adb::shell_bytes(self.port, &self.serial, cmd, Duration::from_secs(10))
             .map(|b| String::from_utf8_lossy(&b).into_owned())
@@ -244,6 +342,8 @@ impl Poll {
             since_arg(self.last_ms)
         ));
         let mut s = lock(store);
+        // new lines, kept for the React Native error reader below
+        let mut fresh: Vec<(u64, char, String, String)> = Vec::new();
         for line in text.lines() {
             let Some((ms, lpid, level, tag, msg)) = parse_epoch_line(line) else {
                 continue;
@@ -256,7 +356,18 @@ impl Poll {
                 self.seen_at_last.clear();
             }
             self.seen_at_last.insert(line.to_string());
-            s.log("logcat", level, Some(tag), Some(lpid), &msg);
+            s.log("logcat", level, Some(tag.clone()), Some(lpid), &msg);
+            fresh.push((ms, level, tag, msg));
+        }
+        drop(s);
+        // AUD-P0-2: React Native 0.77+ logs JS errors only here (`ReactNativeJS` at E), not
+        // through Metro, so they are read from the app's device log and mapped to their source
+        // line through Metro (outside the store's lock: that asks Metro over HTTP)
+        for text in umr_diagnostics::group_js_errors(&fresh) {
+            if let Some(mut e) = umr_diagnostics::parse_js_error(&text) {
+                self.locate_js(&mut e);
+                lock(store).problem(umr_diagnostics::from_js_error(&e));
+            }
         }
     }
 }
@@ -269,6 +380,7 @@ pub fn start_collector(
     serial: &str,
     package: &str,
     since_ms: u64,
+    project: &Path,
 ) -> Collector {
     let stop = Arc::new(AtomicBool::new(false));
     let flag = stop.clone();
@@ -282,6 +394,8 @@ pub fn start_collector(
         pid: None,
         last_ms: since_ms,
         seen_at_last: HashSet::new(),
+        project: project.to_path_buf(),
+        mapped: HashMap::new(),
     };
     let _ = std::thread::Builder::new()
         .name("umr-diagnostics".into())
@@ -334,6 +448,36 @@ fn entry_json(e: &Entry, stack: bool) -> Value {
     v
 }
 
+/// The source lines around a problem (AUD-P1-11), for "Copy" and agents: `around` lines before
+/// and after `line`, sanitised like every other text that leaves the Core. Only a file inside
+/// `project` (after resolving `..` and links) and at most 2 MB is read.
+#[must_use]
+pub fn code_context(project: &Path, file: &str, line: u32, around: u32) -> Option<Value> {
+    if line == 0 {
+        return None;
+    }
+    let root = std::fs::canonicalize(project).ok()?;
+    let path = Path::new(file);
+    let full = if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        project.join(path)
+    };
+    let full = std::fs::canonicalize(full).ok()?;
+    if !full.starts_with(&root) || std::fs::metadata(&full).ok()?.len() > 2 << 20 {
+        return None;
+    }
+    let text = String::from_utf8_lossy(&std::fs::read(&full).ok()?).into_owned();
+    let first = line.saturating_sub(around).max(1);
+    let lines: Vec<String> = text
+        .lines()
+        .skip(usize::try_from(first - 1).ok()?)
+        .take(usize::try_from(line - first + around + 1).ok()?)
+        .map(|l| sanitize(l.trim_end()))
+        .collect();
+    (!lines.is_empty()).then(|| json!({ "first": first, "line": line, "lines": lines }))
+}
+
 /// `diagnostics.list`.
 pub fn list(state: &ApiState, id: Id, p: &DiagnosticsParams) -> Response {
     let cat = match p.category.as_deref().map(parse_category).transpose() {
@@ -377,9 +521,25 @@ pub fn list(state: &ApiState, id: Id, p: &DiagnosticsParams) -> Response {
 
 /// `diagnostics.get`.
 pub fn get(state: &ApiState, id: Id, p: &DiagnosticGetParams) -> Response {
+    let project = state
+        .run_info
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .as_ref()
+        .map(|r| PathBuf::from(&r.project));
     let s = lock(&state.diag);
     match s.problems.get(&p.fingerprint) {
-        Some(e) => ok(id, &entry_json(e, true)),
+        Some(e) => {
+            let mut v = entry_json(e, true);
+            if let (Some(root), Some(file), Some(line)) =
+                (&project, &e.diagnostic.file, e.diagnostic.line)
+            {
+                if let Some(code) = code_context(root, file, line, 3) {
+                    v["code"] = code;
+                }
+            }
+            ok(id, &v)
+        }
         None => Response::err(
             Some(id),
             RpcError::new(
@@ -452,5 +612,164 @@ mod tests {
         s.log("tool", 'I', None, None, "b");
         assert_eq!(s.log_cursor(), 2);
         assert_eq!(s.problems.len(), 0);
+    }
+
+    #[test]
+    fn a_reload_drops_old_build_and_runtime_problems_but_keeps_crashes() {
+        let mut s = DiagStore::default();
+        s.problem(umr_diagnostics::from_message(
+            "dart",
+            "old compile error",
+            Category::Build,
+        ));
+        s.problem(umr_diagnostics::from_message(
+            "flutter",
+            "old widget error",
+            Category::Runtime,
+        ));
+        s.problem(umr_diagnostics::from_message(
+            "logcat",
+            "crashed earlier",
+            Category::Crash,
+        ));
+        s.reload_started();
+        let left: Vec<_> = s
+            .problems
+            .entries()
+            .iter()
+            .map(|e| e.diagnostic.message.clone())
+            .collect();
+        assert_eq!(left, ["crashed earlier"]);
+    }
+
+    #[test]
+    fn chunked_bodies_are_joined() {
+        assert_eq!(
+            dechunk("5\r\nhello\r\n6\r\n world\r\n0\r\n\r\n"),
+            "hello world"
+        );
+        assert_eq!(dechunk("zz\r\n"), "");
+    }
+
+    #[test]
+    fn only_files_inside_the_project_count() {
+        let root = Path::new(r"D:\Work\my app");
+        assert_eq!(
+            project_file(r"D:\Work\my app\src\App.tsx", root).as_deref(),
+            Some("src/App.tsx")
+        );
+        assert_eq!(
+            project_file(r"D:\Work\my app\node_modules\react\x.js", root),
+            None
+        );
+        assert_eq!(project_file(r"C:\elsewhere\x.js", root), None);
+    }
+
+    /// A stand-in Metro on a free local port answers `/symbolicate` once (chunked, like Node).
+    fn fake_metro(answer: &'static str) -> u16 {
+        use std::io::{Read, Write};
+        let l = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = l.local_addr().unwrap().port();
+        std::thread::spawn(move || {
+            if let Ok((mut c, _)) = l.accept() {
+                let mut buf = [0u8; 4096];
+                let _ = c.read(&mut buf);
+                let r = format!(
+                    "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nTransfer-Encoding: chunked\r\n\r\n{:x}\r\n{answer}\r\n0\r\n\r\n",
+                    answer.len()
+                );
+                let _ = c.write_all(r.as_bytes());
+            }
+        });
+        port
+    }
+
+    fn poll_for(project: &str) -> Poll {
+        Poll {
+            port: 0,
+            serial: String::new(),
+            package: String::new(),
+            since_ms: 0,
+            crashes: 0,
+            anrs: 0,
+            pid: None,
+            last_ms: 0,
+            seen_at_last: HashSet::new(),
+            project: PathBuf::from(project),
+            mapped: HashMap::new(),
+        }
+    }
+
+    #[test]
+    fn a_react_native_error_is_mapped_through_metro() {
+        let port = fake_metro(
+            r#"{"stack":[{"file":"D:/Work/rn/src/Keypad.tsx","lineNumber":41,"column":6,"methodName":"Keypad"}]}"#,
+        );
+        let text = format!("{{ [Error: boom]\n  componentStack: '\n    at Keypad (http://10.0.2.2:{port}/src/Keypad.bundle//&platform=android:120:9)\n    at RCTView (<anonymous>)',\n  isComponentError: true }}");
+        let mut e = umr_diagnostics::parse_js_error(&text).unwrap();
+        let mut poll = poll_for(r"D:\Work\rn");
+        poll.locate_js(&mut e);
+        assert_eq!(
+            (e.file.as_deref(), e.line, e.column),
+            (Some("src/Keypad.tsx"), Some(41), Some(7))
+        );
+        // asked once: the same position again is answered from memory (the fake is gone)
+        let mut again = umr_diagnostics::parse_js_error(&text).unwrap();
+        poll.locate_js(&mut again);
+        assert_eq!(again.line, Some(41));
+    }
+
+    #[test]
+    fn without_metro_the_error_keeps_its_component_only() {
+        // a port nothing listens on
+        let port = std::net::TcpListener::bind("127.0.0.1:0")
+            .unwrap()
+            .local_addr()
+            .unwrap()
+            .port();
+        let text = format!("{{ [Error: boom]\n  componentStack: '\n    at App (http://10.0.2.2:{port}/App.bundle//&platform=android:92:40)',\n  isComponentError: true }}");
+        let mut e = umr_diagnostics::parse_js_error(&text).unwrap();
+        poll_for(r"D:\Work\rn").locate_js(&mut e);
+        assert_eq!(e.file, None);
+        let d = umr_diagnostics::from_js_error(&e);
+        assert_eq!(d.message, "Error: boom (in component <App>)");
+    }
+
+    #[test]
+    fn code_context_reads_only_inside_the_project() {
+        let base = std::env::temp_dir().join(format!("umr-code-{}", std::process::id()));
+        let proj = base.join("app");
+        std::fs::create_dir_all(proj.join("src")).unwrap();
+        let body = (1..=10).fold(String::new(), |mut s, i| {
+            use std::fmt::Write as _;
+            let _ = writeln!(s, "line {i}");
+            s
+        });
+        std::fs::write(proj.join("src").join("App.tsx"), &body).unwrap();
+        std::fs::write(base.join("secret.txt"), "outside\n").unwrap();
+        let c = code_context(&proj, "src/App.tsx", 5, 2).unwrap();
+        assert_eq!(c["first"], 3);
+        assert_eq!(c["line"], 5);
+        assert_eq!(
+            c["lines"],
+            json!(["line 3", "line 4", "line 5", "line 6", "line 7"])
+        );
+        // near the top the window starts at line 1
+        assert_eq!(
+            code_context(&proj, "src/App.tsx", 1, 3).unwrap()["lines"][0],
+            "line 1"
+        );
+        // an absolute path inside the project works too
+        let abs = proj.join("src").join("App.tsx");
+        assert!(code_context(&proj, &abs.display().to_string(), 2, 1).is_some());
+        // never outside the project, never line 0, never a missing file
+        assert_eq!(code_context(&proj, "../secret.txt", 1, 1), None);
+        assert_eq!(
+            code_context(&proj, &base.join("secret.txt").display().to_string(), 1, 1),
+            None
+        );
+        assert_eq!(code_context(&proj, "src/App.tsx", 0, 1), None);
+        assert_eq!(code_context(&proj, "MainActivity.kt", 3, 1), None);
+        let _ = std::fs::remove_dir_all(&base);
     }
 }

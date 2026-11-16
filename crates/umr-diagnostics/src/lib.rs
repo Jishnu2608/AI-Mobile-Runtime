@@ -7,6 +7,7 @@
 //! | Metro / React Native | already collected: `adapters/react-native` follows Metro's stdout; `problems::parse_line` reads Babel/Metro syntax errors and marks unlocated JS runtime errors |
 //! | Android crash buffer (`logcat -b crash`) | **[`crash`]**, new here: Java/Kotlin `FATAL EXCEPTION` blocks and native (tombstone) crash headers — nothing else reads this buffer |
 //! | ANR traces | **[`crash::parse_anr`]**, new here: `ActivityManager` "ANR in …" blocks from the main log |
+//! | React Native JS errors (app log, `ReactNativeJS` at `E`) | **[`js`]**: render errors and uncaught exceptions, which React Native 0.77+ no longer prints through Metro |
 //!
 //! Scope (DIA-006): each parser is proven against seeded fault text (unit tests) and, for the
 //! crash buffer, against a real crash captured live on the emulator (`adb shell am crash`).
@@ -22,16 +23,24 @@
 pub mod classify;
 pub mod crash;
 pub mod fingerprint;
+pub mod js;
 pub mod model;
 pub mod sanitize;
 
 #[cfg(test)]
 mod tests;
 
-pub use classify::{from_adapter_error, from_anr, from_crash, from_message, from_problem};
+pub use classify::{
+    from_adapter_error, from_anr, from_crash, from_js_error, from_message, from_problem,
+};
 pub use fingerprint::{Added, Dedupe, Entry};
 pub use model::{Category, Diagnostic, Origin, Severity};
 pub use sanitize::{sanitize, sanitize_diagnostic};
+
+pub use js::{
+    bundle_frames, group_js_errors, metro_port, parse_js_error, parse_symbolicated,
+    symbolicate_body, JsError, JsFrame,
+};
 
 pub use crash::{
     collect_crash_buffer, parse_anr, parse_crash_buffer, AnrEvent, CrashEvent, CrashKind,
