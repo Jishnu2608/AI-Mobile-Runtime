@@ -196,8 +196,85 @@ function CopyAll({ problems }: { problems: Problem[] }) {
   );
 }
 
-function ProblemRow({ p }: { p: Problem }) {
-  const [open, setOpen] = useState(false);
+/** A request an agent can act on: what to fix, where, the code and the stack. */
+export function agentRequest(p: Problem): string {
+  return `Please fix this problem in my app (reported by AI Mobile Runtime):\n\n${problemText(p)}\n`;
+}
+
+type BannerKind = "crashed" | "build" | "runtime";
+
+/**
+ * AUD-P1-7: what the phone shows is not the current code: the app crashed (the phone shows the
+ * home screen), the last build failed (it still shows the previous version), or the app reported
+ * an error. One line above the phone with "Open problem" and "Send to agent".
+ */
+export function RunBanner({ problems, onOpen }: { problems: Problem[]; onOpen: (fingerprint: string) => void }) {
+  const [state, setState] = useState<string>("");
+  const [hidden, setHidden] = useState<string>("");
+  const [sent, setSent] = useState<string>("");
+  useEffect(() => {
+    let stop = false;
+    const tick = async () => {
+      try {
+        const s = await call<{ session?: { state?: string } | null }>("session.status");
+        if (!stop) setState(s.session?.state ?? "");
+      } catch {
+        /* Core restarting */
+      }
+    };
+    tick();
+    const t = window.setInterval(tick, 2000);
+    return () => {
+      stop = true;
+      window.clearInterval(t);
+    };
+  }, []);
+  const newest = (cat: string) => [...problems].filter((p) => p.category === cat).sort((a, b) => b.seq - a.seq)[0];
+  let kind: BannerKind | null = null;
+  let p: Problem | undefined;
+  if (state === "crashed" && (p = newest("crash"))) kind = "crashed";
+  else if (state === "build_failed" && (p = newest("build"))) kind = "build";
+  else if ((state === "running" || state === "reloading") && (p = newest("runtime")) && p.severity === "error") kind = "runtime";
+  if (!kind || !p || hidden === p.fingerprint) return null;
+  const title = kind === "crashed" ? "App crashed" : kind === "build" ? "Build failed — showing the last working version" : "Error in the app";
+  const send = async () => {
+    const full = await call<Problem>("diagnostics.get", { fingerprint: p!.fingerprint }).catch(() => p!);
+    let flagged = false;
+    try {
+      await call("diagnostics.flag", { fingerprint: p!.fingerprint });
+      flagged = true;
+    } catch {
+      /* without the hook: the copy still works */
+    }
+    const copied = await toClipboard(agentRequest({ ...p!, ...full }));
+    setSent(
+      [flagged && "your agent gets it when it finishes its current task", copied && "copied — paste it into your agent's chat to start now"]
+        .filter(Boolean)
+        .join("; ") || "could not send",
+    );
+    window.setTimeout(() => setSent(""), 6000);
+  };
+  return (
+    <div className={`pv-banner ${kind}`} role="alert">
+      <div className="pv-banner-text">
+        <strong>{title}</strong>
+        <span title={p.message}>{p.message.split("\n")[0]}{where(p) ? ` · ${where(p)}` : ""}</span>
+        {sent && <span className="pv-banner-sent">Sent: {sent}.</span>}
+      </div>
+      <div className="pv-banner-actions">
+        <button onClick={() => onOpen(p!.fingerprint)}>Open problem</button>
+        <button className="primary" onClick={send} title="Your agent gets this problem with its code and stack at the end of its current task; it is also copied to paste into the agent's chat">
+          Send to agent
+        </button>
+        <button className="pv-banner-close" title="Hide until something else happens" aria-label="Hide" onClick={() => setHidden(p!.fingerprint)}>✕</button>
+      </div>
+    </div>
+  );
+}
+
+function ProblemRow({ p, focus }: { p: Problem; focus?: boolean }) {
+  const [open, setOpen] = useState(!!focus);
+  const rowRef = useRef<HTMLDivElement>(null);
   // the full entry (stack and code), fetched when the row opens or is copied
   const [detail, setDetail] = useState<Problem | null>(null);
   const [copied, setCopied] = useState<"" | "done" | "failed">("");
@@ -210,6 +287,13 @@ function ProblemRow({ p }: { p: Problem }) {
     setOpen(!open);
     if (!open && !detail) load();
   };
+  // "Open problem" in the banner: this row opens, with its code and stack, and comes into view
+  useEffect(() => {
+    if (!focus) return;
+    setOpen(true);
+    if (!detail) load();
+    rowRef.current?.scrollIntoView({ block: "nearest" });
+  }, [focus]); // eslint-disable-line react-hooks/exhaustive-deps
   const copy = async (e: React.MouseEvent) => {
     e.stopPropagation();
     const ok = await toClipboard(problemText(detail ?? (await load())));
@@ -219,7 +303,7 @@ function ProblemRow({ p }: { p: Problem }) {
   const code = codeText(detail?.code);
   const stack = (detail?.stack ?? []).map(shortFrame);
   return (
-    <div className={`dg-row ${p.severity}`} onClick={toggle}>
+    <div ref={rowRef} className={`dg-row ${p.severity}${focus ? " focus" : ""}`} onClick={toggle}>
       <div className="dg-head">
         <span className={`dg-origin ${p.origin}`} title={ORIGIN_TEXT[p.origin] ?? p.origin}>
           {p.origin === "app" ? "code" : p.origin === "environment" ? "env" : "?"}
@@ -248,7 +332,7 @@ function ProblemRow({ p }: { p: Problem }) {
   );
 }
 
-function ProblemsTab({ problems }: { problems: Problem[] }) {
+function ProblemsTab({ problems, focus }: { problems: Problem[]; focus?: string }) {
   if (!problems.length) return <div className="dg-empty">No problems in the current run.</div>;
   return (
     <div className="dg-list">
@@ -265,7 +349,7 @@ function ProblemsTab({ problems }: { problems: Problem[] }) {
                 </button>
               )}
             </div>
-            {group.map((p) => <ProblemRow key={p.fingerprint} p={p} />)}
+            {group.map((p) => <ProblemRow key={p.fingerprint} p={p} focus={p.fingerprint === focus} />)}
           </div>
         );
       })}
@@ -354,7 +438,7 @@ function LogsTab() {
   );
 }
 
-export function DiagnosticsPanel({ problems, onClose }: { problems: Problem[]; onClose: () => void }) {
+export function DiagnosticsPanel({ problems, onClose, focus }: { problems: Problem[]; onClose: () => void; focus?: string }) {
   const [tab, setTab] = useState<"problems" | "logs">("problems");
   return (
     <div className="dg">
@@ -364,7 +448,7 @@ export function DiagnosticsPanel({ problems, onClose }: { problems: Problem[]; o
         {tab === "problems" && problems.length > 0 && <CopyAll problems={problems} />}
         <button className="dg-close" title="Close" onClick={onClose}>✕</button>
       </div>
-      {tab === "problems" ? <ProblemsTab problems={problems} /> : <LogsTab />}
+      {tab === "problems" ? <ProblemsTab problems={problems} focus={focus} /> : <LogsTab />}
     </div>
   );
 }

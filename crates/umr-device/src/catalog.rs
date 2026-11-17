@@ -179,6 +179,46 @@ pub fn find(id: &str) -> Option<&'static Profile> {
     PROFILES.iter().find(|p| p.id == id)
 }
 
+/// The profile whose emulator shows `id` (SNAP-003). Compact and large phones have the standard
+/// phone's shape (height ÷ width 2.17 vs 2.22) and no extra hardware, so they are drawn on the
+/// standard phone's emulator with another screen size and density: switching takes about two
+/// seconds and needs no emulator or snapshots of its own. The tablet (1.6) and the foldables
+/// (hinge sensor, postures) keep their own emulator.
+#[must_use]
+pub fn host(id: &str) -> Option<&'static Profile> {
+    match id {
+        "compact" | "large" => find("standard"),
+        other => find(other),
+    }
+}
+
+/// How the host emulator's screen must be set for `id`: `Some(None)` = its own size (reset),
+/// `Some(Some(p))` = `p`'s size and density, `None` = the profile has its own emulator.
+#[must_use]
+pub fn display_on_host(id: &str) -> Option<Option<&'static Profile>> {
+    let host = host(id)?;
+    if PROFILES
+        .iter()
+        .all(|p| p.id == host.id || host_id(p.id) != host.id)
+    {
+        return None; // nobody shares this emulator: leave its screen alone
+    }
+    Some(if id == host.id { None } else { find(id) })
+}
+
+fn host_id(id: &str) -> &'static str {
+    host(id).map_or("", |p| p.id)
+}
+
+/// The `adb shell` command that shows `id` on its host emulator, if it shares one.
+#[must_use]
+pub fn display_command(id: &str) -> Option<String> {
+    Some(match display_on_host(id)? {
+        None => "wm size reset; wm density reset".to_string(),
+        Some(p) => format!("wm size {}x{}; wm density {}", p.width, p.height, p.density),
+    })
+}
+
 #[must_use]
 pub fn default_profile() -> &'static Profile {
     PROFILES.iter().find(|p| p.default).unwrap_or(&PROFILES[0])
@@ -256,5 +296,39 @@ mod tests {
         assert_eq!(Posture::parse("tabletop"), Some(Posture::HalfOpened));
         assert_eq!(Posture::parse("unfolded"), Some(Posture::Opened));
         assert_eq!(Posture::parse("sideways"), None);
+    }
+
+    #[test]
+    fn compact_and_large_share_the_standard_phones_emulator() {
+        let id = |x: &str| host(x).map(|p| p.id);
+        assert_eq!(id("compact"), Some("standard"));
+        assert_eq!(id("large"), Some("standard"));
+        assert_eq!(id("standard"), Some("standard"));
+        assert_eq!(id("tablet"), Some("tablet"));
+        assert_eq!(id("fold"), Some("fold"));
+        assert_eq!(id("nope"), None);
+        // the shared emulator is set for each; the others are left alone
+        assert_eq!(
+            display_command("compact").as_deref(),
+            Some("wm size 1080x2340; wm density 420")
+        );
+        assert_eq!(
+            display_command("large").as_deref(),
+            Some("wm size 1440x3120; wm density 500")
+        );
+        assert_eq!(
+            display_command("standard").as_deref(),
+            Some("wm size reset; wm density reset")
+        );
+        assert_eq!(display_command("tablet"), None);
+        assert_eq!(display_command("flip"), None);
+        // sharing only makes sense for the same shape and no extra hardware
+        for shared in ["compact", "large"] {
+            let p = find(shared).unwrap();
+            let h = host(shared).unwrap();
+            let ratio = |q: &Profile| f64::from(q.height) / f64::from(q.width);
+            assert!((ratio(p) - ratio(h)).abs() < 0.1, "{shared}");
+            assert!(p.fold.is_none() && h.fold.is_none());
+        }
     }
 }

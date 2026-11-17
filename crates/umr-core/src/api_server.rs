@@ -190,7 +190,9 @@ pub fn required_scope(method: &str) -> Option<Scope> {
         | methods::AUTH_CLIENT_GRANTS
         | methods::APPROVALS_LIST
         | methods::APPROVALS_DECIDE
-        | methods::AUDIT_LIST => Some(Scope::Admin),
+        | methods::AUDIT_LIST
+        | methods::DIAGNOSTICS_FLAG
+        | methods::HOME_SUMMARY => Some(Scope::Admin),
         // core.info, core.doctor and unknown methods
         _ => Some(Scope::Observe),
     }
@@ -405,6 +407,10 @@ fn dispatch_checked(state: &ApiState, conn: &mut Connection, req: &Request) -> R
         methods::DIAGNOSTICS_GET => with_params(id, &req.params, |id, p: DiagnosticGetParams| {
             crate::diag_api::get(state, id, &p)
         }),
+        methods::DIAGNOSTICS_FLAG => with_params(id, &req.params, |id, p: DiagnosticGetParams| {
+            crate::diag_api::flag(state, id, &p)
+        }),
+        methods::HOME_SUMMARY => crate::home_api::summary(state, id),
         methods::LOGS_TAIL => with_target(id, &req.params, |id, p: LogsParams| {
             crate::diag_api::logs(state, id, &p)
         }),

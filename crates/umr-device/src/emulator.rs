@@ -418,11 +418,43 @@ pub fn snapshot_load_failed(log: &str) -> bool {
     log.contains(&format!("Failed to load snapshot '{SNAPSHOT}'"))
 }
 
+/// The emulator's own quick-boot snapshot. The product never loads it (it boots from
+/// [`SNAPSHOT`] or cold), yet the emulator writes it during a cold boot: a copy of the whole guest
+/// memory, 4 GB per phone (SNAP-001).
+pub const QUICKBOOT: &str = "default_boot";
+
+/// Removes the unused quick-boot snapshot of an AVD; returns the bytes freed. Never touches
+/// [`SNAPSHOT`]. Called before a launch and after the warm snapshot is saved.
+#[must_use = "the bytes freed"]
+pub fn prune_quickboot(avd_dir: &Path) -> u64 {
+    let dir = avd_dir.join("snapshots").join(QUICKBOOT);
+    let size = dir_size(&dir);
+    if std::fs::remove_dir_all(&dir).is_ok() {
+        size
+    } else {
+        0
+    }
+}
+
+fn dir_size(dir: &Path) -> u64 {
+    std::fs::read_dir(dir).map_or(0, |entries| {
+        entries
+            .flatten()
+            .map(|e| match e.metadata() {
+                Ok(m) if m.is_dir() => dir_size(&e.path()),
+                Ok(m) => m.len(),
+                Err(_) => 0,
+            })
+            .sum()
+    })
+}
+
 /// Saves the warm snapshot of a healthy cold boot and records how it was taken.
 fn save_snapshot(opts: &BootOptions, inst: &mut Instance, emulator: &str) -> Result<(), String> {
     let mut c = Console::connect(inst.report.console_port, Duration::from_secs(5))?;
     c.set_timeout(Duration::from_secs(180));
     c.command(&format!("avd snapshot save {SNAPSHOT}"))?;
+    let _ = prune_quickboot(&opts.avd_dir);
     write_record(
         &opts.avd_dir,
         &SnapshotRecord {
@@ -444,6 +476,8 @@ pub fn boot(opts: &BootOptions) -> Result<Instance, String> {
         .parent()
         .ok_or("emulator path has no folder")?;
     let version = emulator_version(emu_dir).unwrap_or_else(|| "unknown".into());
+    // SNAP-001: an earlier boot (or an older version of the product) may have left one
+    let _ = prune_quickboot(&opts.avd_dir);
     let warm = if opts.force_cold {
         Err("cold boot requested".to_string())
     } else {
@@ -606,5 +640,22 @@ mod tests {
             "emulator-5560".into(),
         ];
         assert_eq!(console_ports_in_use(&s), [5554, 5560]);
+    }
+
+    #[test]
+    fn only_the_unused_quick_boot_snapshot_is_removed() {
+        let d = tmp("quickboot");
+        let quick = d.join("snapshots").join(QUICKBOOT);
+        let warm = d.join("snapshots").join(SNAPSHOT);
+        std::fs::create_dir_all(quick.join("textures")).unwrap();
+        std::fs::create_dir_all(&warm).unwrap();
+        std::fs::write(quick.join("ram.bin"), vec![0u8; 3000]).unwrap();
+        std::fs::write(quick.join("textures").join("t.bin"), vec![0u8; 500]).unwrap();
+        std::fs::write(warm.join("ram.bin"), vec![0u8; 100]).unwrap();
+        assert_eq!(prune_quickboot(&d), 3500);
+        assert!(!quick.exists());
+        assert!(warm.join("ram.bin").exists(), "the warm snapshot stays");
+        assert_eq!(prune_quickboot(&d), 0, "nothing left to remove");
+        let _ = std::fs::remove_dir_all(&d);
     }
 }

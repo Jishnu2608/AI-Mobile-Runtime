@@ -28,6 +28,7 @@ const STEP_LINE: Record<string, string> = {
   ready: "Everything checks out. Let's run it!",
   run: "Booting a phone just for you.",
   agents: "Bring your AI coding buddies.",
+  home: "Welcome back! Pick up where you left off.",
 };
 
 const POKES = ["Wheee!", "Hot reload me again!", "I run on coffee and Gradle.", "Careful, I'm in debug mode.", "No crashes on my watch.", "Again! Again!", "Build successful. Probably."];

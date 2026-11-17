@@ -359,19 +359,36 @@ fn short(s: &str, n: usize) -> String {
     }
 }
 
-/// Same folder, whatever the case, slashes or `\\?\` prefix.
-fn same_folder(a: &str, b: &str) -> bool {
-    let norm = |s: &str| {
-        let p = std::path::Path::new(s);
-        let c = std::fs::canonicalize(p).unwrap_or_else(|_| p.to_path_buf());
-        c.display()
-            .to_string()
-            .trim_start_matches(r"\\?\")
-            .replace('/', "\\")
-            .trim_end_matches('\\')
-            .to_lowercase()
+/// This Core's start time (ms): problem numbers (cursors) are only valid within one start.
+fn core_epoch() -> u64 {
+    static EPOCH: std::sync::OnceLock<u64> = std::sync::OnceLock::new();
+    *EPOCH.get_or_init(crate::diag_api::now_ms)
+}
+
+/// A folder for comparison: whatever the case, slashes or `\\?\` prefix.
+fn norm_folder(s: &str) -> String {
+    let p = std::path::Path::new(s);
+    let c = std::fs::canonicalize(p).unwrap_or_else(|_| p.to_path_buf());
+    c.display()
+        .to_string()
+        .trim_start_matches(r"\\?\")
+        .replace('/', "\\")
+        .trim_end_matches('\\')
+        .to_lowercase()
+}
+
+/// AUD-P1-8: the agent works on the running project when its folder is the project, contains it
+/// (an agent opened at a repository root with the app in `apps/mobile`) or lies inside it (an
+/// agent opened in `lib/`). Before, only the exact folder counted and the stop hook stayed
+/// silent for the other two.
+fn works_on(project: &str, agent: &str) -> bool {
+    let (p, a) = (norm_folder(project), norm_folder(agent));
+    let inside = |child: &str, parent: &str| {
+        child.len() > parent.len()
+            && child.starts_with(parent)
+            && child.as_bytes()[parent.len()] == b'\\'
     };
-    norm(a) == norm(b)
+    !p.is_empty() && !a.is_empty() && (p == a || inside(&p, &a) || inside(&a, &p))
 }
 
 /// The problems an agent's stop hook reports: open build problems, and runtime / crash problems
@@ -386,8 +403,11 @@ fn problems_for_agent(d: &crate::diag_api::DiagStore, since: u64) -> Vec<Value> 
             g.origin != Origin::Environment
                 && match g.category {
                     Category::Build => true,
-                    Category::Runtime | Category::Crash => e.seq > since,
-                    _ => false,
+                    // new since the last report, or sent by the user ("Send to agent")
+                    Category::Runtime | Category::Crash => {
+                        e.seq > since || d.flagged.contains(&g.fingerprint)
+                    }
+                    _ => d.flagged.contains(&g.fingerprint),
                 }
         })
         .collect();
@@ -417,7 +437,7 @@ pub fn check(state: &ApiState, id: Id, p: &AgentCheckParams) -> Response {
         .lock()
         .unwrap_or_else(PoisonError::into_inner)
         .as_ref()
-        .is_some_and(|r| same_folder(&r.project, &p.project));
+        .is_some_and(|r| works_on(&r.project, &p.project));
     if !running {
         return ok(id, &json!({ "status": "not_running", "problems": [] }));
     }
@@ -441,11 +461,36 @@ pub fn check(state: &ApiState, id: Id, p: &AgentCheckParams) -> Response {
         .try_lock()
         .ok()
         .and_then(|mut g| g.as_mut().map(|a| a.is_alive()));
-    let d = state.diag.lock().unwrap_or_else(PoisonError::into_inner);
-    let problems = problems_for_agent(&d, p.since);
+    let mut d = state.diag.lock().unwrap_or_else(PoisonError::into_inner);
+    // a cursor from an earlier Core start (or ahead of this one's numbers) means nothing here
+    let since = if p.epoch.is_some_and(|e| e != core_epoch()) || p.since > d.problems.cursor() {
+        0
+    } else {
+        p.since
+    };
+    let problems = problems_for_agent(&d, since);
+    // AUD-P1-7: the user sent these ("Send to agent"): the hook reports them even when its loop
+    // guard would let the agent stop (the same problem was reported before)
+    let flagged: Vec<String> = problems
+        .iter()
+        .filter_map(|v| v["fp"].as_str())
+        .filter(|fp| d.flagged.contains(*fp))
+        .map(String::from)
+        .collect();
+    // AUD-P3-24: the home screen's feed of what the agent was told and what it fixed
+    let reported: Vec<(String, String)> = problems
+        .iter()
+        .map(|v| {
+            (
+                v["fp"].as_str().unwrap_or_default().to_string(),
+                v["msg"].as_str().unwrap_or_default().to_string(),
+            )
+        })
+        .collect();
+    d.note_check(&reported);
     ok(
         id,
-        &json!({ "status": "ok", "problems": problems, "cursor": d.problems.cursor(), "alive": alive }),
+        &json!({ "status": "ok", "problems": problems, "flagged": flagged, "cursor": d.problems.cursor(), "epoch": core_epoch(), "alive": alive }),
     )
 }
 
@@ -580,9 +625,24 @@ mod tests {
     }
 
     #[test]
-    fn folders_compare_case_and_slash_blind() {
-        assert!(same_folder(r"C:\Proj\App\", "c:/proj/app"));
-        assert!(!same_folder(r"C:\Proj\App", r"C:\Proj\Other"));
+    fn the_agent_works_on_a_project_in_or_around_its_folder() {
+        let app = r"C:\Repo\apps\mobile";
+        assert!(works_on(app, r"C:\Repo\apps\mobile"), "same folder");
+        assert!(works_on(app, "c:/repo/"), "agent at the repository root");
+        assert!(
+            works_on(app, r"C:\Repo\apps\mobile\lib"),
+            "agent inside the project"
+        );
+        assert!(!works_on(app, r"C:\Repo\apps\web"), "a sibling project");
+        assert!(
+            !works_on(app, r"C:\Repo\apps\mob"),
+            "a prefix that is not a folder"
+        );
+        assert!(!works_on(app, ""), "no folder");
+        assert!(
+            works_on(r"C:\Proj\App\", "c:/proj/app"),
+            "case and slash blind"
+        );
     }
 
     fn principal() -> Principal {

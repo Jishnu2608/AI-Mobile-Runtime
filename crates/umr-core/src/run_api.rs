@@ -429,6 +429,7 @@ pub(crate) fn run_inner(
     *log.lock().unwrap_or_else(PoisonError::into_inner) = EventLog::default();
     let sink = events_sink(state);
     let _ = session_api::apply(state, &mut s, SessionEvent::Rebuild, Some(adapter.id()));
+    crate::home_api::record_run(&state.data_root, &path, adapter.id());
     let start = std::time::Instant::now();
     tracing::info!(adapter = adapter.id(), project = %path, "run");
     match adapter.start(&ctx, sink) {
@@ -605,13 +606,14 @@ pub(crate) fn reload_kind(state: &ApiState, kind: ReloadKind) -> Result<Value, R
                         Some(&e.to_string()),
                     );
                 } else {
-                    // the app keeps running the previous code
-                    let _ = session_api::apply(
-                        state,
-                        s,
-                        SessionEvent::Reloaded,
-                        Some(&format!("failed: {e}")),
-                    );
+                    // the app keeps running the previous code; a compile error is a failed
+                    // build (AUD-P1-4: it was reported as "reloaded", and later as "crashed")
+                    let ev = if matches!(e, AdapterError::BuildFailed { .. }) {
+                        SessionEvent::BuildFailed
+                    } else {
+                        SessionEvent::Reloaded
+                    };
+                    let _ = session_api::apply(state, s, ev, Some(&format!("failed: {e}")));
                 }
             }
             let status = match e {

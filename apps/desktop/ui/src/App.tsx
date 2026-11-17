@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Stage } from "./Stage";
+import { Home, useHome } from "./Home";
 import { applyUpdate, call, checkUpdate, DocsPage, inTauri, loadWizard, openDocs, openPreview, pickFolder, saveWizard, size, Step, UpdateInfo, WizardState } from "./api";
 import { AgentsStep } from "./Agents";
 import { STEP_WHY, Why } from "./why";
@@ -61,6 +62,14 @@ function Busy({ text }: { text: string }) {
 
 export function App() {
   const [state, setState] = useState<WizardState | null>(null);
+  // AUD-P3-24: returning users open on the home screen; the wizard is one click away
+  const home = useHome();
+  const [view, setView] = useState<"home" | "wizard" | null>(null);
+  useEffect(() => {
+    if (view !== null || !state) return;
+    // until the summary arrives (or with an older Core that has none) the wizard shows
+    if (home) setView(home.recent.length > 0 && !state.jobId ? "home" : "wizard");
+  }, [home, state, view]);
 
   useEffect(() => {
     loadWizard()
@@ -78,6 +87,11 @@ export function App() {
 
   if (!state) return <Busy text="Starting…" />;
   const index = STEPS.findIndex((s) => s.id === state.step);
+  const wizard = (next: Partial<WizardState>) => {
+    go(next);
+    setView("wizard");
+  };
+  const atHome = view === "home";
 
   return (
     <div className="layout">
@@ -87,10 +101,28 @@ export function App() {
           <img src={logo} alt="" width={30} height={30} />
           AI Mobile Runtime
         </h1>
-        <p className="sub">Set up everything your project needs to run on the Android emulator.</p>
+        <p className="sub">
+          {atHome ? "Your projects, the running app and your agent's work." : "Set up everything your project needs to run on the Android emulator."}
+          {(home?.recent.length ?? 0) > 0 && (
+            <button className="link home-toggle" onClick={() => setView(atHome ? "wizard" : "home")}>
+              {atHome ? "Open setup" : "← Home"}
+            </button>
+          )}
+        </p>
         {!inTauri && <p className="demo">Browser preview with sample data — open the desktop app for real results.</p>}
         <UpdateBanner />
       </header>
+      {atHome ? (
+        <main>
+          <Home
+            summary={home}
+            onSetup={(path) => wizard({ step: "plan", projectPath: path, jobId: undefined })}
+            onNewProject={() => wizard({ step: "project", projectPath: "", jobId: undefined })}
+            onAgents={() => wizard({ step: "agents" })}
+          />
+        </main>
+      ) : (
+      <>
       <ol className="steps" aria-label="Setup steps">
         {STEPS.map((s, i) => (
           <li key={s.id} className={i < index ? "done" : i === index ? "current" : ""} aria-current={i === index ? "step" : undefined} title={STEP_WHY[s.id]}>
@@ -122,8 +154,10 @@ export function App() {
         {state.step === "agents" && <AgentsStep project={state.projectPath} onBack={() => go({ step: "ready" })} />}
         <StepDocs step={state.step} />
       </main>
+      </>
+      )}
     </div>
-    <Stage step={state.step} />
+    <Stage step={atHome ? "home" : state.step} />
     </div>
   );
 }
@@ -398,6 +432,16 @@ function PlanStep({ path, onBack, onNext }: { path: string; onBack: () => void; 
                 Turn on…
               </button>
             </div>
+          ))}
+        </div>
+      )}
+      {(plan.notes ?? []).length > 0 && (
+        <div className="note" role="note">
+          <strong>Good to know</strong>
+          {(plan.notes as string[]).map((n, i) => (
+            <p key={i} className="small">
+              {n}
+            </p>
           ))}
         </div>
       )}

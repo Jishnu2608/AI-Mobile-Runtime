@@ -44,6 +44,8 @@ const ALLOWED: &[&str] = &[
     methods::PROJECT_RUN,
     methods::DIAGNOSTICS_LIST,
     methods::DIAGNOSTICS_GET,
+    methods::DIAGNOSTICS_FLAG,
+    methods::HOME_SUMMARY,
     methods::LOGS_TAIL,
     methods::APPROVALS_LIST,
     methods::APPROVALS_DECIDE,

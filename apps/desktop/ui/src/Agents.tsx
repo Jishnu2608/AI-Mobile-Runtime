@@ -20,6 +20,19 @@ type Report = { client: string; checks: Check[]; fixed: string[] }[];
 
 const DEFAULT_SCOPE: Record<string, "project" | "user"> = { "claude-code": "project", codex: "user", cursor: "project", "claude-desktop": "user", vscode: "project" };
 
+/** Agents whose connection also installs the stop hook: the automatic error loop (HOOK-001). */
+const LOOP: Record<string, true> = { "claude-code": true, codex: true, cursor: true };
+
+/** AUD-P1-8: whether the automatic error loop is on for this agent, in one sentence. */
+function loopLine(row: ClientRow, connected: boolean): { ok: boolean; text: string } {
+  if (!LOOP[row.id]) {
+    return { ok: true, text: `No automatic loop for ${row.name}: ask it to check the app's problems (its runtime tools include them).` };
+  }
+  return connected
+    ? { ok: true, text: `Automatic error loop on: when ${row.name} finishes a task, it is told about build errors, crashes and runtime errors in the running app and keeps fixing them.` }
+    : { ok: false, text: `Automatic error loop off: ${row.name} is not told about errors in the running app until you connect it.` };
+}
+
 export function AgentsStep({ project, onBack }: { project: string; onBack: () => void }) {
   const [rows, setRows] = useState<ClientRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -40,9 +53,21 @@ export function AgentsStep({ project, onBack }: { project: string; onBack: () =>
         one entry into the agent's own settings; you see every change before it is made, and <strong>Disconnect</strong> takes it out
         again.
       </p>
+      <p>
+        <strong>The automatic error loop</strong> (Claude Code, Codex, Cursor): when your agent finishes a task, the runtime checks the
+        app it changed. If the build failed, the app crashed or showed an error, the agent gets the problem with its file and line and
+        keeps working, without you copying anything. It works when the agent is opened in the project folder, a folder above it (a
+        repository root) or a folder inside it.
+      </p>
       <p className="muted small">
         Project: <code>{project || "(none chosen)"}</code>
       </p>
+      {rows && rows.some((r) => LOOP[r.id] && r.installed) && !rows.some((r) => LOOP[r.id] && (r.project_connected || r.user_connected)) && (
+        <div className="problem" role="status">
+          <strong>The automatic error loop is off.</strong> None of your coding agents is connected, so errors in the running app reach them
+          only when you paste them in. Connect one below.
+        </div>
+      )}
       {error && <div className="problem" role="alert">{error} <button className="secondary" onClick={load}>Try again</button></div>}
       {!rows && !error && <p className="busy">Looking for coding agents on this PC…</p>}
       {rows && rows.map((r) => <AgentCard key={r.id} row={r} project={project} onChanged={load} />)}
@@ -125,6 +150,10 @@ function AgentCard({ row, project, onChanged }: { row: ClientRow; project: strin
           {connected && <button className="secondary" onClick={() => preview(true)} disabled={!!busy}>Disconnect</button>}
         </div>
       </div>
+      {row.installed && (() => {
+        const l = loopLine(row, connected);
+        return <p className={`small loop ${l.ok ? "on" : "off"}`}>{l.text}</p>;
+      })()}
       {needsProject && <p className="muted small">Choose a project first, or connect for all projects.</p>}
       {busy && <p className="muted small">{busy}…</p>}
       {error && <div className="problem" role="alert">{error}</div>}

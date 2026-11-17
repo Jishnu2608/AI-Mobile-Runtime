@@ -249,6 +249,42 @@ pre.diff { margin: 4px 0 8px; max-height: 220px; overflow: auto; background: var
 .dg-help:hover { text-decoration: underline; }
 
 /* why each wizard stage matters (one line under the heading) */
+/* AUD-P3-24: home screen */
+.home-toggle { margin-left: 10px; }
+.home h3 { margin: 22px 0 8px; font-size: 15px; }
+.home-row { display: flex; align-items: center; gap: 12px; }
+.home-row > svg { flex: none; width: 22px; height: 22px; color: var(--muted); }
+.home-grow { flex: 1; min-width: 0; }
+.home-grow p { margin: 0; }
+.home-grow .small { overflow: hidden; text-overflow: ellipsis; }
+.home-row button { display: inline-flex; align-items: center; gap: 5px; }
+.home-row button svg, .home button svg { width: 15px; height: 15px; }
+.home-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
+.home-list .card { margin: 0; padding: 12px 14px; }
+.home-problems { display: flex; align-items: center; gap: 6px; margin: 10px 0 0; color: var(--bad); font-size: 13.5px; }
+.home-problems svg { width: 16px; height: 16px; flex: none; }
+.home-feed { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; }
+.home-feed li { display: grid; grid-template-columns: 18px 64px 1fr; gap: 8px; align-items: start; font-size: 13.5px; }
+.home-feed li svg { width: 16px; height: 16px; color: var(--muted); margin-top: 2px; }
+.home-feed li.fixed svg { color: var(--ok); }
+.home > p > button { display: inline-flex; align-items: center; gap: 6px; }
+/* AUD-P1-7: what the phone shows is not the current code */
+.pv-banner { display: flex; gap: 8px; align-items: center; justify-content: space-between; flex-wrap: wrap; margin: 6px 8px 0; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--bad); background: var(--bad-bg); color: var(--text); font-size: 12.5px; }
+.pv-banner.build { border-color: var(--warn); background: var(--warn-bg); }
+.pv-banner-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1 1 180px; }
+.pv-banner-text strong { color: var(--bad); }
+.pv-banner.build .pv-banner-text strong { color: var(--warn); }
+.pv-banner-text span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-2); }
+.pv-banner-text .pv-banner-sent { white-space: normal; color: var(--ok); }
+.pv-banner-actions { display: flex; gap: 6px; align-items: center; }
+.pv-banner-actions button { font-size: 12px; padding: 5px 9px; }
+.pv-banner-close { border: 0 !important; background: none !important; color: var(--muted) !important; padding: 4px !important; }
+.dg-row.focus { outline: 2px solid var(--lime-deep); outline-offset: -2px; }
+.loop { margin: 8px 0 0; padding-left: 10px; border-left: 3px solid var(--line-strong); }
+.loop.on { border-left-color: var(--lime-deep); }
+.loop.off { border-left-color: var(--warn); color: var(--warn); }
+.note { margin: 12px 0; padding: 10px 14px; border-radius: 10px; background: var(--note-bg); color: var(--note-ink); border: 1px solid var(--note-line); }
+.note p { margin: 4px 0 0; }
 .why { margin: -4px 0 14px; padding-left: 10px; border-left: 2px solid var(--lime-deep); color: var(--muted); font-size: 13.5px; line-height: 1.45; max-width: 62ch; }
 
 /* project step: pick a folder instead of typing a path */

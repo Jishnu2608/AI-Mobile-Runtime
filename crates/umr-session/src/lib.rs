@@ -168,8 +168,24 @@ pub fn next(s: State, e: Event) -> Option<State> {
         (S::EnvBlocked, E::EnvReady) => S::Preparing,
         (S::Preparing, E::EnvReady) => S::Booting,
         (S::Booting, E::DeviceOnline) => S::Building,
-        (S::Building, E::BuildFailed) => S::BuildFailed,
-        (S::BuildFailed | S::Running, E::Rebuild) => S::Building,
+        // a hot reload that does not compile: the app keeps running the previous code
+        (S::Building | S::Reloading, E::BuildFailed) => S::BuildFailed,
+        // AUD-P1-4: a new run or a full rebuild starts from whatever the app did last (crashed,
+        // failed to launch, mid-reload); before, it was refused there and the session kept the
+        // previous app and state
+        (
+            S::BuildFailed
+            | S::Running
+            | S::Crashed
+            | S::LaunchFailed
+            | S::Reloading
+            | S::Launching
+            | S::Building,
+            E::Rebuild,
+        ) => S::Building,
+        // the next save after a failed hot reload reloads again; success means it compiles
+        (S::BuildFailed, E::HotChange) => S::Reloading,
+        (S::BuildFailed, E::Reloaded) => S::Running,
         (S::Building, E::ArtifactReady) => S::Launching,
         (S::Building, E::NothingToLaunch) => S::Running,
         (S::Launching, E::AppForeground) => S::Running,
@@ -420,6 +436,28 @@ mod tests {
         assert_eq!(next(S::Running, E::SwitchDevice), Some(S::Booting));
         assert_eq!(next(S::Crashed, E::SwitchDevice), Some(S::Booting));
         assert_eq!(next(S::Idle, E::SwitchDevice), None);
+    }
+
+    #[test]
+    fn a_new_run_starts_from_whatever_the_app_did_last() {
+        // AUD-P1-4: a crashed or failed app no longer pins the session to the old run
+        for st in [
+            S::Crashed,
+            S::LaunchFailed,
+            S::Reloading,
+            S::Launching,
+            S::Building,
+            S::Running,
+            S::BuildFailed,
+        ] {
+            assert_eq!(next(st, E::Rebuild), Some(S::Building), "{st:?}");
+        }
+        assert_eq!(next(S::Idle, E::Rebuild), None);
+        // a hot reload that does not compile is a failed build; the next good reload runs
+        assert_eq!(next(S::Reloading, E::BuildFailed), Some(S::BuildFailed));
+        assert_eq!(next(S::BuildFailed, E::HotChange), Some(S::Reloading));
+        assert_eq!(next(S::BuildFailed, E::Reloaded), Some(S::Running));
+        assert_eq!(next(S::Reloading, E::Reloaded), Some(S::Running));
     }
 
     #[test]

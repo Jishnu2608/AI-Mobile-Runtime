@@ -109,6 +109,58 @@ fn sdk_has(s: &AndroidSdk, r: &Requirement) -> Option<Action> {
     })
 }
 
+/// The Android API level in an SDK package path: `platforms/android-37.0` → `37.0`,
+/// `system-images/android-36/google_apis/x86_64` → `36`.
+#[must_use]
+pub fn api_of(package: &str) -> Option<String> {
+    let at = package.find("android-")? + "android-".len();
+    let api: String = package[at..]
+        .chars()
+        .take_while(|c| c.is_ascii_digit() || *c == '.')
+        .collect();
+    (!api.is_empty()).then_some(api)
+}
+
+/// AUD-P2-16: platform and system-image rows show the Android API level; the package's own
+/// version is only its revision ("Android SDK Platform 2" read like the wrong platform).
+fn api_version(package: Option<&str>, version: Option<String>) -> Option<String> {
+    let Some(pkg) =
+        package.filter(|p| p.starts_with("platforms/") || p.starts_with("system-images/"))
+    else {
+        return version;
+    };
+    let Some(api) = api_of(pkg) else {
+        return version;
+    };
+    let api = api.strip_suffix(".0").unwrap_or(&api).to_string();
+    Some(match version {
+        Some(rev) => format!("API {api} · revision {rev}"),
+        None => format!("API {api}"),
+    })
+}
+
+/// A note when the emulator's Android is older than the API the app compiles against.
+fn old_image_note(items: &[PlanItem]) -> Option<String> {
+    let num = |pkg: &str| api_of(pkg).and_then(|a| a.split('.').next()?.parse::<u32>().ok());
+    let platform = items
+        .iter()
+        .filter_map(|i| i.package.as_deref())
+        .filter(|p| p.starts_with("platforms/"))
+        .filter_map(num)
+        .max()?;
+    let image = items
+        .iter()
+        .filter_map(|i| i.package.as_deref())
+        .filter(|p| p.starts_with("system-images/"))
+        .filter_map(num)
+        .max()?;
+    (image < platform).then(|| {
+        format!(
+            "The emulator runs Android API {image}; your app compiles against API {platform}. It runs, but features new in API {platform} cannot be tried on it."
+        )
+    })
+}
+
 fn same_dir(a: &str, b: &str) -> bool {
     let n = |s: &str| {
         s.trim_end_matches(['\\', '/'])
@@ -176,12 +228,15 @@ pub fn build(
             title: comp.map_or_else(|| r.component.clone(), |c| c.title.clone()),
             package: r.package.clone(),
             min: r.min.clone(),
-            version: match &action {
-                Action::Reuse {
-                    version: Some(v), ..
-                } => Some(v.clone()),
-                _ => r.version.clone(),
-            },
+            version: api_version(
+                r.package.as_deref(),
+                match &action {
+                    Action::Reuse {
+                        version: Some(v), ..
+                    } => Some(v.clone()),
+                    _ => r.version.clone(),
+                },
+            ),
             approx_download_bytes: if install {
                 comp.map_or(0, |c| c.approx_download_bytes)
             } else {
@@ -247,6 +302,8 @@ pub fn build(
         });
     }
 
+    let mut notes = res.notes.clone();
+    notes.extend(old_image_note(&items));
     let total_download_bytes = items.iter().map(|i| i.approx_download_bytes).sum();
     let total_disk_bytes: u64 = items.iter().map(|i| i.approx_disk_bytes).sum();
     let disk_free_bytes = env.host.disk_free_bytes;
@@ -258,7 +315,7 @@ pub fn build(
         licences,
         admin_actions,
         conflicts: res.conflicts.clone(),
-        notes: res.notes.clone(),
+        notes,
         total_download_bytes,
         total_disk_bytes,
         disk_free_bytes,
@@ -519,5 +576,71 @@ mod tests {
             .filter(|i| i.component.starts_with("android-"))
             .all(|i| matches!(i.action, Action::Reuse { .. })));
         assert_eq!(p.licences, Vec::<PlanLicence>::new());
+    }
+
+    #[test]
+    fn platform_and_image_rows_name_the_api_not_the_revision() {
+        assert_eq!(api_of("platforms/android-37.0").as_deref(), Some("37.0"));
+        assert_eq!(
+            api_of("system-images/android-36/google_apis/x86_64").as_deref(),
+            Some("36")
+        );
+        assert_eq!(api_of("build-tools/37.0.0"), None);
+        assert_eq!(
+            api_version(Some("platforms/android-37.0"), Some("2".into())).as_deref(),
+            Some("API 37 · revision 2")
+        );
+        assert_eq!(
+            api_version(
+                Some("system-images/android-36/google_apis/x86_64"),
+                Some("7".into())
+            )
+            .as_deref(),
+            Some("API 36 · revision 7")
+        );
+        assert_eq!(
+            api_version(Some("platforms/android-36"), None).as_deref(),
+            Some("API 36")
+        );
+        // other packages keep their own version
+        assert_eq!(
+            api_version(Some("build-tools/37.0.0"), Some("37.0.0".into())).as_deref(),
+            Some("37.0.0")
+        );
+        assert_eq!(
+            api_version(None, Some("17.0.21".into())).as_deref(),
+            Some("17.0.21")
+        );
+    }
+
+    #[test]
+    fn an_older_emulator_image_than_the_compile_api_is_noted() {
+        let item = |pkg: &str| PlanItem {
+            component: "x".into(),
+            title: "x".into(),
+            package: Some(pkg.into()),
+            version: None,
+            min: None,
+            action: Action::Install,
+            approx_download_bytes: 0,
+            approx_disk_bytes: 0,
+            licence: None,
+            reason: String::new(),
+            sources: Vec::new(),
+        };
+        let older = [
+            item("platforms/android-37.0"),
+            item("system-images/android-36/google_apis/x86_64"),
+        ];
+        assert_eq!(
+            old_image_note(&older).as_deref(),
+            Some("The emulator runs Android API 36; your app compiles against API 37. It runs, but features new in API 37 cannot be tried on it.")
+        );
+        let same = [
+            item("platforms/android-36"),
+            item("system-images/android-36/google_apis/x86_64"),
+        ];
+        assert_eq!(old_image_note(&same), None);
+        assert_eq!(old_image_note(&[item("platforms/android-37.0")]), None);
     }
 }

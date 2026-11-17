@@ -131,6 +131,10 @@ pub const ADAPTER_CHECK: &str = "adapter.check";
 pub const DIAGNOSTICS_LIST: &str = "diagnostics.list";
 /// `diagnostics.get` [`DiagnosticGetParams`] → one entry with its stack. Scope: observe.
 pub const DIAGNOSTICS_GET: &str = "diagnostics.get";
+/// Marks a problem for the agent's next stop hook ("Send to agent").
+pub const DIAGNOSTICS_FLAG: &str = "diagnostics.flag";
+/// The setup window's home screen: recent projects, status, problems, agent-fix feed.
+pub const HOME_SUMMARY: &str = "home.summary";
 /// `logs.tail` [`LogsParams`] → `{ lines: [{seq, at_ms, source, level, tag, pid, text}], cursor }`:
 /// the run's tool output (`tool`), progress (`umr`) and the app's device log (`logcat`).
 /// Scope: observe.
@@ -407,6 +411,10 @@ pub struct AgentCheckParams {
     /// Problem cursor from the previous check (0: all runtime / crash problems of the run).
     #[serde(default)]
     pub since: u64,
+    /// The Core start the cursor belongs to (`epoch` of the previous answer). Problem numbers
+    /// restart with the Core: a cursor from an earlier start would hide new problems.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub epoch: Option<u64>,
     /// How long to wait for a rebuild to finish; capped at 170 s. Default 120 s.
     #[serde(default = "default_check_ms")]
     pub timeout_ms: u64,

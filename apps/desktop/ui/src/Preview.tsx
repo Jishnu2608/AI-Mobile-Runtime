@@ -7,7 +7,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowLeft, Camera, Gauge, House, Layers, RefreshCw, RotateCwSquare, ScrollText, Square, TriangleAlert } from "lucide-react";
 import { call, inApp } from "./api";
 import { FrameRenderer, percentiles } from "./gl";
-import { Approvals, DiagnosticsPanel, useProblems } from "./Problems";
+import { Approvals, DiagnosticsPanel, RunBanner, useProblems } from "./Problems";
 
 interface Hello {
   type: "hello";
@@ -58,6 +58,7 @@ export function Preview() {
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [panel, setPanel] = useState(false);
+  const [focus, setFocus] = useState<string | undefined>(undefined);
   const stageRef = useRef<HTMLDivElement>(null);
   const [stage, setStage] = useState({ w: 0, h: 0 });
   const [landscape, setLandscape] = useState(false);
@@ -357,6 +358,13 @@ export function Preview() {
         <span className="pv-fps" title="Frames drawn per second">{device ? `${fps} fps` : ""}</span>
       </div>
       <Approvals />
+      <RunBanner
+        problems={problems}
+        onOpen={(fp) => {
+          setFocus(fp);
+          setPanel(true);
+        }}
+      />
       <div className="pv-stage" ref={stageRef}>
         <div className={landscape ? "pv-phone land" : "pv-phone"} style={phoneStyle(stage, device, landscape)}>
           <canvas
@@ -393,7 +401,16 @@ export function Preview() {
           {status && <div className="pv-overlay">{status}</div>}
         </div>
       </div>
-      {panel && <DiagnosticsPanel problems={problems} onClose={() => setPanel(false)} />}
+      {panel && (
+        <DiagnosticsPanel
+          problems={problems}
+          focus={focus}
+          onClose={() => {
+            setPanel(false);
+            setFocus(undefined);
+          }}
+        />
+      )}
       {note && <div className="pv-note" onClick={() => setNote("")}>{note}</div>}
     </div>
   );

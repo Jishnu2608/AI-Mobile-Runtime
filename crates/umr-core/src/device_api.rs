@@ -194,7 +194,8 @@ pub(crate) fn resolve_avd(
     profile: &str,
     api: Option<&str>,
 ) -> Result<umr_device::avd::AvdInfo, RpcError> {
-    let Some(prof) = umr_device::catalog::find(profile) else {
+    // SNAP-003: compact and large are shown on the standard phone's emulator
+    let Some(prof) = umr_device::catalog::host(profile) else {
         let ids: Vec<&str> = umr_device::catalog::PROFILES.iter().map(|x| x.id).collect();
         return Err(RpcError::new(
             codes::INVALID_PARAMS,
@@ -207,6 +208,23 @@ pub(crate) fn resolve_avd(
     let (sdk, api) = api_level(state, api)?;
     umr_device::avd::ensure(&avd_home(state), &sdk, prof, &api, TAG, ABI)
         .map_err(|e| RpcError::new(codes::INTERNAL_ERROR, e))
+}
+
+/// SNAP-003: sets the screen size and density for `profile` on its (shared) emulator: another
+/// size for compact and large, the emulator's own for standard. Profiles with their own emulator
+/// are left alone. `adb shell wm` takes about a second; the running app gets a configuration
+/// change and stays. Returns the command applied, or the error.
+pub(crate) fn apply_display(
+    state: &ApiState,
+    serial: &str,
+    profile: &str,
+) -> Option<Result<String, String>> {
+    let cmd = umr_device::catalog::display_command(profile)?;
+    Some(
+        umr_device::adb::shell(state.adb_port, serial, &cmd)
+            .map(|_| cmd)
+            .map_err(|e| e.to_string()),
+    )
 }
 
 /// Removes the AVD from the "booting" set when the boot ends (also on panic).
@@ -231,7 +249,10 @@ pub fn boot(state: &ApiState, id: Id, p: &BootDeviceParams) -> Response {
         Err(e) => return Response::err(Some(id), e),
     };
     match boot_avd(state, &avd, p.cold, p.window, p.gpu.as_deref()) {
-        Ok(r) => ok(id, &r),
+        Ok(r) => {
+            let _ = apply_display(state, &r.serial, &p.profile);
+            ok(id, &r)
+        }
         Err(e) => Response::err(Some(id), e),
     }
 }

@@ -175,9 +175,10 @@ pub fn start(state: &ApiState, id: Id, p: &StartSessionParams) -> Response {
     crate::preview_api::refresh_target(state);
     match r {
         Ok(v) => {
+            // a screen-size change on the same emulator keeps the app running: no re-run
             let switched = follow
                 .as_ref()
-                .filter(|_| p.apk.is_none() && p.package.is_none());
+                .filter(|_| p.apk.is_none() && p.package.is_none() && v["resized"] != true);
             if let Some(run) = switched {
                 let rerun =
                     crate::run_api::run_inner(state, &run.project, Some(&p.profile), false, true);
@@ -206,7 +207,7 @@ fn start_inner(state: &ApiState, p: &StartSessionParams) -> Result<serde_json::V
     let mut s = match refresh(state) {
         // the same device is already up and nothing new to launch (whatever the app's state:
         // a crashed or failed app does not mean the device has to go)
-        Some(s)
+        Some(mut s)
             if s.avd == avd.name
                 && s.state.has_device()
                 && device_api::running(state).iter().any(|r| r.avd == s.avd)
@@ -216,6 +217,27 @@ fn start_inner(state: &ApiState, p: &StartSessionParams) -> Result<serde_json::V
             let boot = device_api::running(state)
                 .into_iter()
                 .find(|r| r.avd == avd.name);
+            // SNAP-003: another size on the same emulator (compact / standard / large): change
+            // the screen in place; the app keeps running
+            if s.profile != p.profile {
+                if let Some(serial) = s.serial.clone() {
+                    if let Some(Err(e)) = device_api::apply_display(state, &serial, &p.profile) {
+                        return Err(RpcError::new(
+                            codes::INTERNAL_ERROR,
+                            format!("could not switch the screen to {}: {e}", p.profile),
+                        ));
+                    }
+                }
+                {
+                    let db = state.db.lock().unwrap_or_else(PoisonError::into_inner);
+                    s.set_device(&db, &p.profile, &avd.name)
+                        .map_err(|e| journal_error(&e))?;
+                }
+                publish(state, Some(s.clone()));
+                let mut v = view(&s, boot.as_ref());
+                v["resized"] = serde_json::json!(true);
+                return Ok(v);
+            }
             return Ok(view(&s, boot.as_ref()));
         }
         // recover the session the previous Core (or a crash) left behind
@@ -287,6 +309,11 @@ fn start_inner(state: &ApiState, p: &StartSessionParams) -> Result<serde_json::V
         }
     };
     s.serial = Some(boot.serial.clone());
+    // SNAP-003: the shared emulator keeps the last size it was set to (also in its snapshot):
+    // set it for this profile on every boot
+    if let Some(Err(e)) = device_api::apply_display(state, &boot.serial, &p.profile) {
+        tracing::warn!(profile = %p.profile, error = %e, "setting the screen size failed");
+    }
     let how = format!(
         "{:?} boot in {} s on {}",
         boot.mode, boot.seconds, boot.serial

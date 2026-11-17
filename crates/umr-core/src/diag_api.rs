@@ -52,6 +52,25 @@ pub struct DiagStore {
     pub problems: Dedupe,
     logs: VecDeque<LogLine>,
     next_log: u64,
+    /// AUD-P1-7: problems the user sent to the agent ("Send to agent"): its next stop hook
+    /// reports them even when they were reported before.
+    pub flagged: HashSet<String>,
+    /// AUD-P3-24: problems the agent was told about (fingerprint → when, what), to notice when
+    /// they are gone, and the feed of both for the home screen (newest last, survives runs).
+    pub told: HashMap<String, (u64, String)>,
+    pub feed: VecDeque<FeedEvent>,
+}
+
+/// One line of the agent-fix feed on the home screen.
+#[derive(Debug, Clone, Serialize)]
+pub struct FeedEvent {
+    pub at_ms: u64,
+    /// `told`: the agent got the problem at the end of a task; `fixed`: it was gone at a later
+    /// check (with `seconds` since it was told).
+    pub kind: &'static str,
+    pub message: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub seconds: Option<u64>,
 }
 
 impl Default for DiagStore {
@@ -60,6 +79,9 @@ impl Default for DiagStore {
             problems: Dedupe::new(Self::KEEP_PROBLEMS),
             logs: VecDeque::new(),
             next_log: 0,
+            flagged: HashSet::new(),
+            told: HashMap::new(),
+            feed: VecDeque::new(),
         }
     }
 }
@@ -67,12 +89,62 @@ impl Default for DiagStore {
 impl DiagStore {
     const KEEP_PROBLEMS: usize = 500;
     const KEEP_LOGS: usize = 5000;
+    const KEEP_FEED: usize = 50;
 
     /// A new run starts empty. The log cursor keeps counting so a reader's old cursor never
-    /// hides the new run's first lines.
+    /// hides the new run's first lines. The feed stays: it is the history of the agent's work.
     pub fn reset(&mut self) {
         self.problems.clear();
         self.logs.clear();
+        self.flagged.clear();
+        self.told.clear();
+    }
+
+    /// Records what an agent check found: problems it reports now are "told"; problems told
+    /// earlier and gone now are "fixed". `reported` holds (fingerprint, message).
+    pub fn note_check(&mut self, reported: &[(String, String)]) {
+        let now = now_ms();
+        let present: HashSet<&String> = self
+            .problems
+            .entries()
+            .iter()
+            .map(|e| &e.diagnostic.fingerprint)
+            .collect();
+        let gone: Vec<String> = self
+            .told
+            .keys()
+            .filter(|fp| !present.contains(fp))
+            .cloned()
+            .collect();
+        for fp in gone {
+            if let Some((at, message)) = self.told.remove(&fp) {
+                self.push_feed(FeedEvent {
+                    at_ms: now,
+                    kind: "fixed",
+                    message,
+                    seconds: Some(now.saturating_sub(at) / 1000),
+                });
+            }
+        }
+        for (fp, message) in reported {
+            self.flagged.remove(fp);
+            if !self.told.contains_key(fp) {
+                self.told.insert(fp.clone(), (now, message.clone()));
+                self.push_feed(FeedEvent {
+                    at_ms: now,
+                    kind: "told",
+                    message: message.clone(),
+                    seconds: None,
+                });
+            }
+        }
+    }
+
+    fn push_feed(&mut self, e: FeedEvent) {
+        self.feed.push_back(e);
+        while self.feed.len() > Self::KEEP_FEED {
+            self.feed.pop_front();
+        }
     }
 
     pub fn problem(&mut self, d: Diagnostic) {
@@ -448,6 +520,23 @@ fn entry_json(e: &Entry, stack: bool) -> Value {
     v
 }
 
+/// `diagnostics.flag` (AUD-P1-7, "Send to agent"): the agent's next stop hook reports this
+/// problem even if it was reported before.
+pub fn flag(state: &ApiState, id: Id, p: &DiagnosticGetParams) -> Response {
+    let mut s = lock(&state.diag);
+    if !s.problems.contains(&p.fingerprint) {
+        return Response::err(
+            Some(id),
+            RpcError::new(
+                codes::INVALID_PARAMS,
+                format!("no diagnostic {} in the current run", p.fingerprint),
+            ),
+        );
+    }
+    s.flagged.insert(p.fingerprint.clone());
+    ok(id, &json!({ "flagged": p.fingerprint }))
+}
+
 /// The source lines around a problem (AUD-P1-11), for "Copy" and agents: `around` lines before
 /// and after `line`, sanitised like every other text that leaves the Core. Only a file inside
 /// `project` (after resolving `..` and links) and at most 2 MB is read.
@@ -733,6 +822,37 @@ mod tests {
         assert_eq!(e.file, None);
         let d = umr_diagnostics::from_js_error(&e);
         assert_eq!(d.message, "Error: boom (in component <App>)");
+    }
+
+    #[test]
+    fn the_feed_records_what_the_agent_was_told_and_what_it_fixed() {
+        let mut s = DiagStore::default();
+        let d = umr_diagnostics::from_message("dart", "Expected ';'", Category::Build);
+        let fp = d.fingerprint.clone();
+        s.problem(d);
+        s.flagged.insert(fp.clone());
+        s.note_check(&[(fp.clone(), "Expected ';'".into())]);
+        assert!(
+            s.flagged.is_empty(),
+            "a reported problem is no longer flagged"
+        );
+        assert_eq!(s.feed.len(), 1);
+        assert_eq!(s.feed[0].kind, "told");
+        // reported again while it is still there: no second line
+        s.note_check(&[(fp.clone(), "Expected ';'".into())]);
+        assert_eq!(s.feed.len(), 1);
+        // gone at the next check: fixed
+        s.reload_started();
+        s.note_check(&[]);
+        assert_eq!(s.feed.len(), 2);
+        assert_eq!(
+            (s.feed[1].kind, s.feed[1].message.as_str()),
+            ("fixed", "Expected ';'")
+        );
+        assert!(s.feed[1].seconds.is_some());
+        // a new run keeps the history
+        s.reset();
+        assert_eq!(s.feed.len(), 2);
     }
 
     #[test]

@@ -138,6 +138,8 @@ pub fn output(client: &str, v: &Verdict) -> Option<String> {
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 struct HookState {
     cursor: u64,
+    /// The Core start the cursor belongs to.
+    epoch: u64,
     rounds: u32,
     /// [`signature`] of the last report.
     last: String,
@@ -166,6 +168,7 @@ fn load_states(path: &Path) -> BTreeMap<String, HookState> {
                         k.clone(),
                         HookState {
                             cursor: n("cursor"),
+                            epoch: n("epoch"),
                             rounds,
                             last: s["last"].as_str().unwrap_or("").to_string(),
                         },
@@ -187,7 +190,7 @@ fn save_state(path: &Path, key: &str, s: HookState) {
         .map(|(k, s)| {
             (
                 k.clone(),
-                json!({ "cursor": s.cursor, "rounds": s.rounds, "last": s.last }),
+                json!({ "cursor": s.cursor, "epoch": s.epoch, "rounds": s.rounds, "last": s.last }),
             )
         })
         .collect();
@@ -241,6 +244,7 @@ async fn check(target: &CoreTarget, client: &str, input: &Value) -> Result<Verdi
         .call_raw(
             methods::AGENT_CHECK,
             json!({ "project": project.display().to_string(), "since": state.cursor,
+                    "epoch": (state.epoch > 0).then_some(state.epoch),
                     "timeout_ms": (HOOK_TIMEOUT_S - 30) * 1000 }),
         )
         .await
@@ -249,12 +253,19 @@ async fn check(target: &CoreTarget, client: &str, input: &Value) -> Result<Verdi
         return Ok(Verdict::Allow); // not this folder's run, or still building at the timeout
     }
     let problems = r["problems"].as_array().cloned().unwrap_or_default();
-    let (verdict, rounds) = decide(&problems, state.rounds, &state.last);
+    // AUD-P1-7: problems the user sent with "Send to agent" pass the loop guard
+    let sent_by_user = r["flagged"].as_array().is_some_and(|f| !f.is_empty());
+    let (verdict, rounds) = if sent_by_user && !problems.is_empty() {
+        (Verdict::Continue(report(&problems)), 1)
+    } else {
+        decide(&problems, state.rounds, &state.last)
+    };
     save_state(
         &file,
         &key,
         HookState {
             cursor: r["cursor"].as_u64().unwrap_or(state.cursor),
+            epoch: r["epoch"].as_u64().unwrap_or(0),
             rounds,
             last: signature(&problems),
         },

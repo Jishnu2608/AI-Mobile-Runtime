@@ -135,7 +135,28 @@ export async function mockCall(method: string, _params: unknown): Promise<any> {
         code: { first: 92, line: 94, lines: ["  val total = remember { mutableStateOf(0) }", "  Column {", '    Text(text = Calc.parse(input).toString())', "  }", "}"] },
       };
     case "session.status":
-      return { session: { avd: "umr_standard_api36", profile: "standard", serial: "emulator-5554" } };
+      return { session: { avd: "umr_standard_api36", profile: "standard", serial: "emulator-5554", state: "crashed" } };
+    case "diagnostics.flag":
+      return { flagged: (_params as any)?.fingerprint };
+    case "home.summary": {
+      const now = Date.now();
+      return {
+        recent: [
+          { path: "C:\\work\\demo", adapter: "flutter", last_run_unix: now / 1000 - 600, runs: 7, exists: true },
+          { path: "C:\\work\\shop-app", adapter: "react-native", last_run_unix: now / 1000 - 86400 * 2, runs: 3, exists: true },
+          { path: "C:\\work\\old-kotlin", adapter: "gradle-android", last_run_unix: now / 1000 - 86400 * 9, runs: 1, exists: false },
+        ],
+        session: { state: "running", profile: "standard", app: "com.example.demo", serial: "emulator-5554", project: "C:\\work\\demo" },
+        run: { project: "C:\\work\\demo", adapter: "flutter", package: "com.example.demo", serial: "emulator-5554" },
+        problems: { total: 2, by_category: { build: 1, crash: 1 } },
+        feed: [
+          { at_ms: now - 60_000, kind: "fixed", message: "Expected ';' after this.", seconds: 41 },
+          { at_ms: now - 101_000, kind: "told", message: "Expected ';' after this." },
+          { at_ms: now - 3_600_000, kind: "fixed", message: "Bad state: No element", seconds: 95 },
+        ],
+        fixed_today: 2,
+      };
+    }
     case "logs.tail":
       if ((_params as any)?.since) return { lines: [], cursor: 4 };
       return {
