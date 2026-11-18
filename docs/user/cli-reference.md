@@ -210,7 +210,7 @@ Commands:
   stop         Stop an emulator the product started
   use          Start a session on a size class: boot it (switching from another device), optionally install and launch an app
   rotate       Rotate the emulator 90° (left or right)
-  posture      Fold or unfold a foldable emulator while it runs: closed, half-opened, opened, flipped, tent
+  posture      Fold or unfold a foldable emulator while it runs: a posture (closed, half-opened, opened) or `--angle` in degrees (0 closed, 90 half open, 180 open flat). Closed, the app moves to the cover screen. Without either it shows the hinge as it is
   fingerprint  Touch the emulator's fingerprint sensor: unlocks the lock screen and answers an app's biometric prompt once a finger is enrolled (Settings, with a screen lock set). `down` / `up` hold the finger, e.g. while Settings enrols it
   auth         Lock screen and fingerprint state: locked, sensor waiting for a finger, fingers enrolled
   help         Print this message or the help of the given subcommand(s)
@@ -328,14 +328,15 @@ Options:
 ### umr device posture
 
 ```text
-Fold or unfold a foldable emulator while it runs: closed, half-opened, opened, flipped, tent
+Fold or unfold a foldable emulator while it runs: a posture (closed, half-opened, opened) or `--angle` in degrees (0 closed, 90 half open, 180 open flat). Closed, the app moves to the cover screen. Without either it shows the hinge as it is
 
-Usage: umr device posture [OPTIONS] <POSTURE>
+Usage: umr device posture [OPTIONS] [POSTURE]
 
 Arguments:
-  <POSTURE>  
+  [POSTURE]  
 
 Options:
+      --angle <ANGLE>    Hinge angle in degrees, 0–180
       --target <TARGET>  
   -h, --help             Print help
 ```
@@ -500,12 +501,12 @@ Connect AI coding agents: setup, clients, grants, audit log
 Usage: umr agent <COMMAND>
 
 Commands:
-  setup         Connect a coding agent (claude-code, codex, cursor, claude-desktop, vscode): creates its client, writes its MCP server entry and agent instructions (shows the changes and asks first). `--remove` disconnects it again
-  hook          The agent's stop hook (written by `setup` for claude-code, codex and cursor): reads the hook input on stdin, waits for the rebuild the agent's saves started, and keeps the agent working while the app has a build error, a new runtime error or a crash. Never blocks when nothing of this folder runs
+  setup         Connect a coding agent (claude-code, codex, cursor, claude-desktop, vscode, antigravity): creates its client, writes its MCP server entry and agent instructions (shows the changes and asks first). `--remove` disconnects it again
+  hook          The agent's stop hook (written by `setup` for claude-code, codex, cursor and antigravity): reads the hook input on stdin, waits for the rebuild the agent's saves started, and keeps the agent working while the app has a build error, a new runtime error or a crash. Never blocks when nothing of this folder runs
   link          One-click install link for Cursor or VS Code, made for this PC's umr (creates the agent client if needed)
   doctor        Check each connected agent end to end: config entry, program path, token, a real MCP handshake and its last call. `--fix` repoints entries at this umr
   add           Create an agent client with its own token (default scopes: observe, interact, control)
-  clients       Coding agents on this PC (Claude Code, Codex, Cursor, Claude Desktop, VS Code): installed, connected, and how to connect each one. Does not need the Core
+  clients       Coding agents on this PC (Claude Code, Codex, Cursor, Claude Desktop, VS Code, Antigravity): installed, connected, and how to connect each one. Does not need the Core
   list          Agent clients, their scopes and grants
   remove        Remove an agent client (its token stops working)
   grant         Let an agent run a project folder (or `device:switch`) without asking each time
@@ -521,16 +522,16 @@ Options:
 ### umr agent setup
 
 ```text
-Connect a coding agent (claude-code, codex, cursor, claude-desktop, vscode): creates its client, writes its MCP server entry and agent instructions (shows the changes and asks first). `--remove` disconnects it again
+Connect a coding agent (claude-code, codex, cursor, claude-desktop, vscode, antigravity): creates its client, writes its MCP server entry and agent instructions (shows the changes and asks first). `--remove` disconnects it again
 
 Usage: umr agent setup [OPTIONS] <AGENT>
 
 Arguments:
-  <AGENT>  claude-code, codex, cursor, claude-desktop or vscode
+  <AGENT>  claude-code, codex, cursor, claude-desktop, vscode or antigravity
 
 Options:
       --project <PROJECT>  Project folder (project-scope config and instruction files); default: current folder
-      --scope <SCOPE>      `project` (this folder) or `user` (all projects). Default: project for Claude Code, Cursor and VS Code; user for Codex and Claude Desktop
+      --scope <SCOPE>      `project` (this folder) or `user` (all projects). Default: project for Claude Code, Cursor and VS Code; user for Codex, Claude Desktop and Antigravity
       --remove             Take the runtime out of the agent's files and revoke its token
       --print              Only print the server entry to add by hand; write nothing
       --yes                Do not ask
@@ -542,15 +543,16 @@ Options:
 ### umr agent hook
 
 ```text
-The agent's stop hook (written by `setup` for claude-code, codex and cursor): reads the hook input on stdin, waits for the rebuild the agent's saves started, and keeps the agent working while the app has a build error, a new runtime error or a crash. Never blocks when nothing of this folder runs
+The agent's stop hook (written by `setup` for claude-code, codex, cursor and antigravity): reads the hook input on stdin, waits for the rebuild the agent's saves started, and keeps the agent working while the app has a build error, a new runtime error or a crash. Never blocks when nothing of this folder runs
 
-Usage: umr agent hook <AGENT>
+Usage: umr agent hook [OPTIONS] <AGENT>
 
 Arguments:
-  <AGENT>  claude-code, codex or cursor
+  <AGENT>  claude-code, codex, cursor or antigravity
 
 Options:
-  -h, --help  Print help
+      --after-edit  AUD-P1-32: run after a file edit inside the agent's turn (Claude Code `PostToolUse`): report problems the app already shows, without waiting for a build
+  -h, --help        Print help
 ```
 
 ### umr agent link
@@ -603,7 +605,7 @@ Options:
 ### umr agent clients
 
 ```text
-Coding agents on this PC (Claude Code, Codex, Cursor, Claude Desktop, VS Code): installed, connected, and how to connect each one. Does not need the Core
+Coding agents on this PC (Claude Code, Codex, Cursor, Claude Desktop, VS Code, Antigravity): installed, connected, and how to connect each one. Does not need the Core
 
 Usage: umr agent clients [OPTIONS]
 

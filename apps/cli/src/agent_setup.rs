@@ -51,7 +51,8 @@ impl Scope {
 /// The scope used when none is given: what each client's setup wrote before scopes existed.
 #[must_use]
 pub fn default_scope(c: &Client) -> Scope {
-    if c.project_config.is_some() && c.id != "codex" {
+    // Antigravity: the App reads only the user file (the workspace file is for its CLI and IDE)
+    if c.project_config.is_some() && c.id != "codex" && c.id != "antigravity" {
         Scope::Project
     } else {
         Scope::User
@@ -90,6 +91,12 @@ fn instructions_target(c: &Client, scope: Scope) -> Option<InstrTarget> {
         ("vscode", Scope::Project) => Some(InstrTarget::Own(Place::Project(
             ".github/instructions/umr-runtime.instructions.md",
         ))),
+        ("antigravity", Scope::Project) => Some(InstrTarget::Own(Place::Project(
+            ".agents/rules/umr-runtime.md",
+        ))),
+        ("antigravity", Scope::User) => Some(InstrTarget::Own(Place::Home(
+            ".gemini/config/rules/umr-runtime.md",
+        ))),
         // Claude Desktop, and Cursor / VS Code at user scope, have no instructions file:
         // the agent gets the MCP `instructions` sent at start-up.
         _ => None,
@@ -107,6 +114,8 @@ fn hook_place(c: &Client, scope: Scope) -> Option<Place> {
         ("codex", Scope::User) => Some(Place::CodexHome("hooks.json")),
         ("cursor", Scope::Project) => Some(Place::Project(".cursor/hooks.json")),
         ("cursor", Scope::User) => Some(Place::Home(".cursor/hooks.json")),
+        ("antigravity", Scope::Project) => Some(Place::Project(".agents/hooks.json")),
+        ("antigravity", Scope::User) => Some(Place::Home(".gemini/config/hooks.json")),
         _ => None,
     }
 }
@@ -121,6 +130,10 @@ fn instructions_text(c: &Client) -> String {
         // Cursor project rule: .mdc with front matter; always loaded
         "cursor" => {
             format!("---\ndescription: {SKILL_DESCRIPTION}\nalwaysApply: true\n---\n\n{body}")
+        }
+        // Antigravity rule: skipped without front matter that names a trigger
+        "antigravity" => {
+            format!("---\ntrigger: always_on\ndescription: {SKILL_DESCRIPTION}\n---\n\n{body}")
         }
         // VS Code instructions file: applies to every file in the workspace
         "vscode" => format!(
@@ -714,6 +727,7 @@ fn next_step(c: &Client, scope: Scope, project: &Path) -> String {
         ("cursor", _) => "Open Cursor Settings → MCP and make sure `umr` is switched on (Cursor may ask to enable a new server).".into(),
         ("claude-desktop", _) => "Quit Claude Desktop completely (also from the tray) and start it again; the `umr` tools appear under the tools menu.".into(),
         ("vscode", _) => "In VS Code, open the Chat view in agent mode; start the `umr` server when VS Code offers it (MCP: List Servers).".into(),
+        ("antigravity", _) => "In Antigravity, open Customizations → MCP Servers (App) or … → MCP Servers → Manage MCP Servers (IDE) and refresh or restart `umr`; a new conversation picks up the rule and the stop hook.".into(),
         _ => String::new(),
     }
 }
@@ -987,6 +1001,21 @@ fn handshake(command: &str, args: &[String], timeout: Duration) -> Result<usize,
     })
 }
 
+/// AUD-P1-32: Claude Code also reports problems after each edit, during its turn; an older
+/// setup has only the stop hook.
+fn after_edit_check(c: &Client, stop_hook: bool, hook: &Path) -> Option<Check> {
+    (stop_hook
+        && c.id == "claude-code"
+        && !read(hook).is_some_and(|t| crate::agent_hook::has_after_edit_hook(&t)))
+    .then(|| {
+        check(
+            Mark::Warn,
+            "no after-edit hook: Claude Code hears about problems only at the end of its turn",
+            Some(format!("umr agent setup {}", c.id)),
+        )
+    })
+}
+
 /// Checks for one client. `None` when it is not connected anywhere and was not asked for.
 async fn doctor_client(
     target: &CoreTarget,
@@ -1053,6 +1082,7 @@ async fn doctor_client(
         // HOOK-001: the stop hook that reports build errors and crashes back to the agent
         if let Some(hook) = hook_place(c, *scope).and_then(|p| resolve(p, project).ok()) {
             let on = read(&hook).is_some_and(|t| crate::agent_hook::has_hook(&t));
+            checks.extend(after_edit_check(c, on, &hook));
             checks.push(if on {
                 check(Mark::Ok, format!("stop hook in {}", hook.display()), None)
             } else {
@@ -1065,6 +1095,23 @@ async fn doctor_client(
                     Some(format!("umr agent setup {}", c.id)),
                 )
             });
+            // AUD-P1-14: a real round trip, as the hook makes it at the end of a task
+            if on && core_up {
+                if let Some(name) = client_name_in(args) {
+                    checks.push(match hook_round_trip(target, &name, project).await {
+                        Ok(what) => check(
+                            Mark::Ok,
+                            format!("stop hook reaches the runtime: {what}"),
+                            None,
+                        ),
+                        Err(e) => check(
+                            Mark::Fail,
+                            format!("stop hook cannot reach the runtime: {e}"),
+                            Some("umr status; umr start".into()),
+                        ),
+                    });
+                }
+            }
         }
     }
     Some((checks, stale))
@@ -1142,6 +1189,39 @@ async fn check_entry(
         )),
     }
     (checks, !same)
+}
+
+/// AUD-P1-14: what the stop hook would get now for `project`, with the agent's own token.
+async fn hook_round_trip(
+    target: &CoreTarget,
+    name: &str,
+    project: &Path,
+) -> Result<String, String> {
+    let token = std::fs::read_to_string(crate::mcp_cmd::token_path(target, name))
+        .map_err(|e| format!("no token: {e}"))?;
+    let Some(mut core) = target.connect_as(token.trim()).await? else {
+        return Err("the Runtime Core is not running".into());
+    };
+    let r = core
+        .call_raw(
+            umr_api::methods::AGENT_CHECK,
+            serde_json::json!({ "project": project.display().to_string(), "timeout_ms": 3000, "probe": true }),
+        )
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(match r["status"].as_str() {
+        Some("ok") => {
+            let n = r["problems"].as_array().map_or(0, Vec::len);
+            if n == 0 {
+                "the app of this project runs and has no problems to report".into()
+            } else {
+                format!("the app of this project runs; {n} problem(s) would be reported")
+            }
+        }
+        Some("not_running") => "it answers; no app of this project runs right now".into(),
+        Some("busy") => "it answers; the app is rebuilding".into(),
+        other => format!("answer {}", other.unwrap_or("?")),
+    })
 }
 
 async fn last_call(target: &CoreTarget, name: &str) -> Option<String> {
@@ -1367,7 +1447,7 @@ mod tests {
 
     #[test]
     fn every_client_sets_up_and_removes_cleanly_in_a_project() {
-        for id in ["claude-code", "cursor", "vscode"] {
+        for id in ["claude-code", "cursor", "vscode", "antigravity"] {
             let dir = temp(id);
             let c = agent_clients::find(id).unwrap();
             let plan1 = plan(c, Scope::Project, &dir, r"C:\umr\umr.exe", false).unwrap();
@@ -1440,6 +1520,11 @@ mod tests {
         );
         let vscode = instructions_text(agent_clients::find("vscode").unwrap());
         assert!(vscode.contains("applyTo: '**'"));
+        let antigravity = instructions_text(agent_clients::find("antigravity").unwrap());
+        assert!(antigravity.starts_with("---\ntrigger: always_on\ndescription: "));
+        assert!(
+            instructions_target(agent_clients::find("antigravity").unwrap(), Scope::User).is_some()
+        );
         assert!(
             instructions_target(agent_clients::find("claude-desktop").unwrap(), Scope::User)
                 .is_none()
@@ -1458,6 +1543,10 @@ mod tests {
         );
         assert_eq!(
             default_scope(agent_clients::find("claude-desktop").unwrap()),
+            Scope::User
+        );
+        assert_eq!(
+            default_scope(agent_clients::find("antigravity").unwrap()),
             Scope::User
         );
         assert!(config_place(

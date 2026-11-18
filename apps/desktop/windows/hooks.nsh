@@ -27,6 +27,17 @@
 !macroend
 
 !macro NSIS_HOOK_POSTUNINSTALL
+  ; DEV-003b: the emulator always writes its console token to %USERPROFILE% (it cannot be moved).
+  ; The Core leaves a marker in its data folder when its own emulator start created that file;
+  ; only then is the token removed (Android Studio shares it otherwise). UMR_HOME moves the data
+  ; folder, so both places are checked.
+  ReadEnvStr $0 UMR_HOME
+  StrCmp $0 "" 0 +2
+    StrCpy $0 "$PROFILE\.umr"
+  IfFileExists "$0\emulator-console-token.created" 0 umr_token_done
+    Delete "$PROFILE\.emulator_console_auth_token"
+    Delete "$0\emulator-console-token.created"
+  umr_token_done:
   ; User data is kept on purpose: emulator images, AVDs and toolchains can be many GB and
   ; may be shared with other projects. Say where they are (silent uninstalls skip this).
   IfSilent +2

@@ -101,6 +101,35 @@ export async function applyUpdate(): Promise<void> {
 }
 
 /** Opens the docked live preview window. */
+/** AUD-P1-5: the window's own title (taskbar, Alt+Tab); the page title too. */
+/** AUD-P2-20 / AUD-P3-23: open a file (at a line) in VS Code, else Notepad. Returns the program used. */
+export async function openInEditor(path: string, line?: number | null, root?: string): Promise<string> {
+  if (!inTauri) throw new Error("opening files works in the desktop app");
+  return invoke<string>("open_in_editor", { path, line: line ?? null, root: root ?? null });
+}
+
+/** AUD-P2-21: grow (or shrink) this window sideways; returns the logical pixels actually added. */
+export async function widenWindow(extra: number): Promise<number> {
+  if (!inTauri) return 0;
+  return invoke<number>("widen_window", { extra });
+}
+
+export async function setWindowTitle(title: string): Promise<void> {
+  document.title = title;
+  if (inTauri) await invoke("set_window_title", { title }).catch(() => undefined);
+}
+
+/** AUD-P2-26: open (or bring up) the preview with its Problems panel open. Both windows share
+ * the web view's storage, so the preview also hears this when it is already open. */
+export async function openProblems(): Promise<void> {
+  try {
+    localStorage.setItem("umr.openProblems", String(Date.now()));
+  } catch {
+    /* the preview opens without its panel */
+  }
+  await openPreview();
+}
+
 export async function openPreview(): Promise<void> {
   if (!inTauri) return;
   await invoke("open_preview_window");

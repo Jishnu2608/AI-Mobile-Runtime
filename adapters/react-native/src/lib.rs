@@ -408,12 +408,35 @@ fn native_build(ctx: &AdapterContext, port: u16, sink: &Sink) -> Result<String, 
                 .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
     })
     .unwrap_or_else(|| "x86_64".into());
-    let apk = umr_adapter_gradle::build_with(
-        &g,
-        &module,
-        &[format!("-PreactNativeArchitectures={abi}")],
-        sink,
-    )?;
+    // AUD-P1-45: JavaScript comes from Metro; the APK only changes with the native side
+    let extra: Vec<PathBuf> = [
+        "package.json",
+        "package-lock.json",
+        "yarn.lock",
+        "pnpm-lock.yaml",
+        "app.json",
+    ]
+    .iter()
+    .map(|f| ctx.project.join(f))
+    .collect();
+    let apk = match umr_adapter_gradle::up_to_date_apk(&g.project, &module, &extra) {
+        Some(apk) => {
+            sink(Event::Phase {
+                phase: Phase::Building,
+                message: format!(
+                    "reusing {} (no native change since it was built)",
+                    apk.display()
+                ),
+            });
+            apk
+        }
+        None => umr_adapter_gradle::build_with(
+            &g,
+            &module,
+            &[format!("-PreactNativeArchitectures={abi}")],
+            sink,
+        )?,
+    };
     let package = umr_adapter_gradle::install(&g, &apk, sink)?;
     umr_adapter_gradle::launch(&g, &package, sink)?;
     Ok(package)

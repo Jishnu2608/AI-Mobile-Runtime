@@ -2,7 +2,7 @@
 // deduplicated from the Core (`diagnostics.list`), logs from `logs.tail`; both already sanitised.
 import { useEffect, useRef, useState } from "react";
 import { Check, ClipboardCopy, Copy } from "lucide-react";
-import { call, openDocs, troubleshootingAnchor } from "./api";
+import { call, inTauri, openDocs, openInEditor, troubleshootingAnchor } from "./api";
 
 export interface Problem {
   fingerprint: string;
@@ -18,6 +18,8 @@ export interface Problem {
   seq: number;
   first_seen_ms: number;
   stack_frames: number;
+  /** AUD-P2-25: from before a reload or rebuild that is still running ("checking the fix"). */
+  checking?: boolean;
   stack?: string[];
   /** The source lines around `file:line` (`diagnostics.get` only). */
   code?: { first: number; line: number; lines: string[] };
@@ -37,7 +39,7 @@ const KEEP_LOGS = 1500;
 
 /** Identity of a list: which problems, how often, and when last seen. */
 export function listKey(entries: Problem[]): string {
-  return entries.map((e) => `${e.fingerprint}:${e.count}:${e.seq}`).join("|");
+  return entries.map((e) => `${e.fingerprint}:${e.count}:${e.seq}:${e.checking ? 1 : 0}`).join("|");
 }
 
 /**
@@ -164,10 +166,19 @@ async function toClipboard(text: string): Promise<boolean> {
 }
 
 /** Copy all problems with project, app and device (AUD-P1-11). */
-function CopyAll({ problems }: { problems: Problem[] }) {
+export function CopyAll({ problems, fetch: fetchAll }: { problems?: Problem[]; fetch?: boolean }) {
   const [state, setState] = useState<"idle" | "busy" | "done" | "failed">("idle");
   const copy = async () => {
     setState("busy");
+    // AUD-P2-26: the Run step has no list of its own; it reads the current run's problems here
+    let list = problems ?? [];
+    if (fetchAll) {
+      try {
+        list = (await call<{ entries: Problem[] }>("diagnostics.list", { limit: 50 })).entries ?? [];
+      } catch {
+        /* the problems the caller gave, if any */
+      }
+    }
     const run: RunContext = {};
     try {
       const l = await call<{ run?: RunContext }>("diagnostics.list", { limit: 1 });
@@ -183,7 +194,7 @@ function CopyAll({ problems }: { problems: Problem[] }) {
       /* without the device name */
     }
     const all: Problem[] = [];
-    for (const p of problems.slice(0, 50)) all.push(await full(p));
+    for (const p of list.slice(0, 50)) all.push(await full(p));
     const ok = await toClipboard(reportText(all, run));
     setState(ok ? "done" : "failed");
     setTimeout(() => setState("idle"), 1600);
@@ -235,8 +246,12 @@ export function RunBanner({ problems, onOpen }: { problems: Problem[]; onOpen: (
   if (state === "crashed" && (p = newest("crash"))) kind = "crashed";
   else if (state === "build_failed" && (p = newest("build"))) kind = "build";
   else if ((state === "running" || state === "reloading") && (p = newest("runtime")) && p.severity === "error") kind = "runtime";
+  // AUD-P2-25: while the saved fix builds, say so instead of hiding the banner
+  else if ((state === "building" || state === "reloading" || state === "launching") && (p = [...problems].filter((x) => x.checking).sort((a, b) => b.seq - a.seq)[0])) kind = p.category === "build" ? "build" : "runtime";
   if (!kind || !p || hidden === p.fingerprint) return null;
-  const title = kind === "crashed" ? "App crashed" : kind === "build" ? "Build failed — showing the last working version" : "Error in the app";
+  const title = p.checking
+    ? "Checking your fix — building the saved code"
+    : kind === "crashed" ? "App crashed" : kind === "build" ? "Build failed — showing the last working version" : "Error in the app";
   const send = async () => {
     const full = await call<Problem>("diagnostics.get", { fingerprint: p!.fingerprint }).catch(() => p!);
     let flagged = false;
@@ -309,6 +324,7 @@ function ProblemRow({ p, focus }: { p: Problem; focus?: boolean }) {
           {p.origin === "app" ? "code" : p.origin === "environment" ? "env" : "?"}
         </span>
         <span className="dg-msg">{p.message.split("\n")[0]}</span>
+        {p.checking && <span className="dg-checking" title="You saved a change; this stays until the new build shows whether it is fixed">checking the fix…</span>}
         {p.count > 1 && <span className="dg-count">×{p.count}</span>}
         <button className={`dg-copy${copied ? " " + copied : ""}`} title="Copy this problem with its place, code and stack — for your agent, an issue or a forum" onClick={copy}>
           {copied === "done" ? <Check aria-hidden /> : <Copy aria-hidden />}
@@ -317,7 +333,7 @@ function ProblemRow({ p, focus }: { p: Problem; focus?: boolean }) {
       </div>
       {(where(p) || open) && (
         <div className="dg-where">
-          {where(p)}
+          {where(p) && <FileLink p={p} />}
           {where(p) && " · "}
           {p.source}
         </div>
@@ -329,6 +345,37 @@ function ProblemRow({ p, focus }: { p: Problem; focus?: boolean }) {
         </pre>
       )}
     </div>
+  );
+}
+
+/** AUD-P3-23: the problem's file:line opens in VS Code (or Notepad) at that line. */
+function FileLink({ p }: { p: Problem }) {
+  const [note, setNote] = useState("");
+  if (!inTauri || !p.file) return <>{where(p)}</>;
+  const open = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      const file = p.file!;
+      let root: string | undefined;
+      if (!/^([A-Za-z]:[\\/]|[\\/]{2})/.test(file)) {
+        // relative to the project, or a bare name from a crash frame: the app finds it there
+        const l = await call<{ run?: { project?: string } }>("diagnostics.list", { limit: 1 });
+        root = l.run?.project;
+        if (!root) throw new Error("the project folder is not known");
+      }
+      setNote(`opened in ${await openInEditor(file, p.line, root)}`);
+    } catch (err) {
+      setNote(String(err).replace(/^Error:\s*/, ""));
+    }
+    setTimeout(() => setNote(""), 2500);
+  };
+  return (
+    <>
+      <button className="link dg-file" title="Open this file at this line (VS Code, else Notepad)" onClick={open}>
+        {where(p)}
+      </button>
+      {note && <span className="muted"> ({note})</span>}
+    </>
   );
 }
 

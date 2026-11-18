@@ -116,6 +116,9 @@ fn parse_fatal(lines: &[&str]) -> CrashEvent {
             pid = id.trim().parse().ok();
         } else if is_stack_frame(msg) {
             stack.push(msg.trim_start().to_string());
+        } else if msg.starts_with("Caused by: ") || msg.trim_start().starts_with("... ") {
+            // AUD-P2-17: the chain of causes stays in the trace, in place
+            stack.push(msg.trim().to_string());
         } else if msg.starts_with("FATAL EXCEPTION") {
             // the header line names the thread, not the exception; skip it
         } else if !msg.trim().is_empty() && message.is_empty() {
@@ -124,6 +127,7 @@ fn parse_fatal(lines: &[&str]) -> CrashEvent {
     }
     let (file, line) = stack
         .iter()
+        .filter(|f| is_stack_frame(f))
         .find_map(|f| frame_location(f))
         .map_or((None, None), |(f, l)| (Some(f), Some(l)));
     CrashEvent {

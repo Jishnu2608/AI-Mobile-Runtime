@@ -44,3 +44,5 @@ pub mod secure_file;
 pub mod secure_pipe;
 #[cfg(windows)]
 pub mod system;
+#[cfg(windows)]
+pub mod window;

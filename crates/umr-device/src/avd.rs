@@ -133,7 +133,7 @@ pub fn config_ini(p: &Profile, api: &str, tag: &str, abi: &str) -> String {
             "hw.sensor.hinge_angles_posture_definitions",
             &f.posture_angles.replace(' ', ""),
         );
-        if let Some((x, y, w, h)) = f.folded_region {
+        if let Some((x, y, w, h)) = f.cover {
             kv("hw.displayRegion.0.1.xOffset", &x.to_string());
             kv("hw.displayRegion.0.1.yOffset", &y.to_string());
             kv("hw.displayRegion.0.1.width", &w.to_string());
@@ -248,11 +248,18 @@ mod tests {
             "hw.sensor.posture_list=1,2,3",
             "hw.sensor.hinge_angles_posture_definitions=0-30,30-150,150-180",
             "hw.displayRegion.0.1.width=884",
+            // AUD-P1-42: the cover screen is centred, as Android draws it after `wm size`
+            "hw.displayRegion.0.1.xOffset=442",
         ] {
             assert!(f.lines().any(|l| l == line), "missing {line}\n{f}");
         }
         let flip = config_ini(find("flip").unwrap(), "36", "google_apis", "x86_64");
-        assert!(flip.contains("hw.sensor.hinge.type=0") && !flip.contains("hw.displayRegion"));
+        assert!(flip.contains("hw.sensor.hinge.type=0"));
+        // AUD-P1-43: the flip's cover screen
+        assert!(
+            flip.contains("hw.displayRegion.0.1.yOffset=756")
+                && flip.contains("hw.displayRegion.0.1.height=1124")
+        );
     }
 
     #[test]

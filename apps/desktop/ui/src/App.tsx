@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { Stage } from "./Stage";
 import { Home, useHome } from "./Home";
-import { applyUpdate, call, checkUpdate, DocsPage, inTauri, loadWizard, openDocs, openPreview, pickFolder, saveWizard, size, Step, UpdateInfo, WizardState } from "./api";
+import { applyUpdate, call, checkUpdate, DocsPage, inTauri, loadWizard, openDocs, openInEditor, openPreview, openProblems, pickFolder, saveWizard, size, Step, UpdateInfo, WizardState } from "./api";
 import { AgentsStep } from "./Agents";
 import { STEP_WHY, Why } from "./why";
+import { CopyAll } from "./Problems";
 // the product mark, shared with the website and the app icon (brand/)
 import logo from "../../../../brand/logo-mark.svg";
 
@@ -65,6 +66,24 @@ export function App() {
   // AUD-P3-24: returning users open on the home screen; the wizard is one click away
   const home = useHome();
   const [view, setView] = useState<"home" | "wizard" | null>(null);
+  // AUD-P3-38: Pocket can be switched off, and the choice is remembered on this PC
+  const [pocket, setPocket] = useState(() => {
+    try {
+      return localStorage.getItem("umr.pocket") !== "off";
+    } catch {
+      return true;
+    }
+  });
+  const togglePocket = () => {
+    setPocket((on) => {
+      try {
+        localStorage.setItem("umr.pocket", on ? "off" : "on");
+      } catch {
+        /* not remembered: still switched for now */
+      }
+      return !on;
+    });
+  };
   useEffect(() => {
     if (view !== null || !state) return;
     // until the summary arrives (or with an older Core that has none) the wizard shows
@@ -94,7 +113,7 @@ export function App() {
   const atHome = view === "home";
 
   return (
-    <div className="layout">
+    <div className={pocket ? "layout" : "layout no-stage"}>
     <div className="shell">
       <header>
         <h1 className="brand">
@@ -109,6 +128,9 @@ export function App() {
             </button>
           )}
         </p>
+        <button className="link pocket-toggle" onClick={togglePocket} title={pocket ? "Hide the Pocket panel and its animation (remembered)" : "Show the Pocket panel again"}>
+          {pocket ? "Hide Pocket" : "Show Pocket"}
+        </button>
         {!inTauri && <p className="demo">Browser preview with sample data — open the desktop app for real results.</p>}
         <UpdateBanner />
       </header>
@@ -149,7 +171,7 @@ export function App() {
         )}
         {state.step === "licences" && <LicenceStep path={state.projectPath} onBack={() => go({ step: "plan" })} onNext={() => go({ step: "install" })} />}
         {state.step === "install" && <InstallStep path={state.projectPath} jobId={state.jobId} onJob={(jobId) => go({ jobId })} onBack={() => go({ step: "plan", jobId: undefined })} onDone={() => go({ step: "ready", jobId: undefined })} />}
-        {state.step === "ready" && <ReadyStep path={state.projectPath} onRestart={() => go({ step: "scan", jobId: undefined })} onNext={() => go({ step: "run" })} />}
+        {state.step === "ready" && <ReadyStep path={state.projectPath} onRestart={() => go({ step: "project", projectPath: "", jobId: undefined })} onNext={() => go({ step: "run" })} />}
         {state.step === "run" && <RunStep path={state.projectPath} onBack={() => go({ step: "ready" })} onNext={() => go({ step: "agents" })} />}
         {state.step === "agents" && <AgentsStep project={state.projectPath} onBack={() => go({ step: "ready" })} />}
         <StepDocs step={state.step} />
@@ -157,7 +179,7 @@ export function App() {
       </>
       )}
     </div>
-    <Stage step={atHome ? "home" : state.step} />
+    {pocket && <Stage step={atHome ? "home" : state.step} />}
     </div>
   );
 }
@@ -231,6 +253,79 @@ function StepDocs({ step }: { step: Step }) {
   );
 }
 
+const ORIGIN: Record<string, string> = {
+  managed: "installed by AI Mobile Runtime",
+  envvar: "named by an environment variable",
+  path: "on PATH",
+  registry: "Windows registry",
+  commondir: "install folder",
+  androidstudio: "inside Android Studio",
+};
+const TOOL_NAME: Record<string, string> = { flutter: "Flutter", node: "Node.js", npm: "npm", git: "Git", "android-cli": "Android CLI", yarn: "Yarn", pnpm: "pnpm", bun: "Bun" };
+
+function origins(o: string[] | undefined): string {
+  return (o ?? []).map((x) => ORIGIN[x.toLowerCase().replace(/[-_]/g, "")] ?? x).join(", ");
+}
+
+function health(h: { state: string; detail?: string } | undefined): { ok: boolean; text: string } {
+  if (!h || h.state === "ok") return { ok: true, text: "works" };
+  if (h.state === "broken") return { ok: false, text: `not working: ${h.detail ?? ""}` };
+  return { ok: true, text: "not checked" };
+}
+
+/** AUD-P2-18: every tool the scan found, with its version, where it is and whether it runs. */
+function ToolsFound({ r }: { r: any }) {
+  type Row = { name: string; version: string; where: string; from: string; ok: boolean; status: string; role?: string };
+  const rows: Row[] = [];
+  for (const j of r.jdks ?? []) {
+    const h = health(j.health);
+    rows.push({ name: `${j.is_jdk ? "JDK" : "Java runtime (no JDK)"}${j.vendor ? ` · ${j.vendor}` : ""}`, version: j.version ?? (j.major ? String(j.major) : "?"), where: j.home, from: origins(j.origins), ok: h.ok && j.is_jdk, status: j.is_jdk ? h.text : "a JRE: Gradle needs a JDK" });
+  }
+  for (const sdk of r.android_sdks ?? []) {
+    const adb = health(sdk.adb);
+    const emu = health(sdk.emulator);
+    const pt = (sdk.packages ?? []).find((p: any) => p.path === "platform-tools");
+    // AUD-P3-39: the runtime builds and runs apps with its own SDK; any other one is left as it is
+    const own = (sdk.origins ?? []).some((o: string) => o.toLowerCase() === "managed");
+    const many = (r.android_sdks ?? []).length > 1;
+    const role = own
+      ? "builds and runs your apps"
+      : many
+        ? "yours (for example Android Studio's): not used and not changed"
+        : "yours: not changed; the runtime installs its own SDK for builds";
+    rows.push({ name: "Android SDK", version: `${(sdk.packages ?? []).length} packages${pt?.version ? ` · adb ${pt.version}` : ""}`, where: sdk.root, from: origins(sdk.origins), ok: adb.ok && emu.ok, status: `adb ${adb.text}, emulator ${emu.text}`, role });
+  }
+  for (const t of r.tools ?? []) {
+    const h = health(t.health);
+    rows.push({ name: TOOL_NAME[t.name] ?? t.name, version: t.version ?? "?", where: t.path, from: origins(t.origins), ok: h.ok, status: h.text });
+  }
+  if (!rows.length) return <p className="muted">No development tools found yet: the plan installs what your project needs.</p>;
+  return (
+    <table className="plan tools-found">
+      <tbody>
+        {rows.map((x, i) => (
+          <tr key={i}>
+            <td>
+              <span className={`tag ${x.ok ? "reuse" : "install"}`}>{x.ok ? "OK" : "Check"}</span>
+            </td>
+            <td>
+              {x.name} <span className="muted">{x.version}</span>
+              {x.role && <span className={`tag ${x.role.startsWith("builds") ? "reuse" : ""} tool-role`}>{x.role}</span>}
+              <div className="muted small" title={x.where}>
+                {x.where && <code>{x.where}</code>}
+                {[x.from, !x.ok || x.status !== "works" ? x.status : ""]
+                  .filter(Boolean)
+                  .map((t) => ` · ${t}`)
+                  .join("")}
+              </div>
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
 function ScanStep({ onNext }: { onNext: () => void }) {
   const { data, error, loading, reload } = useAsync(() => call("env.scan"), []);
   if (loading) return <Busy text="Scanning this computer (a few seconds)…" />;
@@ -249,6 +344,8 @@ function ScanStep({ onNext }: { onNext: () => void }) {
         <Fact label="JDKs found" value={String(r.jdks.length)} ok />
         <Fact label="Android SDKs found" value={String(r.android_sdks.length)} ok />
       </div>
+      <h3>Tools found</h3>
+      <ToolsFound r={r} />
       <h3>Ready to build</h3>
       <ul className="readiness">
         {r.readiness.map((p: any) => (
@@ -302,11 +399,14 @@ function ProjectStep({ path, onBack, onNext }: { path: string; onBack: () => voi
       detect(p);
     }
   };
+  // AUD-P3-23: a themed confirmation in the card instead of the browser's confirm() box
+  const [asking, setAsking] = useState(false);
   const trust = () => {
-    if (!window.confirm("Building runs the project's own code (Gradle scripts, npm install scripts, Flutter plugins). Trust this folder?")) return;
+    setAsking(false);
     call("project.trust", { path: input.trim(), trusted: true }).then(() => detect(input));
   };
   const d = result?.detection;
+  const unknown = d?.framework === "unknown";
   return (
     <section>
       <h2>Your project</h2>
@@ -335,12 +435,27 @@ function ProjectStep({ path, onBack, onNext }: { path: string; onBack: () => voi
           <button className="link" onClick={() => setTyping(true)}>Type a path instead</button>
         </p>
       )}
-      {error && <Problem text={error} />}
+      {error && (
+        // AUD-P2-19: the Core says what is wrong with the path; no "Something went wrong"
+        <div className="problem" role="alert">{error.replace(/^Error:\s*/, "")}</div>
+      )}
       {d && (
         <div className="card">
-          <p className="big">
-            {FRAMEWORK[d.framework] ?? d.framework} <span className="muted">· {d.confidence} % sure</span>
-          </p>
+          {unknown ? (
+            <p className="big">
+              {d.candidates.length > 0 ? "No app right in this folder" : "No mobile app found here"}
+            </p>
+          ) : (
+            <p className="big">
+              {FRAMEWORK[d.framework] ?? d.framework} <span className="muted">· {d.confidence} % sure</span>
+            </p>
+          )}
+          {unknown && d.candidates.length === 0 && (
+            <p>
+              Pick the folder that holds <code>pubspec.yaml</code> (Flutter), <code>package.json</code> (React Native, Expo) or{" "}
+              <code>settings.gradle</code> (Android).
+            </p>
+          )}
           <ul className="evidence">
             {d.evidence.map((e: any, i: number) => (
               <li key={i}>
@@ -350,7 +465,7 @@ function ProjectStep({ path, onBack, onNext }: { path: string; onBack: () => voi
           </ul>
           {d.candidates.length > 0 && (
             <>
-              <p>Projects inside this folder:</p>
+              <p>{unknown ? "These folders inside it hold one; pick yours:" : "Projects inside this folder:"}</p>
               <ul>
                 {d.candidates.map((c: any) => (
                   <li key={c.path}>
@@ -363,14 +478,17 @@ function ProjectStep({ path, onBack, onNext }: { path: string; onBack: () => voi
               </ul>
             </>
           )}
-          <p className="muted">
-            {result.trusted ? "Trusted: builds may run this project's scripts." : "Not trusted yet — you will be asked before the first build."}
-            {!result.trusted && d.framework !== "unknown" && (
-              <button className="link" onClick={trust}>
-                Trust now
-              </button>
-            )}
-          </p>
+          {!unknown && !asking && (
+            <p className="muted">
+              {result.trusted ? "Trusted: builds may run this project's scripts." : "Not trusted yet — you will be asked before the first build."}{" "}
+              {!result.trusted && (
+                <button className="link" onClick={() => setAsking(true)}>
+                  Trust now
+                </button>
+              )}
+            </p>
+          )}
+          {asking && <TrustPrompt onTrust={trust} onCancel={() => setAsking(false)} />}
         </div>
       )}
       <Nav onBack={onBack} onNext={() => onNext(input.trim())} nextDisabled={!d || d.framework === "unknown"} nextLabel="See what is needed" />
@@ -412,7 +530,10 @@ function PlanStep({ path, onBack, onNext }: { path: string; onBack: () => void; 
         </tbody>
       </table>
       <p>
-        Download ~{size(plan.total_download_bytes)} · free {size(plan.disk_free_bytes)}
+        {/* AUD-P3-34: say it plainly when there is nothing to download */}
+        {installs.length === 0
+          ? `Everything is already installed · free ${size(plan.disk_free_bytes)}`
+          : `Download about ${size(plan.total_download_bytes)} · free ${size(plan.disk_free_bytes)}`}
         {!plan.disk_ok && <strong className="warn"> — not enough free space</strong>}
       </p>
       {plan.admin_actions.length > 0 && (
@@ -562,6 +683,7 @@ function InstallStep({ path, jobId, onJob, onBack, onDone }: { path: string; job
     <section>
       <h2>Installing</h2>
       <Why step="install" />
+      <InstallTotal status={status} />
       <ul className="progress">
         {status.items.map((i: any) => {
           const pct = i.bytes_total ? Math.min(100, Math.round((i.bytes_done / i.bytes_total) * 100)) : i.state === "done" || i.state === "already-installed" ? 100 : 0;
@@ -587,10 +709,135 @@ function InstallStep({ path, jobId, onJob, onBack, onDone }: { path: string; job
           Cancel (downloads are kept)
         </button>
       )}
-      {status.state === "failed" && <Problem text={`${status.message ?? "Install failed"}. Log: ${status.log}`} retry={onBack} />}
+      {status.state === "failed" && <InstallFailed status={status} onBack={onBack} />}
       {status.state === "cancelled" && <p className="muted">Cancelled. You can continue later; downloads resume.</p>}
       {status.state === "done" && <Nav onNext={onDone} nextLabel="Finish" />}
     </section>
+  );
+}
+
+/** AUD-P2-20: one line for the whole install: bytes, speed over the last seconds, time left. */
+function InstallTotal({ status }: { status: any }) {
+  const samples = useRef<{ t: number; b: number }[]>([]);
+  const items: any[] = status.items;
+  const sized = items.filter((i) => i.bytes_total);
+  const total = sized.reduce((a, i) => a + i.bytes_total, 0);
+  const done = sized.reduce((a, i) => a + Math.min(i.bytes_done, i.bytes_total), 0);
+  const finished = items.filter((i) => ["done", "already-installed", "skipped"].includes(i.state)).length;
+  const now = Date.now();
+  const s = samples.current;
+  if (!s.length || s[s.length - 1].b !== done) s.push({ t: now, b: done });
+  while (s.length > 2 && now - s[0].t > 8000) s.shift();
+  const span = s.length > 1 ? (s[s.length - 1].t - s[0].t) / 1000 : 0;
+  const speed = span > 1 ? (s[s.length - 1].b - s[0].b) / span : 0;
+  const left = speed > 0 && total > done ? (total - done) / speed : null;
+  const pct = total ? Math.round((done / total) * 100) : Math.round((finished / Math.max(1, items.length)) * 100);
+  const mins = (sec: number) => (sec < 90 ? `${Math.max(1, Math.round(sec))} s` : `${Math.round(sec / 60)} min`);
+  return (
+    <div className="install-total">
+      <div className="row">
+        <strong>
+          {finished} of {items.length} done
+          {total > 0 && ` · ${size(done)} of ${size(total)}`}
+        </strong>
+        <span className="muted">
+          {status.state === "running" && speed > 0 && `${size(speed)}/s`}
+          {status.state === "running" && left !== null && ` · about ${mins(left)} left`}
+        </span>
+      </div>
+      <div className="bar big" role="progressbar" aria-label="Whole install" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}>
+        <div style={{ width: `${pct}%` }} />
+      </div>
+    </div>
+  );
+}
+
+/** AUD-P2-20: a failed install says what failed and offers the log and a copy of the error. */
+function InstallFailed({ status, onBack }: { status: any; onBack: () => void }) {
+  const [note, setNote] = useState<string | null>(null);
+  const failed = (status.items as any[]).filter((i) => i.state === "failed");
+  const text = [
+    `Install failed: ${status.message ?? "unknown error"}`,
+    ...failed.map((i) => `- ${i.title}${i.version ? ` ${i.version}` : ""}: ${i.message ?? "failed"}`),
+    status.log ? `Log: ${status.log}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+  return (
+    <div className="problem" role="alert">
+      <div>
+        <strong>The install stopped.</strong> {status.message ?? ""}
+        {failed.map((i) => (
+          <div key={i.component + (i.package ?? "")} className="small">
+            {i.title}: {i.message ?? "failed"}
+          </div>
+        ))}
+        {note && <div className="small">{note}</div>}
+      </div>
+      <span>
+        {status.log && (
+          <button className="secondary" onClick={() => openInEditor(status.log).then((w) => setNote(`Opened in ${w}.`), (e) => setNote(String(e)))}>
+            Open log
+          </button>
+        )}{" "}
+        <button className="secondary" onClick={() => navigator.clipboard.writeText(text).then(() => setNote("Copied."), () => setNote("Could not copy."))}>
+          Copy error
+        </button>{" "}
+        <button className="secondary" onClick={onBack}>Try again</button>
+      </span>
+    </div>
+  );
+}
+
+/** AUD-P2-22: where the disk space goes, largest first, in plain words. */
+const DISK_GROUPS: [RegExp, string, string][] = [
+  [/^android\/system-images\//, "Emulator system images", "the Android the emulator runs, one per API level"],
+  [/^android\/ndk\//, "Android NDK", "native C/C++ code; React Native and Flutter plugins need it"],
+  [/^android\/emulator$/, "Android emulator", "the program that runs the phone"],
+  [/^android\/cmake\//, "CMake", "builds native code"],
+  [/^android\//, "Android SDK", "platforms, build tools, adb"],
+  [/^jdk\//, "Java (JDK)", "runs Gradle"],
+  [/^flutter@/, "Flutter SDK", "with its Dart SDK and engine files"],
+  [/^node/, "Node.js", "runs Metro for React Native"],
+];
+function DiskBreakdown({ components, disk }: { components: any[]; disk: any }) {
+  const rows = new Map<string, { bytes: number; why: string }>();
+  const add = (name: string, why: string, bytes: number) => {
+    if (bytes <= 0) return;
+    const r = rows.get(name) ?? { bytes: 0, why };
+    r.bytes += bytes;
+    rows.set(name, r);
+  };
+  for (const c of components) {
+    if (c.source !== "managed" || c.kind === "android-cli-runtime") continue;
+    const g = DISK_GROUPS.find(([re]) => re.test(c.id));
+    add(g ? g[1] : c.kind, g ? g[2] : c.id, c.size_bytes);
+  }
+  add("Emulators", "your virtual phones with their apps, data and quick-start snapshots", disk.android_user_home_bytes);
+  add("Download cache", "installers kept to resume or repair; safe to clean", disk.download_cache_bytes);
+  add("Temporary files and logs", "build and install leftovers", disk.temp_bytes + disk.logs_bytes + disk.staging_bytes);
+  const list = [...rows.entries()].sort((a, b) => b[1].bytes - a[1].bytes);
+  if (!list.length) return null;
+  return (
+    <details className="disk">
+      <summary>Where the {size(disk.total_bytes)} go</summary>
+      <table>
+        <tbody>
+          {list.map(([name, r]) => (
+            <tr key={name}>
+              <td className="num">{size(r.bytes)}</td>
+              <td>
+                <strong>{name}</strong> <span className="muted small">{r.why}</span>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p className="muted small">
+        Only what the runtime installed is counted; tools you had before stay where they are. <code>umr components</code> lists every item;
+        removing a project type's tools frees its share.
+      </p>
+    </details>
   );
 }
 
@@ -608,6 +855,7 @@ function ReadyStep({ path, onRestart, onNext }: { path: string; onRestart: () =>
         {r.components.length} components installed and checked ({size(r.disk.total_bytes)}).
         {broken.length > 0 && <strong className="warn"> {broken.length} need repair — run setup again.</strong>}
       </p>
+      <DiskBreakdown components={r.components} disk={r.disk} />
       <p>
         Project: <code>{path}</code>
       </p>
@@ -617,6 +865,98 @@ function ReadyStep({ path, onRestart, onNext }: { path: string; onRestart: () =>
 }
 
 /** Step "Run": the first run of the project on the emulator, then the live preview (9.6). */
+const RUN_STAGES: { id: string; label: string; states: string[] }[] = [
+  { id: "device", label: "Start the emulator", states: ["preparing", "env_blocked", "booting"] },
+  { id: "build", label: "Build the app", states: ["building"] },
+  { id: "launch", label: "Install and start it", states: ["launching"] },
+];
+
+/**
+ * AUD-P1-6: what a run is doing while the Run step waits (first builds take minutes): the
+ * stage from the session, the time so far, the latest build lines, and Cancel.
+ */
+function RunProgress({ onCancel }: { onCancel: () => void }) {
+  const [state, setState] = useState("");
+  const [lines, setLines] = useState<string[]>([]);
+  const [seconds, setSeconds] = useState(0);
+  const [cancelling, setCancelling] = useState(false);
+  useEffect(() => {
+    const t0 = Date.now();
+    let stop = false;
+    const tick = async () => {
+      setSeconds(Math.round((Date.now() - t0) / 1000));
+      try {
+        const s = await call<{ session?: { state?: string } | null }>("session.status");
+        if (!stop) setState(s.session?.state ?? "");
+        const l = await call<{ lines: { source: string; text: string }[] }>("logs.tail", { limit: 40, level: "I" });
+        if (!stop)
+          setLines(
+            l.lines
+              .filter((x) => x.source !== "logcat" && x.text.trim())
+              .slice(-4)
+              .map((x) => x.text.slice(0, 160)),
+          );
+      } catch {
+        /* the Core is busy starting: next tick */
+      }
+    };
+    tick();
+    const id = window.setInterval(tick, 1000);
+    return () => {
+      stop = true;
+      window.clearInterval(id);
+    };
+  }, []);
+  const current = RUN_STAGES.findIndex((st) => st.states.includes(state));
+  const mm = Math.floor(seconds / 60);
+  const ss = String(seconds % 60).padStart(2, "0");
+  return (
+    <div className="card run-progress" role="status">
+      <ol className="run-stages">
+        {RUN_STAGES.map((st, i) => (
+          <li key={st.id} className={i < current ? "done" : i === current ? "current" : ""}>
+            <span className="dot">{i < current ? "✓" : i + 1}</span>
+            {st.label}
+          </li>
+        ))}
+      </ol>
+      <p className="small muted">
+        {mm}:{ss} so far · the first build of a project can take several minutes
+      </p>
+      {lines.length > 0 && <pre className="run-lines">{lines.join("\n")}</pre>}
+      <button
+        className="secondary"
+        disabled={cancelling}
+        onClick={() => {
+          setCancelling(true);
+          onCancel();
+        }}
+      >
+        {cancelling ? "Cancelling…" : "Cancel"}
+      </button>
+    </div>
+  );
+}
+
+/** AUD-P3-23: the themed "trust this folder?" question (Project step, and Run for an untrusted folder). */
+function TrustPrompt({ onTrust, onCancel }: { onTrust: () => void; onCancel: () => void }) {
+  return (
+    <div className="confirm" role="alertdialog" aria-label="Trust this folder?">
+      <p>
+        <strong>Trust this folder?</strong> Building runs the project's own code: Gradle scripts, npm install scripts and Flutter
+        plugins. Trust only projects you know.
+      </p>
+      <div className="row">
+        <span />
+        <span>
+          <button className="secondary" onClick={onCancel}>Not now</button>{" "}
+          <button onClick={onTrust} autoFocus>Trust this folder</button>
+        </span>
+      </div>
+    </div>
+  );
+}
+
 function RunStep({ path, onBack, onNext }: { path: string; onBack: () => void; onNext: () => void }) {
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<any>(null);
@@ -643,21 +983,35 @@ function RunStep({ path, onBack, onNext }: { path: string; onBack: () => void; o
         your other windows. Saved files reload by themselves.
       </p>
       <p className="muted small">The first build of a project can take several minutes; later runs take seconds.</p>
-      {!ok && (
-        <button onClick={run} disabled={busy || !path}>
-          {busy ? "Starting the emulator and building…" : "Run the app"}
+      {!ok && !busy && (
+        <button onClick={run} disabled={!path}>
+          Run the app
         </button>
       )}
-      {error && <Problem text={error} retry={run} />}
-      {result && !ok && (
+      {busy && <RunProgress onCancel={() => call("project.stop").catch(() => undefined)} />}
+      {!ok && result?.status === "cancelled" && <p className="muted">Cancelled. Run it again whenever you like.</p>}
+      {error && /not trusted yet/.test(error) ? (
+        <TrustPrompt onTrust={() => call("project.trust", { path, trusted: true }).then(run, (e) => setError(String(e)))} onCancel={() => setError(null)} />
+      ) : (
+        error && <Problem text={error} retry={run} />
+      )}
+      {result && !ok && result.status !== "cancelled" && (
         <div className="problem" role="alert">
-          <strong>The app did not start.</strong> {result.error ?? result.status}
-          {(result.problems ?? []).slice(0, 3).map((p: any, i: number) => (
-            <div key={i} className="small">
-              {p.category}: {p.message}
-              {p.file ? ` (${p.file}${p.line ? `:${p.line}` : ""})` : ""}
-            </div>
-          ))}
+          <div>
+            <strong>The app did not start.</strong> {result.error ?? result.status}
+            {(result.problems ?? []).slice(0, 3).map((p: any, i: number) => (
+              <div key={i} className="small">
+                {p.category}: {p.message}
+                {p.file ? ` (${p.file}${p.line ? `:${p.line}` : ""})` : ""}
+              </div>
+            ))}
+            {(result.problems ?? []).length > 3 && <div className="small">…and {(result.problems ?? []).length - 3} more.</div>}
+          </div>
+          {/* AUD-P2-26: every problem, with its code and stack, in the preview's panel or on the clipboard */}
+          <span className="run-fail-actions">
+            <button className="secondary" onClick={() => openProblems().catch(() => undefined)}>Open the Problems panel</button>{" "}
+            <CopyAll fetch />
+          </span>
         </div>
       )}
       {ok && (
@@ -666,7 +1020,10 @@ function RunStep({ path, onBack, onNext }: { path: string; onBack: () => void; o
             <span className="ok">Running</span> {result.package} on {result.serial}
           </p>
           <p className="small muted">
-            {result.adapter} adapter · {result.seconds} s{result.watching ? " · reloads when you save" : ""}
+            {/* AUD-P2-27: the whole wait, split into the device and the app */}
+            {result.adapter} adapter · {result.seconds} s
+            {result.device_seconds != null && ` (emulator ${result.device_seconds} s, build and launch ${result.app_seconds} s)`}
+            {result.watching ? " · reloads when you save" : ""}
           </p>
           <button className="secondary" onClick={() => openPreview().catch(() => undefined)}>
             Open the live preview

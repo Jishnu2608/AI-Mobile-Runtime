@@ -5,7 +5,7 @@ members = ["crates/umr-platform", "crates/umr-api", "crates/umr-storage", "crate
 exclude = ["poc"]
 
 [workspace.package]
-version = "0.1.18"
+version = "0.1.28"
 edition = "2021"
 rust-version = "1.89"  # std::fs::File::try_lock
 repository = "https://github.com/Jishnu2608/AI-Mobile-Runtime"

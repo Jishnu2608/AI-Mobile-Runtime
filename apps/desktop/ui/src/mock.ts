@@ -5,6 +5,12 @@ const licenceText =
 let accepted = false;
 let approvalAnswered = false;
 let polls = 0;
+let mockAngle = 180;
+/** `?fold=book|flip` makes the mock device a foldable. */
+function mockFold(): string | null {
+  const f = new URLSearchParams(window.location.search).get("fold");
+  return f === "book" ? "fold" : f === "flip" ? "flip" : null;
+}
 
 const plan = {
   profile: "android-native",
@@ -80,14 +86,26 @@ export async function mockCall(method: string, _params: unknown): Promise<any> {
       return { job_id: "mockjob", steps: 2 };
     case "install.status": {
       polls++;
-      const done = polls > 8;
+      // `?installfail=1` ends the mock install with a failed download (AUD-P2-20)
+      const fail = new URLSearchParams(window.location.search).get("installfail") === "1";
+      const done = polls > 12;
+      const img = 1_500_000_000;
+      const failed = fail && polls > 6;
       return {
         id: "mockjob",
-        state: done ? "done" : "running",
+        state: failed ? "failed" : done ? "done" : "running",
+        message: failed ? "Android system image: download stopped (connection reset)" : undefined,
         log: "D:\\UMR\\logs\\install-mockjob.log",
         items: [
           { component: "android-platform", title: "Android SDK Platform", state: polls > 3 ? "done" : "installing", bytes_done: 0 },
-          { component: "android-system-image", title: "Android system image (Google APIs, x86_64)", state: done ? "done" : polls > 3 ? "installing" : "pending", bytes_done: 0 },
+          {
+            component: "android-system-image",
+            title: "Android system image (Google APIs, x86_64)",
+            state: failed ? "failed" : done ? "done" : "downloading",
+            bytes_done: Math.min(img, polls * 140_000_000),
+            bytes_total: img,
+            message: failed ? "connection reset after 840 MB; run setup again to resume" : undefined,
+          },
         ],
       };
     }
@@ -108,7 +126,20 @@ export async function mockCall(method: string, _params: unknown): Promise<any> {
       await new Promise((r) => setTimeout(r, 1500));
       return { status: "running", package: "com.example.my_app", serial: "emulator-5554", adapter: "flutter", seconds: 41, watching: true, capabilities: { hot_reload: true, hot_restart: true } };
     case "preview.open":
-      return { url: "", profile: "standard" };
+      return { url: "", profile: mockFold() ?? "standard" };
+    case "device.posture": {
+      // `?fold=book|flip` shows a foldable in a plain browser (AUD-P1-40/44)
+      const a = (_params as any)?.angle;
+      if (typeof a === "number") mockAngle = a;
+      const closed = mockAngle <= 30;
+      const flip = mockFold() === "flip";
+      const label = closed ? "Closed" : mockAngle >= 180 ? "Open (flat)" : mockAngle > 150 ? `Open ${mockAngle}°` : `Half open ${mockAngle}°`;
+      return {
+        serial: "emulator-5554", kind: flip ? "flip" : "book", angle: mockAngle, posture: closed ? "closed" : mockAngle > 150 ? "opened" : "half-opened",
+        label, steps: [0, 30, 60, 90, 120, 180], device_state: closed ? "CLOSED" : "OPENED",
+        cover: closed ? (flip ? { x: 0, y: 756, width: 1080, height: 1124, label: 'cover screen 3.4"' } : { x: 442, y: 0, width: 884, height: 2208, label: 'outer screen 6.2"' }) : null,
+      };
+    }
     case "device.auth_state": {
       // `?locked=1` shows the lock screen sensor in a plain browser
       const locked = new URLSearchParams(window.location.search).get("locked") === "1";
@@ -119,7 +150,13 @@ export async function mockCall(method: string, _params: unknown): Promise<any> {
     case "project.stop":
       return { stopped: { package: "com.example.my_app" } };
     case "device.profiles":
-      return { profiles: [{ profile: { id: "standard", class: "phone" } }] };
+      return {
+        profiles: [
+          { profile: { id: "standard", class: "phone" } },
+          { profile: { id: "fold", class: "Book foldable", fold: { kind: "book" } } },
+          { profile: { id: "flip", class: "Flip foldable", fold: { kind: "flip" } } },
+        ],
+      };
     case "diagnostics.list":
       return {
         entries: (_params as any)?.since ? [] : sampleProblems,
@@ -135,7 +172,7 @@ export async function mockCall(method: string, _params: unknown): Promise<any> {
         code: { first: 92, line: 94, lines: ["  val total = remember { mutableStateOf(0) }", "  Column {", '    Text(text = Calc.parse(input).toString())', "  }", "}"] },
       };
     case "session.status":
-      return { session: { avd: "umr_standard_api36", profile: "standard", serial: "emulator-5554", state: "crashed" } };
+      return { session: { avd: `umr_${mockFold() ?? "standard"}_api36`, profile: mockFold() ?? "standard", serial: "emulator-5554", state: "crashed" } };
     case "diagnostics.flag":
       return { flagged: (_params as any)?.fingerprint };
     case "home.summary": {

@@ -2,7 +2,7 @@
   "name": "umr-vscode",
   "displayName": "AI Mobile Runtime",
   "description": "Run your Android app on an emulator right inside VS Code: a live phone preview beside your code, build errors and crashes in the Problems panel, and Copilot agent tools. Kotlin, Java, Flutter and React Native.",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "publisher": "ai-mobile-runtime",
   "preview": true,
   "pricing": "Free",

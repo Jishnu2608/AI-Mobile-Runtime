@@ -232,6 +232,88 @@ pub fn uninstall(port: u16, serial: &str, package: &str) -> Result<(), String> {
     }
 }
 
+// ---- is this APK already installed? (moved from the Flutter adapter for AUD-P1-45) ----
+
+/// SHA-256 of a file as lower-case hex.
+#[must_use]
+pub fn sha256_file(path: &Path) -> Option<String> {
+    use sha2::{Digest, Sha256};
+    use std::io::Read;
+    let mut f = std::fs::File::open(path).ok()?;
+    let mut h = Sha256::new();
+    let mut buf = vec![0u8; 1 << 20];
+    loop {
+        let n = f.read(&mut buf).ok()?;
+        if n == 0 {
+            break;
+        }
+        h.update(&buf[..n]);
+    }
+    Some(
+        h.finalize()
+            .iter()
+            .fold(String::with_capacity(64), |mut s, b| {
+                use std::fmt::Write as _;
+                let _ = write!(s, "{b:02x}");
+                s
+            }),
+    )
+}
+
+/// The local APK's hash, cached next to it (keyed by size and modification time).
+#[must_use]
+pub fn apk_hash(apk: &Path) -> Option<String> {
+    let m = std::fs::metadata(apk).ok()?;
+    let mtime = m
+        .modified()
+        .ok()?
+        .duration_since(std::time::UNIX_EPOCH)
+        .ok()?
+        .as_millis();
+    let key = format!("{} {}", m.len(), mtime);
+    let cache = apk.with_extension("apk.umr-sha256");
+    if let Ok(t) = std::fs::read_to_string(&cache) {
+        if let Some((k, h)) = t.trim().rsplit_once(' ') {
+            if k == key {
+                return Some(h.to_string());
+            }
+        }
+    }
+    let h = sha256_file(apk)?;
+    let _ = std::fs::write(&cache, format!("{key} {h}"));
+    Some(h)
+}
+
+/// Whether the device has exactly this APK installed for `package`: one adb round trip instead
+/// of three (pm path / stat / sha256sum), since each costs seconds under host load (PRV-012),
+/// so the fast path stays fast only if it asks the device once.
+#[must_use]
+pub fn installed_same(port: u16, serial: &str, package: &str, apk: &Path) -> bool {
+    let local = std::fs::metadata(apk).map_or(0, |m| m.len());
+    let Some(hash) = apk_hash(apk) else {
+        return false;
+    };
+    let cmd = format!(
+        "p=$(pm path {package} 2>/dev/null | sed -n 's/^package://p' | grep base.apk | head -n1); \
+         [ -n \"$p\" ] && stat -c %s \"$p\" && sha256sum \"$p\""
+    );
+    let Ok(out) = crate::adb::shell(port, serial, &cmd) else {
+        return false;
+    };
+    let mut lines = out.lines();
+    let Some(size) = lines.next().and_then(|v| v.trim().parse::<u64>().ok()) else {
+        return false;
+    };
+    if size != local {
+        return false;
+    }
+    let remote = lines
+        .next()
+        .and_then(|v| v.split_whitespace().next())
+        .map(str::to_lowercase);
+    remote.as_deref() == Some(hash.as_str())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -8,16 +8,34 @@ use umr_api::rpc::{codes, Id, Response, RpcError};
 
 use crate::api_server::{internal, ok, ApiState};
 
-fn check_dir(path: &str) -> Result<(), RpcError> {
-    let p = Path::new(path);
-    if p.is_absolute() && p.is_dir() {
-        Ok(())
-    } else {
-        Err(RpcError::new(
-            codes::INVALID_PARAMS,
-            format!("'{path}' is not an absolute path to a folder"),
-        ))
+/// AUD-P2-19: what is wrong with a project path, in the user's words (`None`: a folder).
+#[must_use]
+pub fn folder_problem(path: &str) -> Option<String> {
+    let t = path.trim();
+    if t.is_empty() {
+        return Some("Choose your app's folder first.".into());
     }
+    let p = Path::new(t);
+    if !p.is_absolute() {
+        return Some(format!(
+            "Use the full path of the folder, starting with the drive (for example D:\\Work\\my-app), not '{t}'."
+        ));
+    }
+    if p.is_file() {
+        return Some(format!(
+            "'{t}' is a file. Choose the folder that holds it instead."
+        ));
+    }
+    if !p.is_dir() {
+        return Some(format!(
+            "This folder does not exist: '{t}'. Check the spelling, or choose it with the folder picker."
+        ));
+    }
+    None
+}
+
+pub(crate) fn check_dir(path: &str) -> Result<(), RpcError> {
+    folder_problem(path).map_or(Ok(()), |m| Err(RpcError::new(codes::INVALID_PARAMS, m)))
 }
 
 pub fn detect(state: &ApiState, id: Id, p: &ProjectPathParams) -> Response {
@@ -94,6 +112,26 @@ pub fn require_trusted(state: &ApiState, path: &str) -> Result<(), RpcError> {
 mod tests {
     use super::*;
     use crate::test_support::TempRoot;
+
+    #[test]
+    fn folder_problems_say_what_is_wrong() {
+        let tmp = TempRoot::new("folder-problem");
+        let dir = tmp.path().display().to_string();
+        assert_eq!(folder_problem(&dir), None);
+        let missing = tmp.path().join("does-not-exist").display().to_string();
+        assert!(folder_problem(&missing)
+            .unwrap()
+            .starts_with("This folder does not exist"));
+        let file = tmp.path().join("pubspec.yaml");
+        std::fs::write(&file, "name: x").unwrap();
+        assert!(folder_problem(&file.display().to_string())
+            .unwrap()
+            .contains("is a file"));
+        assert!(folder_problem("my-app")
+            .unwrap()
+            .starts_with("Use the full path"));
+        assert!(folder_problem("  ").is_some());
+    }
 
     #[test]
     fn trust_gate() {

@@ -85,6 +85,27 @@ pub struct PostureMsg {
     pub value: i32,
 }
 
+/// `ParameterValue` (`repeated float data = 1`, packed).
+#[derive(Clone, PartialEq, prost::Message)]
+pub struct ParameterValue {
+    #[prost(float, repeated, tag = "1")]
+    pub data: Vec<f32>,
+}
+
+/// `PhysicalModelValue`: `target` 10 is the first hinge angle sensor (degrees).
+#[derive(Clone, PartialEq, prost::Message)]
+pub struct PhysicalModelValue {
+    #[prost(int32, tag = "1")]
+    pub target: i32,
+    #[prost(int32, tag = "2")]
+    pub status: i32,
+    #[prost(message, optional, tag = "3")]
+    pub value: Option<ParameterValue>,
+}
+
+/// `PhysicalModelValue.PhysicalType.HINGE_ANGLE0`.
+pub const HINGE_ANGLE0: i32 = 10;
+
 /// `Fingerprint`: a finger on (or off) the emulator's fingerprint sensor (PRV-016).
 #[derive(Clone, PartialEq, prost::Message)]
 pub struct Fingerprint {
@@ -433,6 +454,22 @@ impl Emulator {
     }
 
     /// `setPosture` (foldables): closed, half-opened, opened, flipped, tent.
+    /// AUD-P1-41: sets the hinge angle (degrees). Android's posture (`device_state`) follows from
+    /// the AVD's angle ranges, as when a person opens the phone that far.
+    pub fn set_hinge_angle(&self, degrees: f32) -> Res<()> {
+        block(self.unary::<PhysicalModelValue, Empty>(
+            "setPhysicalModel",
+            PhysicalModelValue {
+                target: HINGE_ANGLE0,
+                status: 0,
+                value: Some(ParameterValue {
+                    data: vec![degrees],
+                }),
+            },
+        ))
+        .map(|_| ())
+    }
+
     pub fn set_posture(&self, p: Posture) -> Res<()> {
         block(self.unary::<PostureMsg, Empty>(
             "setPosture",

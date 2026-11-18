@@ -9,9 +9,7 @@ use std::path::{Path, PathBuf};
 
 use serde_json::{json, Value};
 
-use umr_api::methods::{
-    AppParams, InputAction, InputParams, InstallAppParams, PostureParams, TargetParams,
-};
+use umr_api::methods::{AppParams, InputAction, InputParams, InstallAppParams, TargetParams};
 use umr_api::rpc::{codes, Id, Response, RpcError};
 use umr_device::grpc::Emulator;
 
@@ -266,24 +264,6 @@ pub fn input(state: &ApiState, id: Id, p: &InputParams) -> Response {
     }
 }
 
-fn posture_name(p: umr_device::catalog::Posture) -> &'static str {
-    use umr_device::catalog::Posture as P;
-    match p {
-        P::Closed => "closed",
-        P::HalfOpened => "half-opened",
-        P::Opened => "opened",
-        P::Flipped => "flipped",
-        P::Tent => "tent",
-    }
-}
-
-/// `umr_<profile>_api<n>` → the catalogue profile.
-fn profile_of_avd(avd: &str) -> Option<&'static umr_device::catalog::Profile> {
-    let rest = avd.strip_prefix("umr_")?;
-    let (id, _) = rest.rsplit_once("_api")?;
-    umr_device::catalog::find(id)
-}
-
 /// What `dumpsys window` and `dumpsys fingerprint` say about locking (PRV-016).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct AuthState {
@@ -388,60 +368,6 @@ pub fn fingerprint(state: &ApiState, id: Id, p: &umr_api::methods::FingerprintPa
             }
         }
         Ok(json!({ "serial": t.serial, "id": p.id, "touch": p.touch, "after": after }))
-    });
-    match r {
-        Ok(v) => ok(id, &v),
-        Err(e) => Response::err(Some(id), e),
-    }
-}
-
-pub fn posture(state: &ApiState, id: Id, p: &PostureParams) -> Response {
-    let Some(want) = umr_device::catalog::Posture::parse(&p.posture) else {
-        return Response::err(
-            Some(id),
-            RpcError::new(
-                codes::INVALID_PARAMS,
-                format!(
-                    "unknown posture '{}'; use closed, half-opened, opened, flipped or tent",
-                    p.posture
-                ),
-            ),
-        );
-    };
-    let r = target(state, p.target.as_deref()).and_then(|t| {
-        let (Some(g), Some(avd)) = (&t.grpc, &t.avd) else {
-            return Err(unavailable(
-                "posture control needs an emulator started by the product (gRPC)",
-            ));
-        };
-        let fold = profile_of_avd(avd)
-            .and_then(|pr| pr.fold.as_ref())
-            .ok_or_else(|| {
-                RpcError::new(
-                    codes::INVALID_PARAMS,
-                    format!("{avd} is not a foldable profile"),
-                )
-            })?;
-        if !fold.postures.contains(&want) {
-            return Err(RpcError::new(
-                codes::INVALID_PARAMS,
-                format!("{avd} does not support posture '{}'", p.posture),
-            ));
-        }
-        g.set_posture(want).map_err(failed)?;
-        // what Android reports now (the device_state service follows the hinge sensor)
-        std::thread::sleep(std::time::Duration::from_millis(700));
-        let reported = umr_device::adb::shell(state.adb_port, &t.serial, "cmd device_state state")
-            .ok()
-            .and_then(|o| {
-                o.lines()
-                    .find(|l| l.contains("Committed state"))
-                    .map(|l| l.trim().to_string())
-            });
-        Ok(serde_json::json!({
-            "serial": t.serial, "posture": posture_name(want),
-            "device_state": reported,
-        }))
     });
     match r {
         Ok(v) => ok(id, &v),
@@ -584,8 +510,14 @@ mod tests {
         png.extend_from_slice(&2400u32.to_be_bytes());
         assert_eq!(png_size(&png), Some((1080, 2400)));
         assert_eq!(png_size(b"GIF89a"), None);
-        assert_eq!(profile_of_avd("umr_fold_api36").map(|p| p.id), Some("fold"));
-        assert!(profile_of_avd("umr_fold_api36").unwrap().fold.is_some());
-        assert!(profile_of_avd("Pixel_8").is_none());
+        assert_eq!(
+            crate::fold_api::profile_of_avd("umr_fold_api36").map(|p| p.id),
+            Some("fold")
+        );
+        assert!(crate::fold_api::profile_of_avd("umr_fold_api36")
+            .unwrap()
+            .fold
+            .is_some());
+        assert!(crate::fold_api::profile_of_avd("Pixel_8").is_none());
     }
 }

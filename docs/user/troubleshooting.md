@@ -166,7 +166,7 @@ Start with `umr agent doctor`: it checks every connected agent's config entry, t
 
 | | |
 |---|---|
-| Symptoms | `/mcp` (Claude Code, Codex), Cursor's MCP settings or VS Code's server list show no `umr` server, or it is switched off. |
+| Symptoms | `/mcp` (Claude Code, Codex), Cursor's MCP settings, Antigravity's MCP Servers or VS Code's server list show no `umr` server, or it is switched off. |
 | Likely cause | The entry is missing, the agent has not been restarted since setup, or the project's server is waiting for your approval. |
 | How to check | `umr agent doctor <agent>` shows whether the entry is there and whether its handshake works. |
 | Fix | Run `umr agent setup <agent>`, then restart the agent. Claude Code asks once to approve a project's `.mcp.json`; approve it, or switch it on in `/mcp`. Cursor and VS Code may ask you to enable a new server. Claude Desktop must be quit completely (also from the tray) and started again. |

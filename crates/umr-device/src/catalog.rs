@@ -54,8 +54,15 @@ pub struct Fold {
     pub hinge_type: u8,
     /// `hw.sensor.hinge.areas` (x-y-width-height).
     pub hinge_area: &'static str,
-    /// Display region shown when closed (x, y, width, height); `None` = no outer screen.
-    pub folded_region: Option<(u32, u32, u32, u32)>,
+    /// AUD-P1-42/43: the cover (outer) screen shown when closed: x, y, width, height inside the
+    /// inner screen, **centred**. Closed, the Core sets Android's display to this size
+    /// (`wm size`, so the app lays itself out for it) and Android draws it centred; the emulator
+    /// shows the same rectangle (`hw.displayRegion.0.1`), so both agree to the pixel. An
+    /// off-centre region (the SDK's 0,0) made the emulator show the left part of a centred
+    /// picture.
+    pub cover: Option<(u32, u32, u32, u32)>,
+    /// Cover screen's size class in words (shown in the preview).
+    pub cover_label: &'static str,
     pub postures: &'static [Posture],
     /// `hw.sensor.hinge_angles_posture_definitions` (one range per posture).
     pub posture_angles: &'static str,
@@ -132,7 +139,9 @@ pub const PROFILES: &[Profile] = &[
             kind: FoldKind::Book,
             hinge_type: 1,
             hinge_area: "884-0-1-2208",
-            folded_region: Some((0, 0, 884, 2208)),
+            // the SDK's "7.6\" Fold-in with outer display" outer screen (884 × 2208, 1 : 2.5)
+            cover: Some((442, 0, 884, 2208)),
+            cover_label: "outer screen 6.2\"",
             postures: BOOK,
             posture_angles: "0-30, 30-150, 150-180",
             hinge_range: "0-180",
@@ -153,7 +162,10 @@ pub const PROFILES: &[Profile] = &[
             kind: FoldKind::Flip,
             hinge_type: 0,
             hinge_area: "0-1318-1080-1",
-            folded_region: None,
+            // the SDK's flip has no outer screen; a 3.4" class cover screen (about 1 : 1.04),
+            // as on current flip phones
+            cover: Some((0, 756, 1080, 1124)),
+            cover_label: "cover screen 3.4\"",
             postures: BOOK,
             posture_angles: "0-30, 30-150, 150-180",
             hinge_range: "0-180",
@@ -242,6 +254,18 @@ pub fn validate(profiles: &[Profile]) -> Vec<String> {
             }
         }
         if let Some(f) = &a.fold {
+            if let Some((x, y, w, h)) = f.cover {
+                if x + w > a.width
+                    || y + h > a.height
+                    || 2 * x + w != a.width
+                    || 2 * y + h != a.height
+                {
+                    e.push(format!(
+                        "{}: the cover screen must be centred inside the screen",
+                        a.id
+                    ));
+                }
+            }
             if f.posture_angles.split(',').count() != f.postures.len() {
                 e.push(format!("{}: one angle range per posture needed", a.id));
             }
@@ -265,13 +289,7 @@ mod tests {
         assert_eq!(validate(PROFILES), Vec::<String>::new());
         assert_eq!(PROFILES.len(), 6);
         assert_eq!(default_profile().id, "standard");
-        assert!(find("fold")
-            .unwrap()
-            .fold
-            .as_ref()
-            .unwrap()
-            .folded_region
-            .is_some());
+        assert!(find("fold").unwrap().fold.as_ref().unwrap().cover.is_some());
         assert!(find("nope").is_none());
         let mut dup = PROFILES.to_vec();
         dup[1].width = 1080;

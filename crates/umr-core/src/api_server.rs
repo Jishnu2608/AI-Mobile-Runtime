@@ -71,6 +71,12 @@ pub struct ApiState {
     /// Phase 3: the app an adapter runs now, what it is, and its events.
     pub run_app: Mutex<Option<Box<dyn umr_adapter::RunningApp>>>,
     pub run_info: Mutex<Option<crate::run_api::RunInfo>>,
+    /// AUD-P1-6: the process group of a run that is still building or starting (Cancel stops
+    /// it), and whether that run was cancelled.
+    pub run_starting: Mutex<Option<String>>,
+    /// AUD-P1-41: the hinge of the running foldable as last set (angle, posture, cover screen).
+    pub fold: Mutex<Option<crate::fold_api::FoldState>>,
+    pub run_cancelled: std::sync::atomic::AtomicBool,
     pub run_events: Arc<Mutex<crate::run_api::EventLog>>,
     /// ADP-006: file watcher of the current run.
     pub run_watch: Mutex<Option<crate::watch::Watch>>,
@@ -129,6 +135,9 @@ impl ApiState {
             session_busy: std::sync::atomic::AtomicBool::new(false),
             run_app: Mutex::new(None),
             run_info: Mutex::new(None),
+            run_starting: Mutex::new(None),
+            fold: Mutex::new(None),
+            run_cancelled: std::sync::atomic::AtomicBool::new(false),
             run_events: Arc::default(),
             run_watch: Mutex::new(None),
             watch_busy: std::sync::atomic::AtomicBool::new(false),
@@ -155,6 +164,7 @@ pub struct Connection {
 pub fn required_scope(method: &str) -> Option<Scope> {
     match method {
         methods::DEVICE_CREATE
+        | methods::DEVICE_PREPARE
         | methods::DEVICE_BOOT
         | methods::DEVICE_STOP
         | methods::APP_INSTALL
@@ -246,6 +256,7 @@ fn is_slow(method: &str) -> bool {
             | methods::ADMIN_RUN
             | methods::DEVICE_LIST
             | methods::DEVICE_BOOT
+            | methods::DEVICE_PREPARE
             | methods::DEVICE_STOP
             | methods::DEVICE_SCREENSHOT
             | methods::DEVICE_UI
@@ -316,6 +327,9 @@ fn dispatch_checked(state: &ApiState, conn: &mut Connection, req: &Request) -> R
                 crate::device_api::profiles(state, id, &p)
             })
         }
+        methods::DEVICE_PREPARE => with_params(id, &req.params, |id, p: CreateDeviceParams| {
+            crate::device_api::prepare(state, id, &p)
+        }),
         methods::DEVICE_CREATE => with_params(id, &req.params, |id, p: CreateDeviceParams| {
             crate::device_api::create(state, id, &p)
         }),
@@ -343,7 +357,7 @@ fn dispatch_checked(state: &ApiState, conn: &mut Connection, req: &Request) -> R
             crate::app_api::auth_state(state, id, &p)
         }),
         methods::DEVICE_POSTURE => with_params(id, &req.params, |id, p: PostureParams| {
-            crate::app_api::posture(state, id, &p)
+            crate::fold_api::posture(state, id, &p)
         }),
         methods::APP_INSTALL => with_params(id, &req.params, |id, p: InstallAppParams| {
             crate::app_api::install(state, id, &p)
@@ -565,12 +579,7 @@ pub(crate) fn build_plan(
     RpcError,
 > {
     let root = std::path::Path::new(&p.path);
-    if !root.is_absolute() || !root.is_dir() {
-        return Err(RpcError::new(
-            codes::INVALID_PARAMS,
-            format!("'{}' is not an absolute path to a folder", p.path),
-        ));
-    }
+    crate::project_api::check_dir(&p.path)?;
     let pack = umr_resolver::pack::Pack::bundled()
         .map_err(|e| RpcError::new(codes::INTERNAL_ERROR, e.to_string()))?;
     let needs_rescan = state

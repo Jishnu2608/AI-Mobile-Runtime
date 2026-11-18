@@ -69,6 +69,84 @@ pub fn debug_apk(root: &Path, module: &str) -> Option<PathBuf> {
         .max_by_key(|p| std::fs::metadata(p).and_then(|m| m.modified()).ok())
 }
 
+/// Folders that are output, caches or tools, never inputs of the app's build.
+const NOT_INPUTS: &[&str] = &[
+    "build",
+    ".gradle",
+    ".cxx",
+    ".kotlin",
+    ".idea",
+    ".git",
+    "node_modules",
+    ".dart_tool",
+];
+
+/// Newest modification time of the files below `dir` (output and cache folders skipped).
+fn newest_input(dir: &Path, depth: usize, budget: &mut usize) -> Option<std::time::SystemTime> {
+    let mut best = None;
+    for e in std::fs::read_dir(dir).ok()?.flatten() {
+        if *budget == 0 {
+            return Some(std::time::SystemTime::now()); // too many files to be sure: rebuild
+        }
+        *budget -= 1;
+        let name = e.file_name();
+        if name
+            .to_str()
+            .is_some_and(|n| NOT_INPUTS.contains(&n) || n == "local.properties")
+        {
+            continue;
+        }
+        let Ok(t) = e.file_type() else { continue };
+        let m = if t.is_dir() {
+            if depth == 0 {
+                continue;
+            }
+            newest_input(&e.path(), depth - 1, budget)
+        } else {
+            e.metadata().and_then(|m| m.modified()).ok()
+        };
+        if m > best {
+            best = m;
+        }
+    }
+    best
+}
+
+/// AUD-P1-45: the debug APK when nothing it is built from changed since it was built: the
+/// Gradle project below `root` and the `extra` files (React Native: `package.json` and the lock
+/// file, whose native modules go into the APK). A device switch then installs it instead of a
+/// Gradle build (30–45 s measured), as the Flutter adapter already does.
+#[must_use]
+pub fn up_to_date_apk(root: &Path, module: &str, extra: &[PathBuf]) -> Option<PathBuf> {
+    let apk = debug_apk(root, module)?;
+    // a no-change Gradle build leaves the APK's time alone: the stamp holds when the last
+    // successful build started, which covers every input it saw
+    let time = |p: &Path| std::fs::metadata(p).and_then(|m| m.modified()).ok();
+    let built = time(&apk).max(time(&stamp_path(&apk)))?;
+    let mut budget = 60_000;
+    let tree = newest_input(root, 12, &mut budget)?;
+    let files = extra
+        .iter()
+        .filter_map(|f| std::fs::metadata(f).and_then(|m| m.modified()).ok())
+        .max();
+    (tree <= built && files.is_none_or(|t| t <= built)).then_some(apk)
+}
+
+/// The file next to the APK whose time is the start of the last successful build.
+fn stamp_path(apk: &Path) -> PathBuf {
+    apk.with_file_name(".umr-built")
+}
+
+/// Records that the build that started at `started` produced `apk` (AUD-P1-45).
+fn stamp(apk: &Path, started: std::time::SystemTime) {
+    let p = stamp_path(apk);
+    if std::fs::write(&p, b"").is_ok() {
+        if let Ok(f) = std::fs::OpenOptions::new().write(true).open(&p) {
+            let _ = f.set_modified(started);
+        }
+    }
+}
+
 /// What a Gradle log line means for the user.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum LineKind {
@@ -171,9 +249,25 @@ impl Adapter for GradleAndroid {
             return Err(AdapterError::Missing(format!("{} ({})", i.message, i.fix)));
         }
         let module = app_module(&ctx.project).unwrap_or_else(|| "app".into());
-        let apk = build(ctx, &module, &sink)?;
+        // AUD-P1-45: nothing changed since the last build (a device switch): install that APK
+        let (apk, reused) = match up_to_date_apk(&ctx.project, &module, &[]) {
+            Some(apk) => {
+                sink(Event::Phase {
+                    phase: Phase::Building,
+                    message: format!(
+                        "reusing {} (nothing changed since it was built)",
+                        apk.display()
+                    ),
+                });
+                (apk, true)
+            }
+            None => (build(ctx, &module, &sink)?, false),
+        };
         let package = install(ctx, &apk, &sink)?;
         launch(ctx, &package, &sink)?;
+        if reused {
+            warm_up(ctx, &module);
+        }
         Ok(Box::new(GradleApp {
             ctx: ctx.clone(),
             module,
@@ -201,6 +295,82 @@ fn emit_line(line: &str, root: &Path, sink: &Sink, problems: &mut Vec<Problem>, 
     }
 }
 
+/// `gradlew :<module>:assembleDebug` as a supervised process of the run's group.
+fn gradle_spec(
+    ctx: &AdapterContext,
+    module: &str,
+    extra: &[String],
+    name: &str,
+    log: &Path,
+) -> ProcessSpec {
+    let mut spec = ProcessSpec::new(name, ctx.project.join("gradlew.bat"), log).args(
+        [
+            format!(":{module}:assembleDebug"),
+            "--console=plain".into(),
+            // reuse the configured task graph: a no-change build skips ~10 s of configuration
+            "--configuration-cache".into(),
+            "--configuration-cache-problems=warn".into(),
+        ]
+        .into_iter()
+        .chain(extra.iter().cloned()),
+    );
+    spec.env.clone_from(&ctx.env);
+    if let Some(j) = &ctx.jdk_home {
+        spec.env.insert("JAVA_HOME".into(), j.display().to_string());
+    }
+    spec.env
+        .insert("ANDROID_HOME".into(), ctx.sdk.display().to_string());
+    spec.env
+        .insert("ANDROID_SDK_ROOT".into(), ctx.sdk.display().to_string());
+    spec.cwd = Some(ctx.project.clone());
+    spec.group = Some(ctx.group.clone());
+    spec
+}
+
+/// Longest wait for a warm-up build before a real build starts anyway.
+const WARM_UP_WAIT: Duration = Duration::from_secs(180);
+
+fn warm_up_name(ctx: &AdapterContext) -> String {
+    format!("gradle-warm:{}", ctx.group)
+}
+
+/// ADP-002b: a run that reuses an unchanged APK never starts Gradle, so the first edit paid for
+/// a cold Gradle daemon (45 s instead of 7 s on the Kotlin sample, 2026-11-19). This starts a
+/// no-change build in the background (nothing is rebuilt: the APK is up to date) so the daemon
+/// is warm by the time the user saves.
+pub fn warm_up(ctx: &AdapterContext, module: &str) {
+    let name = warm_up_name(ctx);
+    let log = ctx
+        .log_dir
+        .join(format!("gradle-warm-{}.log", ctx.group.replace(':', "-")));
+    let mut spec = gradle_spec(ctx, module, &[], &name, &log);
+    spec.restart = umr_supervisor::RestartPolicy::Never;
+    let _ = ctx.supervisor.start(spec);
+}
+
+/// A real build waits for a running warm-up: started next to it, Gradle would find its only
+/// daemon busy and start a second, cold one.
+fn wait_for_warm_up(ctx: &AdapterContext, sink: &Sink) {
+    let name = warm_up_name(ctx);
+    let running = |ctx: &AdapterContext| {
+        matches!(
+            ctx.supervisor.status(&name).map(|s| s.state),
+            Some(RunState::Running | RunState::Restarting)
+        )
+    };
+    if !running(ctx) {
+        return;
+    }
+    sink(Event::Phase {
+        phase: Phase::Building,
+        message: "Gradle is still starting up; the build follows".into(),
+    });
+    let start = Instant::now();
+    while running(ctx) && start.elapsed() < WARM_UP_WAIT {
+        std::thread::sleep(Duration::from_millis(200));
+    }
+}
+
 /// Runs `gradlew :<module>:assembleDebug` in `ctx.project`; returns the APK.
 ///
 /// # Errors
@@ -225,32 +395,14 @@ pub fn build_with(
     let log = ctx
         .log_dir
         .join(format!("gradle-{}.log", ctx.group.replace(':', "-")));
-    let mut spec = ProcessSpec::new(&name, root.join("gradlew.bat"), &log).args(
-        [
-            format!(":{module}:assembleDebug"),
-            "--console=plain".into(),
-            // reuse the configured task graph: a no-change build skips ~10 s of configuration
-            "--configuration-cache".into(),
-            "--configuration-cache-problems=warn".into(),
-        ]
-        .into_iter()
-        .chain(extra.iter().cloned()),
-    );
-    spec.env.clone_from(&ctx.env);
-    if let Some(j) = &ctx.jdk_home {
-        spec.env.insert("JAVA_HOME".into(), j.display().to_string());
-    }
-    spec.env
-        .insert("ANDROID_HOME".into(), ctx.sdk.display().to_string());
-    spec.env
-        .insert("ANDROID_SDK_ROOT".into(), ctx.sdk.display().to_string());
-    spec.cwd = Some(root.clone());
-    spec.group = Some(ctx.group.clone());
+    let spec = gradle_spec(ctx, module, extra, &name, &log);
+    wait_for_warm_up(ctx, sink);
     sink(Event::Phase {
         phase: Phase::Building,
         message: format!("gradlew :{module}:assembleDebug"),
     });
     let start = Instant::now();
+    let started_at = std::time::SystemTime::now();
     ctx.supervisor
         .start(spec)
         .map_err(|e| AdapterError::Failed(format!("cannot start Gradle: {e}")))?;
@@ -323,11 +475,13 @@ pub fn build_with(
             start.elapsed().as_secs_f64()
         ),
     });
-    debug_apk(root, module).ok_or_else(|| {
+    let apk = debug_apk(root, module).ok_or_else(|| {
         AdapterError::Failed(format!(
             "the build succeeded but no APK is in {module}/build/outputs/apk/debug"
         ))
-    })
+    })?;
+    stamp(&apk, started_at);
+    Ok(apk)
 }
 
 /// Installs the APK on the run's device; returns its package.
@@ -342,6 +496,13 @@ pub fn install(ctx: &AdapterContext, apk: &Path, sink: &Sink) -> Result<String, 
     let aapt2 = umr_device::app::find_aapt2(&ctx.sdk)
         .ok_or_else(|| AdapterError::Missing("Android build-tools (aapt2)".into()))?;
     let package = umr_device::app::apk_package(&aapt2, apk).map_err(AdapterError::InstallFailed)?;
+    // AUD-P1-45: after a device switch the emulator usually has this very APK already
+    if umr_device::app::installed_same(ctx.device.adb.port, &ctx.device.serial, &package, apk) {
+        sink(Event::Log {
+            line: format!("{package}: this APK is installed already"),
+        });
+        return Ok(package);
+    }
     umr_device::app::install(&ctx.device.adb, &ctx.device.serial, apk)
         .map_err(AdapterError::InstallFailed)?;
     Ok(package)
@@ -421,6 +582,57 @@ impl RunningApp for GradleApp {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn an_unchanged_project_reuses_its_apk() {
+        // AUD-P1-45
+        let d = tmp("reuse");
+        let set = |p: &Path, secs: u64| {
+            let f = std::fs::OpenOptions::new().write(true).open(p).unwrap();
+            f.set_modified(std::time::UNIX_EPOCH + std::time::Duration::from_secs(secs))
+                .unwrap();
+        };
+        let src = d.join("app/src/main/java/Main.kt");
+        std::fs::create_dir_all(src.parent().unwrap()).unwrap();
+        std::fs::write(&src, "fun main() {}").unwrap();
+        set(&src, 1_000);
+        assert_eq!(up_to_date_apk(&d, "app", &[]), None, "nothing built yet");
+        let out = d.join("app/build/outputs/apk/debug");
+        std::fs::create_dir_all(&out).unwrap();
+        let apk = out.join("app-debug.apk");
+        std::fs::write(&apk, "apk").unwrap();
+        set(&apk, 2_000);
+        // build output newer than the APK does not count
+        let tmp_out = d.join("app/build/tmp/x.txt");
+        std::fs::create_dir_all(tmp_out.parent().unwrap()).unwrap();
+        std::fs::write(&tmp_out, "x").unwrap();
+        assert_eq!(
+            up_to_date_apk(&d, "app", &[]).as_deref(),
+            Some(apk.as_path())
+        );
+        // a later edit of the sources: build again
+        set(&src, 3_000);
+        assert_eq!(up_to_date_apk(&d, "app", &[]), None);
+        // … unless a later no-change build confirmed the APK (its time stays old, the stamp is new)
+        stamp(
+            &apk,
+            std::time::UNIX_EPOCH + std::time::Duration::from_secs(4_000),
+        );
+        assert_eq!(
+            up_to_date_apk(&d, "app", &[]).as_deref(),
+            Some(apk.as_path())
+        );
+        std::fs::remove_file(stamp_path(&apk)).unwrap();
+        set(&src, 1_000);
+        // React Native: a newer package.json (native modules) also means a build
+        let pkg = d.join("package.json");
+        std::fs::write(&pkg, "{}").unwrap();
+        set(&pkg, 3_000);
+        assert_eq!(up_to_date_apk(&d, "app", std::slice::from_ref(&pkg)), None);
+        set(&pkg, 1_500);
+        assert!(up_to_date_apk(&d, "app", &[pkg]).is_some());
+        let _ = std::fs::remove_dir_all(&d);
+    }
 
     fn tmp(tag: &str) -> PathBuf {
         let d = std::env::temp_dir().join(format!("umr-gradle-{tag}-{}", std::process::id()));

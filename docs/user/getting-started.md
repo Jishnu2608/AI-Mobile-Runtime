@@ -29,7 +29,7 @@ Start **AI Mobile Runtime** from the Start menu. The wizard:
 
    ![The Run step after a successful first run](images/wizard-run.png)
 
-8. **Connects your coding agent**: the **Agent** step lists the coding agents on your PC (Claude Code, Codex, Cursor, Claude Desktop, VS Code) and connects the one you choose, showing every file it changes first (see step 4 below).
+8. **Connects your coding agent**: the **Agent** step lists the coding agents on your PC (Claude Code, Codex, Cursor, Claude Desktop, VS Code, Antigravity) and connects the one you choose, showing every file it changes first (see step 4 below).
 
 Every step has a link to the part of this guide that explains it.
 
@@ -72,7 +72,7 @@ It shows exactly what it will write (the MCP server entry and short instructions
 ![The Agent step: Connect shows the files it will change before anything is written](images/wizard-agent.png)
  Start your agent in the project folder; for Claude Code, approve the `umr` MCP server when asked (`/mcp` lists it).
 
-Claude Code, Codex and Cursor also get a **stop hook**: when the agent says it is done, the runtime waits for the rebuild its last saves started and, if the app does not build or crashed, hands the error (file, line, message) back to the agent so it fixes it before stopping. See [Agents](agents.md#problems-go-back-to-the-agent).
+Claude Code, Codex, Cursor and Antigravity also get a **stop hook**: when the agent says it is done, the runtime waits for the rebuild its last saves started and, if the app does not build or crashed, hands the error (file, line, message) back to the agent so it fixes it before stopping. See [Agents](agents.md#problems-go-back-to-the-agent).
 
 Then ask your agent something like: *"The app is running in the AI Mobile Runtime preview. Tapping the + button does nothing — find the problem with the umr tools, fix it and check the screen."* The agent will read the runtime status, open the problem, edit the code, reload and look at a screenshot. See [Agents](agents.md).
 

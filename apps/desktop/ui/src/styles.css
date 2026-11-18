@@ -134,6 +134,8 @@ pre.licence { max-height: 260px; overflow: auto; white-space: pre-wrap; backgrou
 .nav { display: flex; justify-content: space-between; margin-top: 20px; }
 .problem { padding: 12px 14px; border-radius: 8px; border: 1px solid var(--bad); background: var(--bad-bg); color: var(--bad); display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 10px; }
 .busy { color: var(--muted); padding: 24px; }
+.confirm { margin-top: 12px; padding: 12px 14px; border-radius: 8px; border: 1px solid var(--warn); background: var(--warn-bg); }
+.confirm p { margin: 0 0 8px; }
 
 /* ---- preview window (Phase 4) ---------------------------------------------------------- */
 .pv { display: flex; flex-direction: column; height: 100vh; background: var(--bg); color: var(--text); user-select: none; }
@@ -249,6 +251,16 @@ pre.diff { margin: 4px 0 8px; max-height: 220px; overflow: auto; background: var
 .dg-help:hover { text-decoration: underline; }
 
 /* why each wizard stage matters (one line under the heading) */
+/* AUD-P1-6: run progress */
+.run-progress { margin: 12px 0; }
+.run-stages { list-style: none; display: flex; flex-wrap: wrap; gap: 6px 14px; padding: 0; margin: 0 0 8px; }
+.run-stages li { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 14px; }
+.run-stages li.done { color: var(--ok); }
+.run-stages li.current { color: var(--text); font-weight: 600; }
+.run-stages li.current .dot { background: var(--lime); color: var(--lime-ink); animation: run-pulse 1.4s ease-in-out infinite; }
+@keyframes run-pulse { 50% { box-shadow: 0 0 0 5px rgb(185 231 105 / 0.35); } }
+@media (prefers-reduced-motion: reduce) { .run-stages li.current .dot { animation: none; } }
+.run-lines { margin: 8px 0 10px; padding: 8px 10px; max-height: 6.5em; overflow: hidden; border-radius: 8px; background: var(--code); color: var(--text-2); font-size: 12px; line-height: 1.5; white-space: pre-wrap; word-break: break-all; }
 /* AUD-P3-24: home screen */
 .home-toggle { margin-left: 10px; }
 .home h3 { margin: 22px 0 8px; font-size: 15px; }
@@ -365,3 +377,114 @@ pre.diff { margin: 4px 0 8px; max-height: 220px; overflow: auto; background: var
 }
 .stage-hint { position: absolute; left: 0; right: 0; bottom: 14px; margin: 0; text-align: center; font-size: 12px; color: var(--muted-2); pointer-events: none; }
 @media (max-width: 900px) { .layout { grid-template-columns: 1fr; } .stage { display: none; } }
+.disk { margin: 8px 0 12px; }
+.disk summary { cursor: pointer; }
+.disk table { border-collapse: collapse; margin-top: 8px; }
+.disk td { padding: 4px 10px 4px 0; vertical-align: top; }
+.disk td.num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.install-total { margin: 8px 0 16px; }
+.install-total .bar.big { height: 10px; }
+/* AUD-P2-21: problems beside the phone (stacked below only in a very narrow window) */
+.pv-main { flex: 1; min-height: 0; display: flex; }
+.pv-main .pv-stage { min-width: 0; }
+.pv-main .dg { flex: 0 0 380px; max-width: 60%; border-top: 0; border-left: 1px solid var(--line); }
+@media (max-width: 559px) {
+  .pv-main { flex-direction: column; }
+  .pv-main .dg { flex: 0 0 42%; max-width: none; border-left: 0; border-top: 1px solid var(--line); }
+}
+.dg-file { font: inherit; padding: 0; }
+.tool-role { margin-left: 8px; font-size: 12px; }
+/* AUD-P3-35: the eight steps fit one line at the default 960 x 720 window with the Pocket panel */
+.steps { gap: 2px; flex-wrap: nowrap; }
+.steps li, .step-back { gap: 5px; padding: 5px 7px; font-size: clamp(12px, 1.35vw, 14px); white-space: nowrap; }
+.steps li.done { padding: 0; }
+.steps .dot { width: 20px; height: 20px; font-size: 11px; }
+@media (max-width: 760px) { .steps { flex-wrap: wrap; } }
+/* AUD-P3-38: Pocket off switch */
+.layout.no-stage { grid-template-columns: minmax(0, 1fr); }
+header { position: relative; }
+.pocket-toggle { position: absolute; top: 4px; right: 0; font-size: 12px; }
+@media (max-width: 900px) { .pocket-toggle { display: none; } }
+.run-fail-actions { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+/* AUD-P3-37: project switcher in the phone window */
+.pv-projects { position: relative; display: inline-flex; }
+.pv-menu { position: absolute; top: 30px; left: 0; z-index: 20; min-width: 220px; max-width: 320px; padding: 4px; background: var(--panel); border: 1px solid var(--line-strong); border-radius: 8px; box-shadow: var(--sh-1); display: flex; flex-direction: column; }
+.pv-menu button { display: flex; justify-content: space-between; gap: 10px; text-align: left; padding: 6px 8px; border: 0; border-radius: 6px; background: none; color: var(--text); cursor: pointer; font-size: 13px; }
+.pv-menu button:hover:not(:disabled) { background: var(--bg-alt); }
+.pv-menu button:disabled { opacity: 0.55; cursor: default; }
+.pv-menu button.on { opacity: 1; }
+.pv-menu button span { color: var(--muted); font-size: 12px; white-space: nowrap; }
+.pv-menu-empty { padding: 8px; color: var(--muted); font-size: 12px; }
+.dg-checking { font-size: 11px; color: var(--muted); white-space: nowrap; animation: pulse 1.2s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .dg-checking { animation: none; } }
+
+/* AUD-P1-40/44: foldables: hinge control, hinge line, the half that turns on the hinge */
+.pv-hinge-btn { height: 26px; padding: 0 8px; border: 1px solid var(--line-strong); border-radius: 6px; background: var(--sunken); color: var(--text); font-size: 13px; white-space: nowrap; cursor: pointer; }
+.pv-hinge-btn:hover:not(:disabled), .pv-hinge-btn.on { background: var(--bg-alt); }
+.pv-hinge-pop { min-width: 260px; gap: 8px; padding: 8px; }
+.pv-hinge-steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
+.pv-hinge-steps button { flex-direction: column; align-items: center; gap: 1px; padding: 6px 4px; border: 1px solid var(--line); text-align: center; }
+.pv-hinge-steps button.on { border-color: var(--lime-deep); background: color-mix(in srgb, var(--lime) 18%, transparent); }
+.pv-hinge-steps button span { font-size: 11px; }
+.pv-hinge-slider { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
+.pv-hinge-slider input { width: 100%; accent-color: var(--lime-deep); }
+.pv-hinge-steps button { display: flex; justify-content: center; min-height: 46px; line-height: 1.25; white-space: nowrap; }
+.pv-hinge-steps button strong { font-size: 14px; }
+
+/* AUD-P1-44: a bent foldable. Each half is a leaf (its bezel + its half of the inner display)
+   turning on the shared hinge edge; the leaves meet at the hinge with no bezel between them, so
+   the inner display reads as one surface. CSS 3D: x right, y down, z toward the viewer. */
+.pv-phone.bent { background: transparent; box-shadow: none; perspective: 3600px; }
+.pv-phone.bent.book { perspective-origin: 50% 50%; }
+.pv-phone.bent.flip { perspective-origin: 50% -30%; }
+.pv-phone.bent::before, .pv-phone.bent::after, .pv-phone.bent .pv-camera { display: none; }
+.pv-phone.bent .pv-canvas { opacity: 0; }
+.pv-leaf { position: absolute; box-sizing: border-box; background: #050607; transform-style: preserve-3d; pointer-events: none; z-index: 3; }
+.pv-leaf.book { top: 0; bottom: 0; width: 50%; }
+.pv-leaf.book.a { left: 0; transform-origin: right center; border-radius: var(--outer-r) 0 0 var(--outer-r); padding: var(--bz) 0 var(--bz) var(--bz); }
+.pv-leaf.book.b { right: 0; transform-origin: left center; border-radius: 0 var(--outer-r) var(--outer-r) 0; padding: var(--bz) var(--bz) var(--bz) 0; }
+.pv-leaf.flip { left: 0; right: 0; height: 50%; }
+.pv-leaf.flip.a { top: 0; transform-origin: center bottom; border-radius: var(--outer-r) var(--outer-r) 0 0; padding: var(--bz) var(--bz) 0 var(--bz); }
+.pv-leaf.flip.b { bottom: 0; transform-origin: center top; border-radius: 0 0 var(--outer-r) var(--outer-r); padding: 0 var(--bz) var(--bz) var(--bz); }
+.pv-half { display: block; width: 100%; height: 100%; backface-visibility: hidden; }
+.pv-leaf.book.a .pv-half { border-radius: var(--screen-r) 0 0 var(--screen-r); }
+.pv-leaf.book.b .pv-half { border-radius: 0 var(--screen-r) var(--screen-r) 0; }
+.pv-leaf.flip.a .pv-half { border-radius: var(--screen-r) var(--screen-r) 0 0; }
+.pv-leaf.flip.b .pv-half { border-radius: 0 0 var(--screen-r) var(--screen-r); }
+/* the crease: a soft shade along the hinge on both halves of the inner display */
+.pv-leaf::after { content: ""; position: absolute; pointer-events: none; backface-visibility: hidden; }
+.pv-leaf.book.a::after { top: var(--bz); bottom: var(--bz); right: 0; width: 14px; background: linear-gradient(to left, rgba(0, 0, 0, 0.28), transparent); }
+.pv-leaf.book.b::after { top: var(--bz); bottom: var(--bz); left: 0; width: 14px; background: linear-gradient(to right, rgba(0, 0, 0, 0.28), transparent); }
+.pv-leaf.flip.a::after { left: var(--bz); right: var(--bz); bottom: 0; height: 12px; background: linear-gradient(to top, rgba(0, 0, 0, 0.28), transparent); }
+.pv-leaf.flip.b::after { left: var(--bz); right: var(--bz); top: 0; height: 12px; background: linear-gradient(to bottom, rgba(0, 0, 0, 0.28), transparent); }
+/* the back of a leaf (the rear panel), seen only from behind */
+.pv-back { position: absolute; inset: 0; border-radius: inherit; backface-visibility: hidden; background: linear-gradient(135deg, #2b3038, #121418); }
+.pv-leaf.book .pv-back { transform: rotateY(180deg); }
+.pv-leaf.flip .pv-back { transform: rotateX(180deg); }
+
+/* AUD-P1-44: foldables. The fingerprint sensor is the side key (power button), as on Galaxy Z
+   Fold7 / Flip7: drawn as the key itself, glowing when Android asks for a finger. */
+.pv-phone.foldable::before { display: none; }
+.pv-sidekey { position: absolute; right: -6px; top: 26%; width: 4px; height: 8%; border-radius: 0 3px 3px 0; z-index: 4;
+  background: linear-gradient(90deg, #3e4550, #6a7381); cursor: pointer; pointer-events: auto; }
+.pv-sidekey::before { content: ""; position: absolute; inset: -4px -10px -4px -6px; }  /* a bigger hit area */
+.pv-sidekey.ready { background: linear-gradient(90deg, #4c7a3a, #b8e986); box-shadow: 0 0 10px 2px rgba(184, 233, 134, 0.55); animation: pv-key-pulse 1.4s ease-in-out infinite; }
+.pv-sidekey.on { background: #d6f7b0; box-shadow: 0 0 14px 4px rgba(184, 233, 134, 0.8); }
+.pv-sidekey-hint { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); width: 22px; height: 22px; color: #b8e986; pointer-events: none; }
+.pv-sidekey-hint .pv-fp-glyph { width: 100%; height: 100%; }
+@keyframes pv-key-pulse { 50% { box-shadow: 0 0 4px 1px rgba(184, 233, 134, 0.3); } }
+@media (prefers-reduced-motion: reduce) { .pv-sidekey.ready { animation: none; } }
+/* the flip's key sits on the upper half */
+.pv-phone.foldable.flip:not(.cover) > .pv-sidekey { top: 22%; height: 6%; }
+/* on a turning half the key and the camera ride with it */
+.pv-leaf .pv-sidekey { right: -6px; }
+.pv-leaf.book.b .pv-sidekey { top: 26%; }
+.pv-leaf.flip.a .pv-sidekey { top: 44%; height: 12%; }
+.pv-leaf .pv-camera { backface-visibility: hidden; }
+.pv-leaf.flip.a .pv-camera { left: 50%; }
+.pv-leaf.book.b .pv-camera { left: 50%; }
+/* the fold's inner selfie camera: top middle of the right half */
+.pv-camera.right-half { left: 75%; }
+.pv-phone.land .pv-sidekey { right: auto; top: -6px; left: 70%; width: 8%; height: 4px; border-radius: 3px 3px 0 0; }
+.pv-phone.bent .pv-leaf .pv-camera { display: block; }
+.agent-commit-warn { margin: 6px 0 2px; }

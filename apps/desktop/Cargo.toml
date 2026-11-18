@@ -30,6 +30,7 @@ rfd = { version = "0.15", default-features = false }
 tokio = { version = "1", features = ["sync", "rt"] }
 umr-api = { path = "../../crates/umr-api" }
 umr-core = { path = "../../crates/umr-core" }
+umr-platform = { path = "../../crates/umr-platform" }
 
 [lints]
 workspace = true

@@ -22,6 +22,7 @@
 //! visible on both sides.
 
 pub mod adb;
+pub mod anr;
 pub mod app;
 pub mod avd;
 pub mod catalog;

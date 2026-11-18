@@ -363,9 +363,14 @@ enum DeviceAction {
         #[arg(default_value = "left")]
         direction: String,
     },
-    /// Fold or unfold a foldable emulator while it runs: closed, half-opened, opened, flipped, tent.
+    /// Fold or unfold a foldable emulator while it runs: a posture (closed, half-opened, opened)
+    /// or `--angle` in degrees (0 closed, 90 half open, 180 open flat). Closed, the app moves to
+    /// the cover screen. Without either it shows the hinge as it is.
     Posture {
-        posture: String,
+        posture: Option<String>,
+        /// Hinge angle in degrees, 0–180.
+        #[arg(long)]
+        angle: Option<f32>,
         #[arg(long)]
         target: Option<String>,
     },
@@ -407,17 +412,17 @@ enum PreviewAction {
 
 #[derive(Debug, Subcommand)]
 enum AgentAction {
-    /// Connect a coding agent (claude-code, codex, cursor, claude-desktop, vscode): creates its
+    /// Connect a coding agent (claude-code, codex, cursor, claude-desktop, vscode, antigravity): creates its
     /// client, writes its MCP server entry and agent instructions (shows the changes and asks
     /// first). `--remove` disconnects it again.
     Setup {
-        /// claude-code, codex, cursor, claude-desktop or vscode.
+        /// claude-code, codex, cursor, claude-desktop, vscode or antigravity.
         agent: String,
         /// Project folder (project-scope config and instruction files); default: current folder.
         #[arg(long)]
         project: Option<std::path::PathBuf>,
         /// `project` (this folder) or `user` (all projects). Default: project for Claude Code,
-        /// Cursor and VS Code; user for Codex and Claude Desktop.
+        /// Cursor and VS Code; user for Codex, Claude Desktop and Antigravity.
         #[arg(long)]
         scope: Option<String>,
         /// Take the runtime out of the agent's files and revoke its token.
@@ -436,13 +441,17 @@ enum AgentAction {
         #[arg(long)]
         json: bool,
     },
-    /// The agent's stop hook (written by `setup` for claude-code, codex and cursor): reads the
+    /// The agent's stop hook (written by `setup` for claude-code, codex, cursor and antigravity): reads the
     /// hook input on stdin, waits for the rebuild the agent's saves started, and keeps the agent
     /// working while the app has a build error, a new runtime error or a crash. Never blocks
     /// when nothing of this folder runs.
     Hook {
-        /// claude-code, codex or cursor.
+        /// claude-code, codex, cursor or antigravity.
         agent: String,
+        /// AUD-P1-32: run after a file edit inside the agent's turn (Claude Code `PostToolUse`):
+        /// report problems the app already shows, without waiting for a build.
+        #[arg(long)]
+        after_edit: bool,
     },
     /// One-click install link for Cursor or VS Code, made for this PC's umr.exe (creates the
     /// agent client if needed).
@@ -473,7 +482,7 @@ enum AgentAction {
         #[arg(long)]
         scopes: Option<String>,
     },
-    /// Coding agents on this PC (Claude Code, Codex, Cursor, Claude Desktop, VS Code): installed,
+    /// Coding agents on this PC (Claude Code, Codex, Cursor, Claude Desktop, VS Code, Antigravity): installed,
     /// connected, and how to connect each one. Does not need the Core.
     Clients {
         /// Project folder whose config files are checked; default: current folder.
@@ -686,11 +695,15 @@ fn main() -> ExitCode {
                     )
                     .await
                 }
-                DeviceAction::Posture { posture, target: t } => {
+                DeviceAction::Posture {
+                    posture,
+                    angle,
+                    target: t,
+                } => {
                     session_cmd::call_print(
                         &target,
                         methods::DEVICE_POSTURE,
-                        serde_json::json!({ "posture": posture, "target": t }),
+                        serde_json::json!({ "posture": posture, "angle": angle, "target": t }),
                     )
                     .await
                 }
@@ -743,7 +756,13 @@ fn main() -> ExitCode {
                     agent_setup::setup(&target, &agent, o).await
                 }
                 AgentAction::Link { agent, json } => agent_setup::link(&target, &agent, json).await,
-                AgentAction::Hook { agent } => agent_hook::run(&target, &agent).await,
+                AgentAction::Hook { agent, after_edit } => {
+                    if after_edit {
+                        agent_hook::run_after_edit(&target, &agent).await
+                    } else {
+                        agent_hook::run(&target, &agent).await
+                    }
+                }
                 AgentAction::Doctor { agent, project, fix, json } => {
                     agent_setup::doctor(&target, agent, project, fix, json).await
                 }

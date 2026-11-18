@@ -27,7 +27,14 @@ pub struct AgentRequest {
     pub remove: bool,
 }
 
-const CLIENTS: [&str; 5] = ["claude-code", "codex", "cursor", "claude-desktop", "vscode"];
+const CLIENTS: [&str; 6] = [
+    "claude-code",
+    "codex",
+    "cursor",
+    "claude-desktop",
+    "vscode",
+    "antigravity",
+];
 
 /// The `umr` arguments for a request, or why it is refused.
 pub fn arguments(r: &AgentRequest) -> Result<Vec<String>, String> {

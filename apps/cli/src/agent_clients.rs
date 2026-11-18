@@ -68,7 +68,7 @@ pub struct Client {
 }
 
 /// Every client, in the order they are listed.
-pub const CLIENTS: [Client; 5] = [
+pub const CLIENTS: [Client; 6] = [
     Client {
         id: "claude-code",
         name: "Claude Code",
@@ -133,6 +133,19 @@ pub const CLIENTS: [Client; 5] = [
         setup: true,
         verified: "2026-11-14",
         notes: "`type` is required. The Copilot harness also reads a workspace .mcp.json (`mcpServers`), the same file Claude Code uses.",
+    },
+    Client {
+        id: "antigravity",
+        name: "Antigravity",
+        format: Format::Json { key: "mcpServers", typed: false },
+        project_config: Some(Place::Project(".agents/mcp_config.json")),
+        user_config: Some(Place::Home(".gemini/config/mcp_config.json")),
+        instructions: Instructions::File(".agents/rules/umr-runtime.md"),
+        detect_commands: &[],
+        detect_places: &[Place::Home(".gemini/antigravity")],
+        setup: true,
+        verified: "2026-11-19",
+        notes: "No `type` key: `command` means a local stdio server, `serverUrl` a remote one. The user file applies to the App, the CLI and the IDE; the workspace file `.agents/mcp_config.json` to the CLI and the IDE. Rules in `rules/` need front matter with a `trigger`, or they are skipped.",
     },
 ];
 

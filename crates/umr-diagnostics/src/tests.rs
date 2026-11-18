@@ -334,3 +334,65 @@ fn retain_drops_fixed_entries() {
         Added::Repeat(2)
     );
 }
+
+#[test]
+fn wrapped_crash_leads_with_its_cause_and_app_frames() {
+    // AUD-P2-17: shape captured in the audit (Kotlin sample, crash in onCreate)
+    let p = "11-17 10:00:00.000  4242  4242 E AndroidRuntime: ";
+    let text = [
+        "FATAL EXCEPTION: main",
+        "Process: com.umr.samples.kotlincalc, PID: 4242",
+        "java.lang.RuntimeException: Unable to start activity ComponentInfo{com.umr.samples.kotlincalc/com.umr.samples.kotlincalc.MainActivity}: java.lang.IllegalStateException: audit: crash on start",
+        "\tat android.app.ActivityThread.performLaunchActivity(ActivityThread.java:4048)",
+        "\tat android.app.ActivityThread.handleLaunchActivity(ActivityThread.java:4235)",
+        "\tat android.os.Looper.loop(Looper.java:338)",
+        "Caused by: java.lang.IllegalStateException: audit: crash on start",
+        "\tat com.umr.samples.kotlincalc.MainActivity.onCreate(MainActivity.kt:38)",
+        "\tat android.app.Activity.performCreate(Activity.java:9002)",
+        "\t... 12 more",
+    ]
+    .iter()
+    .fold(String::new(), |mut t, l| {
+        t.push_str(p);
+        t.push_str(l);
+        t.push('\n');
+        t
+    });
+    let d = crash(&text);
+    assert_eq!(
+        d.message,
+        "java.lang.IllegalStateException: audit: crash on start"
+    );
+    assert_eq!(
+        d.stack[0],
+        "at com.umr.samples.kotlincalc.MainActivity.onCreate(MainActivity.kt:38)"
+    );
+    assert!(
+        d.stack[1].starts_with("Full trace: java.lang.RuntimeException: Unable to start activity")
+    );
+    assert!(
+        d.stack.iter().any(|l| l.starts_with("Caused by: ")),
+        "the chain stays"
+    );
+    assert_eq!(
+        d.stack
+            .iter()
+            .filter(|l| l.contains("MainActivity.kt:38"))
+            .count(),
+        1
+    );
+    assert_eq!(
+        (d.file.as_deref(), d.line),
+        (Some("MainActivity.kt"), Some(38))
+    );
+    // nothing wrapped and the app frame already first: unchanged
+    let plain = crash(&app_crash(7));
+    assert_eq!(
+        plain.message,
+        "java.lang.NumberFormatException: For input string: \"abc\""
+    );
+    assert_eq!(
+        plain.stack[0],
+        "at com.example.umrkotlindemo.Calc.parse(Calc.kt:8)"
+    );
+}

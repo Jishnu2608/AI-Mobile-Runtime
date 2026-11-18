@@ -7,6 +7,7 @@
 //! * `device.boot` / `device.stop` (DEV-003/009): headless boot with health check and warm
 //!   snapshot; stop.
 
+use std::path::Path;
 use std::time::Duration;
 
 use umr_api::methods::{BootDeviceParams, CreateDeviceParams, DeviceRefParams, ProfilesParams};
@@ -154,10 +155,101 @@ pub fn profiles(state: &ApiState, id: Id, p: &ProfilesParams) -> Response {
             let avd = api
                 .as_deref()
                 .map(|a| umr_device::avd::info(&home, prof.id, a));
-            serde_json::json!({ "profile": prof, "avd": avd })
+            // AUD-P1-45: switching to it starts from a saved snapshot (seconds), not a cold boot
+            let warm = api.as_deref().and_then(|a| {
+                let host = umr_device::catalog::host(prof.id)?;
+                let info = umr_device::avd::info(&home, host.id, a);
+                Some(snapshot_ready(Path::new(&info.dir)))
+            });
+            let preparing = api.as_deref().is_some_and(|a| {
+                umr_device::catalog::host(prof.id).is_some_and(|h| {
+                    state
+                        .booting
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner)
+                        .contains(&umr_device::avd::info(&home, h.id, a).name)
+                })
+            });
+            serde_json::json!({ "profile": prof, "avd": avd, "warm": warm, "preparing": preparing })
         })
         .collect();
     ok(id, &serde_json::json!({ "api": api, "profiles": list }))
+}
+
+/// Whether the AVD in `dir` has the product's warm snapshot (and its record).
+fn snapshot_ready(dir: &Path) -> bool {
+    umr_device::emulator::read_record(dir).is_some()
+        && dir
+            .join("snapshots")
+            .join(umr_device::emulator::SNAPSHOT)
+            .is_dir()
+}
+
+/// `device.prepare` (AUD-P1-45): boots a profile's emulator once in the background so its warm
+/// snapshot exists before the user first switches to it, then stops it again.
+pub fn prepare(state: &ApiState, id: Id, p: &CreateDeviceParams) -> Response {
+    let Some(prof) =
+        umr_device::catalog::find(&p.profile).and_then(|x| umr_device::catalog::host(x.id))
+    else {
+        return Response::err(
+            Some(id),
+            RpcError::new(
+                codes::INVALID_PARAMS,
+                format!("unknown profile '{}'", p.profile),
+            ),
+        );
+    };
+    let (sdk, api) = match api_level(state, p.api.as_deref()) {
+        Ok(v) => v,
+        Err(e) => return Response::err(Some(id), e),
+    };
+    let info = match umr_device::avd::ensure(&avd_home(state), &sdk, prof, &api, TAG, ABI) {
+        Ok(i) => i,
+        Err(e) => return Response::err(Some(id), RpcError::new(codes::INTERNAL_ERROR, e)),
+    };
+    let answer = |status: &str| {
+        ok(
+            id.clone(),
+            &serde_json::json!({ "profile": p.profile, "status": status }),
+        )
+    };
+    if running(state).iter().any(|r| r.avd == info.name) {
+        return answer("running");
+    }
+    if snapshot_ready(Path::new(&info.dir)) {
+        return answer("ready");
+    }
+    let Some(weak) = state.self_ref.get().cloned() else {
+        return Response::err(
+            Some(id),
+            RpcError::new(codes::INTERNAL_ERROR, "no Core handle"),
+        );
+    };
+    let name = info.name.clone();
+    let spawned = std::thread::Builder::new()
+        .name("umr-prepare".into())
+        .spawn(move || {
+            let Some(state) = weak.upgrade() else { return };
+            match boot_avd(&state, &info, false, false, None) {
+                Ok(b) => {
+                    tracing::info!(avd = %name, seconds = b.seconds, saved = b.snapshot_saved, "prepared");
+                    // stop it unless the user switched to it meanwhile
+                    let in_use = crate::session_api::current(&state)
+                        .is_some_and(|s| s.avd == name);
+                    if !in_use {
+                        stop_avd_background(&state, &name);
+                    }
+                }
+                Err(e) => tracing::warn!(avd = %name, error = %e.message, "preparing failed"),
+            }
+        });
+    match spawned {
+        Ok(_) => answer("preparing"),
+        Err(e) => Response::err(
+            Some(id),
+            RpcError::new(codes::INTERNAL_ERROR, e.to_string()),
+        ),
+    }
 }
 
 pub fn create(state: &ApiState, id: Id, p: &CreateDeviceParams) -> Response {
@@ -326,8 +418,16 @@ pub(crate) fn boot_avd(
     opts.window = window;
     opts.gpu = gpu;
     tracing::info!(avd = %avd.name, cold, "booting emulator");
+    // DEV-003b: the console token lands in the user profile whatever the environment says
+    let token = umr_device::console::auth_token_file();
+    let token_before = token.as_ref().is_some_and(|t| t.is_file());
     match umr_device::emulator::boot(&opts) {
         Ok(inst) => {
+            if let Some(t) = &token {
+                if umr_device::console::note_token_created(&state.data_root, t, token_before) {
+                    tracing::info!(token = %t.display(), "emulator created its console token file");
+                }
+            }
             let r = inst.report.clone();
             tracing::info!(
                 avd = %r.avd, serial = %r.serial, mode = ?r.mode, seconds = r.seconds,

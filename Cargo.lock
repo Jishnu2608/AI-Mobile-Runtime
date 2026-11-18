@@ -4865,7 +4865,7 @@ checksum = "b6f5e870be6c3b371b77fe0ee0bafb859fa4964b4404c27de1d380043c4dda20"
 
 [[package]]
 name = "umr-adapter"
-version = "0.1.18"
+version = "0.1.28"
 dependencies = [
  "serde",
  "umr-device",
@@ -4875,7 +4875,7 @@ dependencies = [
 
 [[package]]
 name = "umr-adapter-flutter"
-version = "0.1.18"
+version = "0.1.28"
 dependencies = [
  "serde_json",
  "sha2",
@@ -4886,7 +4886,7 @@ dependencies = [
 
 [[package]]
 name = "umr-adapter-gradle"
-version = "0.1.18"
+version = "0.1.28"
 dependencies = [
  "umr-adapter",
  "umr-device",
@@ -4895,7 +4895,7 @@ dependencies = [
 
 [[package]]
 name = "umr-adapter-react-native"
-version = "0.1.18"
+version = "0.1.28"
 dependencies = [
  "serde_json",
  "umr-adapter",
@@ -4906,7 +4906,7 @@ dependencies = [
 
 [[package]]
 name = "umr-api"
-version = "0.1.18"
+version = "0.1.28"
 dependencies = [
  "serde",
  "serde_json",
@@ -4915,7 +4915,7 @@ dependencies = [
 
 [[package]]
 name = "umr-cli"
-version = "0.1.18"
+version = "0.1.28"
 dependencies = [
  "clap",
  "serde_json",
@@ -4933,7 +4933,7 @@ dependencies = [
 
 [[package]]
 name = "umr-core"
-version = "0.1.18"
+version = "0.1.28"
 dependencies = [
  "getrandom 0.3.4",
  "notify",
@@ -4964,7 +4964,7 @@ dependencies = [
 
 [[package]]
 name = "umr-desktop"
-version = "0.1.18"
+version = "0.1.28"
 dependencies = [
  "rfd",
  "serde",
@@ -4974,16 +4974,18 @@ dependencies = [
  "tokio",
  "umr-api",
  "umr-core",
+ "umr-platform",
 ]
 
 [[package]]
 name = "umr-device"
-version = "0.1.18"
+version = "0.1.28"
 dependencies = [
  "http",
  "prost",
  "serde",
  "serde_json",
+ "sha2",
  "tokio",
  "tokio-stream",
  "tonic",
@@ -4993,7 +4995,7 @@ dependencies = [
 
 [[package]]
 name = "umr-diagnostics"
-version = "0.1.18"
+version = "0.1.28"
 dependencies = [
  "regex",
  "serde",
@@ -5004,14 +5006,14 @@ dependencies = [
 
 [[package]]
 name = "umr-elevate"
-version = "0.1.18"
+version = "0.1.28"
 dependencies = [
  "umr-platform",
 ]
 
 [[package]]
 name = "umr-env"
-version = "0.1.18"
+version = "0.1.28"
 dependencies = [
  "serde",
  "serde_json",
@@ -5020,7 +5022,7 @@ dependencies = [
 
 [[package]]
 name = "umr-installer"
-version = "0.1.18"
+version = "0.1.28"
 dependencies = [
  "getrandom 0.3.4",
  "reqwest 0.12.28",
@@ -5038,7 +5040,7 @@ dependencies = [
 
 [[package]]
 name = "umr-mcp"
-version = "0.1.18"
+version = "0.1.28"
 dependencies = [
  "serde_json",
  "tokio",
@@ -5046,7 +5048,7 @@ dependencies = [
 
 [[package]]
 name = "umr-platform"
-version = "0.1.18"
+version = "0.1.28"
 dependencies = [
  "tokio",
  "windows-sys 0.59.0",
@@ -5054,7 +5056,7 @@ dependencies = [
 
 [[package]]
 name = "umr-resolver"
-version = "0.1.18"
+version = "0.1.28"
 dependencies = [
  "base64 0.22.1",
  "ed25519-dalek",
@@ -5067,7 +5069,7 @@ dependencies = [
 
 [[package]]
 name = "umr-session"
-version = "0.1.18"
+version = "0.1.28"
 dependencies = [
  "serde",
  "umr-storage",
@@ -5075,7 +5077,7 @@ dependencies = [
 
 [[package]]
 name = "umr-storage"
-version = "0.1.18"
+version = "0.1.28"
 dependencies = [
  "rusqlite",
  "serde",
@@ -5086,7 +5088,7 @@ dependencies = [
 
 [[package]]
 name = "umr-stream"
-version = "0.1.18"
+version = "0.1.28"
 dependencies = [
  "futures-util",
  "getrandom 0.3.4",
@@ -5099,7 +5101,7 @@ dependencies = [
 
 [[package]]
 name = "umr-supervisor"
-version = "0.1.18"
+version = "0.1.28"
 dependencies = [
  "serde",
  "umr-platform",

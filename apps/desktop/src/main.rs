@@ -15,6 +15,7 @@
 
 mod agents;
 mod links;
+mod open;
 mod updates;
 
 use serde_json::Value;
@@ -35,6 +36,7 @@ const ALLOWED: &[&str] = &[
     methods::DEVICE_POSTURE,
     methods::DEVICE_SCREENSHOT,
     methods::DEVICE_PROFILES,
+    methods::DEVICE_PREPARE,
     methods::SESSION_STATUS,
     methods::SESSION_START,
     methods::PROJECT_RELOAD,
@@ -73,6 +75,16 @@ struct Bridge {
 impl Bridge {
     async fn call(&self, method: &str, params: Value) -> Result<Value, String> {
         let target = self.target.as_ref().map_err(Clone::clone)?;
+        // AUD-P1-6: a run or a device switch takes minutes; on the shared connection every other
+        // call (progress, Cancel, the problems) would wait behind it. They get their own.
+        if matches!(method, methods::PROJECT_RUN | methods::SESSION_START) {
+            let (mut c, _) = target.connect_or_start().await?;
+            return match c.call_raw(method, params).await {
+                Ok(v) => Ok(v),
+                Err(ClientError::Rpc(e)) => Err(e.message),
+                Err(e) => Err(e.to_string()),
+            };
+        }
         let mut slot = self.client.lock().await;
         for attempt in 0..2 {
             if slot.is_none() {
@@ -241,11 +253,13 @@ fn dock_rect(work: (i32, i32, u32, u32), dock: Dock, scale: f64) -> (i32, i32, u
     let bar = 48.0 * scale; // toolbar
     let aspect = 1080.0 / 2400.0;
     let mut h = wh - 2.0 * margin;
-    let mut w = (h - bar) * aspect + 2.0 * margin;
-    let max_w = ww / 3.0;
+    // AUD-P2-21: wide enough for the toolbar on one row (it wrapped at 358 px)
+    let mut w = ((h - bar) * aspect + 2.0 * margin).max(500.0 * scale);
+    // a third of the screen, or a little more when a third is too narrow for the toolbar
+    let max_w = (ww / 3.0).max((500.0 * scale).min(ww * 0.36));
     if w > max_w {
         w = max_w;
-        h = (w - 2.0 * margin) / aspect + bar;
+        h = h.min((w - 2.0 * margin) / aspect + bar);
     }
     let x = match dock {
         Dock::Right => wx + ww - w - margin,
@@ -268,7 +282,7 @@ fn open_preview(app: &tauri::App, dock: Dock) -> tauri::Result<()> {
         "preview",
         tauri::WebviewUrl::App("index.html?view=preview".into()),
     )
-    .title("AI Mobile Runtime — Preview")
+    .title("Phone — AI Mobile Runtime")
     .inner_size(420.0, 860.0)
     .min_inner_size(240.0, 400.0)
     .visible(false)
@@ -296,11 +310,97 @@ fn open_preview(app: &tauri::App, dock: Dock) -> tauri::Result<()> {
 
 fn open_wizard(app: &tauri::App) -> tauri::Result<()> {
     tauri::WebviewWindowBuilder::new(app, "main", tauri::WebviewUrl::App("index.html".into()))
-        .title("AI Mobile Runtime — Setup")
+        .title("AI Mobile Runtime")
         .inner_size(960.0, 720.0)
         .min_inner_size(720.0, 560.0)
         .build()?;
     Ok(())
+}
+
+/// AUD-P1-5: one preview window. A second `--preview` (another Run, "Open the live preview",
+/// `umr preview`) brings the running one to the front and ends instead of opening a copy.
+fn preview_already_open(root: &std::path::Path) -> bool {
+    let file = root.join("run").join("preview.pid");
+    let me = std::process::id();
+    let other = std::fs::read_to_string(&file)
+        .ok()
+        .and_then(|t| t.trim().parse::<u32>().ok())
+        .filter(|pid| *pid != me);
+    if let Some(pid) = other {
+        let is_preview = umr_platform::process::list_processes().is_ok_and(|all| {
+            all.iter()
+                .any(|p| p.pid == pid && p.exe_name.eq_ignore_ascii_case("umr-desktop.exe"))
+        });
+        if is_preview && umr_platform::window::focus_window_of(pid) {
+            return true;
+        }
+    }
+    if let Some(dir) = file.parent() {
+        let _ = std::fs::create_dir_all(dir);
+    }
+    let _ = std::fs::write(&file, me.to_string());
+    false
+}
+
+/// AUD-P1-5: the window's title names what it shows ("Phone — rncalc"), so the setup window and
+/// the phone are told apart in the taskbar and Alt+Tab.
+#[tauri::command]
+#[allow(clippy::needless_pass_by_value)] // Tauri passes command arguments by value
+fn set_window_title(window: tauri::WebviewWindow, title: String) {
+    let t: String = title.chars().take(80).collect();
+    let _ = window.set_title(&t);
+}
+
+/// AUD-P2-20 / AUD-P3-23: opens a problem's file at its line, or an install log (text files
+/// only; VS Code, else Notepad). Returns the program's name.
+#[tauri::command]
+#[allow(clippy::needless_pass_by_value)] // Tauri passes command arguments by value
+fn open_in_editor(path: String, line: Option<u32>, root: Option<String>) -> Result<String, String> {
+    let path = match root {
+        Some(r) => open::resolve(std::path::Path::new(&r), &path)?,
+        None => path,
+    };
+    open::open_in_editor(&path, line).map(str::to_string)
+}
+
+/// AUD-P2-21: the problems panel opens beside the phone; the window grows sideways by `extra`
+/// logical pixels (toward the free side of the screen) so the phone keeps its size. A negative
+/// `extra` gives the room back. Returns the logical pixels actually added.
+#[tauri::command]
+#[allow(clippy::needless_pass_by_value)] // Tauri passes command arguments by value
+fn widen_window(window: tauri::WebviewWindow, extra: f64) -> Result<f64, String> {
+    let e = |x: tauri::Error| x.to_string();
+    let scale = window.scale_factor().map_err(e)?;
+    let outer = window.outer_size().map_err(e)?;
+    let inner = window.inner_size().map_err(e)?;
+    let pos = window.outer_position().map_err(e)?;
+    let (wx, ww) = window
+        .current_monitor()
+        .map_err(e)?
+        .map_or((pos.x, outer.width + 4000), |m| {
+            let wa = m.work_area();
+            (wa.position.x, wa.size.width)
+        });
+    let right = wx + i32::try_from(ww).unwrap_or(i32::MAX);
+    #[allow(clippy::cast_possible_truncation)]
+    let want = (extra * scale).round() as i32;
+    // set_size takes the inner size; the frame (borders) stays the same
+    let frame = i32::try_from(outer.width.saturating_sub(inner.width)).unwrap_or(0);
+    let width = i32::try_from(inner.width).unwrap_or(i32::MAX);
+    let new_w = (width + want).clamp(240, (right - wx - frame).max(240));
+    let added = new_w - width;
+    // docked at the right edge: grow to the left; otherwise to the right while there is room
+    let at_right = pos.x + width + frame >= right - 16;
+    let mut x = if at_right { pos.x - added } else { pos.x };
+    x = x.clamp(wx, (right - new_w - frame).max(wx));
+    #[allow(clippy::cast_sign_loss)]
+    window
+        .set_size(tauri::PhysicalSize::new(new_w as u32, inner.height))
+        .map_err(e)?;
+    window
+        .set_position(tauri::PhysicalPosition::new(x, pos.y))
+        .map_err(e)?;
+    Ok(f64::from(added) / scale)
 }
 
 fn main() {
@@ -310,6 +410,13 @@ fn main() {
     };
     let args: Vec<String> = std::env::args().skip(1).collect();
     let preview = mode(&args);
+    if preview.is_some() {
+        if let Ok(t) = &bridge.target {
+            if preview_already_open(t.paths.root()) {
+                return;
+            }
+        }
+    }
     tauri::Builder::default()
         .manage(bridge)
         .setup(move |app| {
@@ -328,7 +435,10 @@ fn main() {
             open_preview_window,
             pick_folder,
             update_check,
-            update_apply
+            update_apply,
+            set_window_title,
+            open_in_editor,
+            widen_window
         ])
         .run(tauri::generate_context!())
         .unwrap_or_else(|e| eprintln!("umr-desktop: {e}"));

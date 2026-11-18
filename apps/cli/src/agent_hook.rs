@@ -1,6 +1,6 @@
 //! HOOK-001: the stop hook that closes the agent loop.
 //!
-//! `umr agent setup claude-code|codex|cursor` registers `umr agent hook <client>` as the agent's
+//! `umr agent setup claude-code|codex|cursor|antigravity` registers `umr agent hook <client>` as the agent's
 //! *stop* hook. When the agent ends its turn, the hook asks the Runtime Core (`agent.check`) to
 //! wait for the rebuild or reload the agent's last saves started, then for the problems the agent
 //! should still fix in the code: an open build error (Kotlin, Java, Dart, JavaScript …) or a new
@@ -9,7 +9,8 @@
 //!
 //! * Claude Code and Codex: stdout `{"decision":"block","reason":…}` keeps the agent working with
 //!   `reason` as its next instruction. Cursor: `{"followup_message":…}` is sent as the next user
-//!   message.
+//!   message. Antigravity: `{"decision":"continue","reason":…}` re-enters its loop with `reason`
+//!   as a system message.
 //! * Never in the way: no Core, no run of this folder, no token, a rebuild still running at the
 //!   timeout or any error → the agent stops normally. After [`MAX_ROUNDS`] reports in a row the
 //!   hook lets the agent stop, so a problem it cannot fix does not loop forever.
@@ -33,17 +34,28 @@ pub const MAX_ROUNDS: u32 = 3;
 /// Seconds the agent gives the hook (a cold Gradle build fits; the Core waits up to 120 s).
 pub const HOOK_TIMEOUT_S: u64 = 150;
 /// The clients that get a stop hook.
-pub const HOOK_CLIENTS: [&str; 3] = ["claude-code", "codex", "cursor"];
+pub const HOOK_CLIENTS: [&str; 4] = ["claude-code", "codex", "cursor", "antigravity"];
 
 // ---- what the agent sent ------------------------------------------------------------------
 
-/// The project folder of the agent's session: `cwd` (Claude Code, Codex) or the first
-/// `workspace_roots` entry (Cursor, which may write `/c:/path`).
+/// The project folder of the agent's session: `cwd` (Claude Code, Codex), the first
+/// `workspace_roots` entry (Cursor, which may write `/c:/path`) or the first `workspacePaths`
+/// entry (Antigravity; a `file:///` URI is accepted too).
 #[must_use]
 pub fn project_from_input(input: &Value) -> Option<PathBuf> {
-    let s = input["cwd"]
-        .as_str()
-        .or_else(|| input["workspace_roots"].get(0).and_then(Value::as_str))?;
+    // Antigravity sends `"cwd": ""` next to its workspace paths
+    fn text(v: &Value) -> Option<&str> {
+        v.as_str().filter(|s| !s.trim().is_empty())
+    }
+    let s = text(&input["cwd"])
+        .or_else(|| text(&input["workspace_roots"][0]))
+        .or_else(|| text(&input["workspacePaths"][0]))?;
+    let s = s.strip_prefix("file://").unwrap_or(s);
+    let s = s
+        .replace("%20", " ")
+        .replace("%3A", ":")
+        .replace("%3a", ":");
+    let s = s.as_str();
     let t = s
         .strip_prefix('/')
         .filter(|r| r.as_bytes().get(1) == Some(&b':'))
@@ -127,8 +139,13 @@ pub fn report(problems: &[Value]) -> String {
 pub fn output(client: &str, v: &Verdict) -> Option<String> {
     match (client, v) {
         ("cursor", Verdict::Allow) => Some("{}".into()),
+        // Antigravity needs a `decision`; anything but "continue" lets the agent stop
+        ("antigravity", Verdict::Allow) => Some(json!({ "decision": "stop" }).to_string()),
         (_, Verdict::Allow) => None,
         ("cursor", Verdict::Continue(m)) => Some(json!({ "followup_message": m }).to_string()),
+        ("antigravity", Verdict::Continue(m)) => {
+            Some(json!({ "decision": "continue", "reason": m }).to_string())
+        }
         (_, Verdict::Continue(m)) => Some(json!({ "decision": "block", "reason": m }).to_string()),
     }
 }
@@ -273,6 +290,98 @@ async fn check(target: &CoreTarget, client: &str, input: &Value) -> Result<Verdi
     Ok(verdict)
 }
 
+// ---- during the turn (AUD-P1-32) ------------------------------------------------------------
+
+/// Seconds Claude Code gives the after-edit hook; it never waits for a build.
+pub const AFTER_EDIT_TIMEOUT_S: u64 = 10;
+/// The edit tools after which Claude Code runs the after-edit hook.
+pub const EDIT_TOOLS: &str = "Edit|MultiEdit|Write|NotebookEdit";
+
+/// Claude Code's way to add text to the agent's context after a tool call.
+#[must_use]
+pub fn after_edit_output(report: &str) -> String {
+    json!({ "hookSpecificOutput": { "hookEventName": "PostToolUse", "additionalContext": report } })
+        .to_string()
+}
+
+/// `umr agent hook claude-code --after-edit`: the stop hook only speaks when the agent ends its
+/// turn; this one runs after each file edit and passes on problems the running app shows *now*
+/// (from earlier saves). It does not wait for a build, does not count toward the stop hook's
+/// rounds, leaves the fix feed alone (`probe`) and says each set of problems once.
+pub async fn run_after_edit(target: &CoreTarget, client: &str) -> ExitCode {
+    let mut raw = String::new();
+    let _ = std::io::stdin().take(1 << 20).read_to_string(&mut raw);
+    let input: Value = serde_json::from_str(raw.trim_start_matches('\u{feff}')).unwrap_or_default();
+    match after_edit(target, client, &input).await {
+        Ok(Some(report)) => println!("{}", after_edit_output(&report)),
+        Ok(None) => {}
+        Err(e) => eprintln!("umr agent hook: {e}"),
+    }
+    ExitCode::SUCCESS
+}
+
+async fn after_edit(
+    target: &CoreTarget,
+    client: &str,
+    input: &Value,
+) -> Result<Option<String>, String> {
+    if client != "claude-code" {
+        return Err(format!("--after-edit is for claude-code, not '{client}'"));
+    }
+    let project = match project_from_input(input) {
+        Some(p) => p,
+        None => std::env::current_dir().map_err(|e| e.to_string())?,
+    };
+    let Ok(token) = std::fs::read_to_string(token_path(target, client)) else {
+        return Ok(None);
+    };
+    let Some(mut core) = target.connect_as(token.trim()).await? else {
+        return Ok(None);
+    };
+    let file = state_file(target);
+    let key = format!("{}#edit", state_key(client, &project));
+    let seen = load_states(&file).get(&key).cloned().unwrap_or_default();
+    let r = core
+        .call_raw(
+            methods::AGENT_CHECK,
+            json!({ "project": project.display().to_string(), "since": 0,
+                    "timeout_ms": 0, "probe": true }),
+        )
+        .await
+        .map_err(|e| e.to_string())?;
+    if r["status"] != "ok" {
+        return Ok(None); // a build runs: its result comes at a later edit or the end of the turn
+    }
+    let problems = r["problems"].as_array().cloned().unwrap_or_default();
+    let sig = signature(&problems);
+    if problems.is_empty() || sig == seen.last {
+        if problems.is_empty() && !seen.last.is_empty() {
+            save_state(&file, &key, HookState::default());
+        }
+        return Ok(None);
+    }
+    save_state(
+        &file,
+        &key,
+        HookState {
+            last: sig,
+            ..HookState::default()
+        },
+    );
+    Ok(Some(format!(
+        "While you work: the running app shows these problems from your earlier saves.\n{}",
+        report(&problems)
+    )))
+}
+
+/// The after-edit handler for Claude Code (`PostToolUse`, edit tools only).
+#[must_use]
+pub fn claude_after_edit_handler(exe: &str) -> Value {
+    json!({ "type": "command", "command": exe,
+            "args": ["agent", "hook", "claude-code", "--after-edit"],
+            "timeout": AFTER_EDIT_TIMEOUT_S })
+}
+
 // ---- the hook entry in each client's config -------------------------------------------------
 
 /// The hook handler for Claude Code (exec form: no shell, so the path needs no quoting).
@@ -294,6 +403,13 @@ pub fn codex_handler(exe: &str) -> Value {
 pub fn cursor_entry(exe: &str) -> Value {
     json!({ "command": format!("& '{}' agent hook cursor", exe.replace('\'', "''")),
             "timeout": HOOK_TIMEOUT_S, "loop_limit": MAX_ROUNDS })
+}
+
+/// The Stop handler for Antigravity (a command line run through `cmd.exe` on Windows).
+#[must_use]
+pub fn antigravity_handler(exe: &str) -> Value {
+    json!({ "type": "command", "command": format!("\"{exe}\" agent hook antigravity"),
+            "timeout": HOOK_TIMEOUT_S })
 }
 
 /// A handler or entry written by setup (its command runs `agent hook`).
@@ -365,7 +481,12 @@ fn strip(v: &mut Value, event: &str, grouped: bool) -> bool {
 /// The config of `client` with our stop hook set (any older one replaced; the rest kept).
 pub fn hooks_set(client: &str, old: Option<&str>, path: &str, exe: &str) -> Result<String, String> {
     let mut v = parse(old, path)?;
-    if client == "cursor" {
+    if client == "antigravity" {
+        strip_named(&mut v);
+        if let Some(o) = v.as_object_mut() {
+            o.insert("umr".into(), json!({ "Stop": [antigravity_handler(exe)] }));
+        }
+    } else if client == "cursor" {
         strip(&mut v, "stop", false);
         if v.get("version").is_none() {
             if let Some(o) = v.as_object_mut() {
@@ -383,6 +504,7 @@ pub fn hooks_set(client: &str, old: Option<&str>, path: &str, exe: &str) -> Resu
         }
     } else {
         strip(&mut v, "Stop", true);
+        strip(&mut v, "PostToolUse", true);
         let handler = if client == "codex" {
             codex_handler(exe)
         } else {
@@ -393,22 +515,83 @@ pub fn hooks_set(client: &str, old: Option<&str>, path: &str, exe: &str) -> Resu
         if let Some(a) = list.as_array_mut() {
             a.push(json!({ "hooks": [handler] }));
         }
+        // AUD-P1-32: Claude Code also hears about problems during its turn, after each edit
+        if client == "claude-code" {
+            let list = hooks.entry("PostToolUse").or_insert_with(|| json!([]));
+            if let Some(a) = list.as_array_mut() {
+                a.push(json!({ "matcher": EDIT_TOOLS, "hooks": [claude_after_edit_handler(exe)] }));
+            }
+        }
     }
     Ok(pretty(&v))
+}
+
+/// Antigravity's `hooks.json`: names at the top level, each `{ "Stop": [handler, …], … }`.
+/// Takes our handlers out of every entry and drops entries left with nothing; `true` when the
+/// file is now empty.
+fn strip_named(v: &mut Value) -> bool {
+    let Some(o) = v.as_object_mut() else {
+        return false;
+    };
+    for e in o.values_mut() {
+        if let Some(list) = e.get_mut("Stop").and_then(Value::as_array_mut) {
+            list.retain(|h| !is_ours(h));
+            if list.is_empty() {
+                if let Some(eo) = e.as_object_mut() {
+                    eo.remove("Stop");
+                }
+            }
+        }
+    }
+    o.retain(|_, e| {
+        e.as_object()
+            .is_none_or(|eo| eo.keys().any(|k| k != "enabled"))
+    });
+    o.is_empty()
 }
 
 /// The config without our stop hook; `None` when nothing else is left (the file was ours).
 pub fn hooks_remove(client: &str, old: &str, path: &str) -> Result<Option<String>, String> {
     let mut v = parse(Some(old), path)?;
+    if client == "antigravity" {
+        return Ok(if strip_named(&mut v) {
+            None
+        } else {
+            Some(pretty(&v))
+        });
+    }
     let (event, grouped) = if client == "cursor" {
         ("stop", false)
     } else {
         ("Stop", true)
     };
+    if client == "claude-code" {
+        strip(&mut v, "PostToolUse", true);
+    }
     Ok(if strip(&mut v, event, grouped) {
         None
     } else {
         Some(pretty(&v))
+    })
+}
+
+/// Whether `text` (Claude Code settings) has our after-edit hook (AUD-P1-32).
+#[must_use]
+pub fn has_after_edit_hook(text: &str) -> bool {
+    let Ok(v) = serde_json::from_str::<Value>(text.trim_start_matches('\u{feff}')) else {
+        return false;
+    };
+    v["hooks"]["PostToolUse"].as_array().is_some_and(|l| {
+        l.iter().any(|g| {
+            g["hooks"].as_array().is_some_and(|hs| {
+                hs.iter().any(|h| {
+                    is_ours(h)
+                        && h["args"]
+                            .as_array()
+                            .is_some_and(|a| a.iter().any(|x| x == "--after-edit"))
+                })
+            })
+        })
     })
 }
 
@@ -419,13 +602,19 @@ pub fn has_hook(text: &str) -> bool {
         return false;
     };
     let hooks = &v["hooks"];
-    let grouped = hooks["Stop"].as_array().is_some_and(|l| {
-        l.iter().any(|g| {
-            g["hooks"]
-                .as_array()
-                .is_some_and(|hs| hs.iter().any(is_ours))
-        })
+    // Antigravity: named entries at the top level, each with its own `Stop` list
+    let named = v.as_object().is_some_and(|o| {
+        o.values()
+            .any(|e| e["Stop"].as_array().is_some_and(|l| l.iter().any(is_ours)))
     });
+    let grouped = named
+        || hooks["Stop"].as_array().is_some_and(|l| {
+            l.iter().any(|g| {
+                g["hooks"]
+                    .as_array()
+                    .is_some_and(|hs| hs.iter().any(is_ours))
+            })
+        });
     grouped
         || hooks["stop"]
             .as_array()
@@ -519,12 +708,24 @@ mod tests {
         let h = &claude["hooks"]["Stop"][0]["hooks"][0];
         assert_eq!(h["command"], EXE);
         assert_eq!(h["args"], json!(["agent", "hook", "claude-code"]));
+        // AUD-P1-32: Claude Code also gets the after-edit hook; Codex has no such event
+        let post = &claude["hooks"]["PostToolUse"][0];
+        assert_eq!(post["matcher"], EDIT_TOOLS);
+        assert_eq!(
+            post["hooks"][0]["args"],
+            json!(["agent", "hook", "claude-code", "--after-edit"])
+        );
+        assert!(has_after_edit_hook(&claude.to_string()));
+        let out: Value = serde_json::from_str(&after_edit_output("fix x")).unwrap();
+        assert_eq!(out["hookSpecificOutput"]["hookEventName"], "PostToolUse");
+        assert_eq!(out["hookSpecificOutput"]["additionalContext"], "fix x");
         let codex: Value =
             serde_json::from_str(&hooks_set("codex", None, "f", EXE).unwrap()).unwrap();
         assert_eq!(
             codex["hooks"]["Stop"][0]["hooks"][0]["command"],
             format!("\"{EXE}\" agent hook codex")
         );
+        assert!(codex["hooks"].get("PostToolUse").is_none());
     }
 
     #[test]
@@ -548,5 +749,55 @@ mod tests {
             serde_json::from_str::<Value>(other).unwrap()
         );
         assert!(!has_hook(other));
+    }
+
+    #[test]
+    fn antigravity_hook_is_added_replaced_and_removed() {
+        let once = hooks_set("antigravity", None, "f", EXE).unwrap();
+        assert_eq!(
+            hooks_set("antigravity", Some(&once), "f", EXE).unwrap(),
+            once
+        );
+        let v: Value = serde_json::from_str(&once).unwrap();
+        let h = &v["umr"]["Stop"][0];
+        assert_eq!(h["command"], format!("\"{EXE}\" agent hook antigravity"));
+        assert_eq!(h["timeout"], HOOK_TIMEOUT_S);
+        assert!(has_hook(&once));
+        assert_eq!(hooks_remove("antigravity", &once, "f").unwrap(), None);
+        // another tool's hooks, one of them sharing an entry with an old copy of ours
+        let other = r#"{"lint":{"PostToolUse":[{"matcher":"","hooks":[{"command":"lint.cmd"}]}]},"mine":{"Stop":[{"command":"x.cmd"}]}}"#;
+        let with = hooks_set("antigravity", Some(other), "f", EXE).unwrap();
+        assert!(has_hook(&with));
+        let back = hooks_remove("antigravity", &with, "f").unwrap().unwrap();
+        assert_eq!(
+            serde_json::from_str::<Value>(&back).unwrap(),
+            serde_json::from_str::<Value>(other).unwrap()
+        );
+        assert!(!has_hook(other));
+    }
+
+    #[test]
+    fn antigravity_gets_a_decision_and_its_workspace() {
+        let stop: Value =
+            serde_json::from_str(&output("antigravity", &Verdict::Allow).unwrap()).unwrap();
+        assert_eq!(stop, json!({ "decision": "stop" }));
+        let go: Value = serde_json::from_str(
+            &output("antigravity", &Verdict::Continue("fix it".into())).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(go, json!({ "decision": "continue", "reason": "fix it" }));
+        // as the Antigravity App sends it (checked live 2026-11-19): empty cwd, forward slashes
+        assert_eq!(
+            project_from_input(&json!({ "cwd": "", "workspacePaths": ["D:/work/app"] })),
+            Some(PathBuf::from(r"D:\work\app"))
+        );
+        assert_eq!(
+            project_from_input(&json!({ "cwd": "", "workspacePaths": [] })),
+            None
+        );
+        assert_eq!(
+            project_from_input(&json!({ "workspacePaths": ["file:///d%3A/work/my%20app"] })),
+            Some(PathBuf::from(r"d:\work\my app"))
+        );
     }
 }

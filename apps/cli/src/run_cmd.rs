@@ -165,8 +165,13 @@ pub async fn run(
         };
     }
     if v["status"] == "running" {
+        // AUD-P2-27: the whole wait, and what it was spent on
+        let split = match (v["device_seconds"].as_f64(), v["app_seconds"].as_f64()) {
+            (Some(d), Some(a)) => format!(": device {d} s, build and launch {a} s"),
+            _ => String::new(),
+        };
         println!(
-            "{} is running on {} ({} adapter, {} s)",
+            "{} is running on {} ({} adapter, {} s{split})",
             v["package"].as_str().unwrap_or("?"),
             v["serial"].as_str().unwrap_or("?"),
             v["adapter"].as_str().unwrap_or("?"),

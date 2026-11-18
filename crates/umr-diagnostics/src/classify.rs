@@ -279,6 +279,39 @@ fn frame_location(frame: &str) -> Option<(String, u32)> {
         .and_then(|(f, l)| Some((f, l?)))
 }
 
+/// AUD-P2-17: the headline and stack a person reads first. Android wraps the real error
+/// ("Unable to start activity …"); the innermost `Caused by:` is what went wrong. The app's own
+/// frames come first, then the whole trace as logcat printed it (outer exception first).
+fn crash_story(c: &CrashEvent) -> (String, Vec<String>) {
+    let innermost = c
+        .stack
+        .iter()
+        .rev()
+        .find_map(|l| l.strip_prefix("Caused by: "));
+    let is_frame = |l: &str| l.starts_with("at ");
+    let app: Vec<String> = c
+        .stack
+        .iter()
+        .filter(|l| is_frame(l) && is_app_frame(l))
+        .cloned()
+        .collect();
+    if innermost.is_none() && app.first() == c.stack.first() {
+        return (c.message.clone(), c.stack.clone());
+    }
+    let mut stack = app.clone();
+    stack.push(format!("Full trace: {}", c.message));
+    stack.extend(
+        c.stack
+            .iter()
+            .filter(|l| !(is_frame(l) && app.contains(l)))
+            .cloned(),
+    );
+    (
+        innermost.map_or_else(|| c.message.clone(), str::to_string),
+        stack,
+    )
+}
+
 /// A crash from the crash buffer. The location is the first app frame when there is one (the
 /// collector's own `file`/`line` is the first frame of any kind).
 #[must_use]
@@ -287,7 +320,7 @@ pub fn from_crash(c: &CrashEvent) -> Diagnostic {
         CrashKind::Fatal => match c
             .stack
             .iter()
-            .filter(|f| is_app_frame(f))
+            .filter(|f| f.starts_with("at ") && is_app_frame(f))
             .find_map(|f| frame_location(f))
         {
             Some((f, l)) => (true, Some(f), Some(l)),
@@ -296,16 +329,20 @@ pub fn from_crash(c: &CrashEvent) -> Diagnostic {
         // the app's own native library lives under /data/app/<package>…
         CrashKind::Native => (c.stack.iter().any(|f| f.contains("/data/app/")), None, None),
     };
+    let (message, stack) = match c.kind {
+        CrashKind::Fatal => crash_story(c),
+        CrashKind::Native => (c.message.clone(), c.stack.clone()),
+    };
     make(
         Category::Crash,
         app,
         Severity::Error,
         "logcat",
-        &c.message,
+        &message,
         file,
         line,
         None,
-        c.stack.clone(),
+        stack,
     )
 }
 

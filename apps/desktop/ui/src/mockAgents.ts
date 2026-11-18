@@ -1,7 +1,7 @@
 // Sample answers for the "Connect your agent" page in a plain browser (UI development,
 // screenshots). Shapes match `umr agent clients|setup|doctor --json`.
 const connected: Record<string, boolean> = { "claude-code": true };
-const userScoped = new Set(["codex", "claude-desktop"]);
+const userScoped = new Set(["codex", "claude-desktop", "antigravity"]);
 const project = String.raw`D:\Work\my-app`;
 
 const clients: [string, string, boolean][] = [
@@ -10,6 +10,7 @@ const clients: [string, string, boolean][] = [
   ["cursor", "Cursor", true],
   ["claude-desktop", "Claude Desktop", true],
   ["vscode", "VS Code (agent mode)", true],
+  ["antigravity", "Antigravity", true],
 ];
 
 const entryDiff = (id: string) =>

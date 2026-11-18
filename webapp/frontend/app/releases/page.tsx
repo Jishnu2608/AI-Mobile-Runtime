@@ -15,7 +15,7 @@ const highlights = [
   { title: "A phone beside your code", body: "A live, interactive emulator in a phone frame, docked next to your editor or agent, with an in-display fingerprint sensor." },
   { title: "Four frameworks", body: "Kotlin, Java, Flutter and React Native / Expo, each built with its own tools; saved files apply themselves." },
   { title: "Problems you can act on", body: "Build errors, runtime errors and crashes, classified and located at file and line, in the app and in VS Code." },
-  { title: "Agents that check their work", body: "Claude Code, Codex, Cursor, Claude Desktop and VS Code connect over MCP, with permissions, approvals and an audit log." },
+  { title: "Agents that check their work", body: "Claude Code, Codex, Cursor, Antigravity, Claude Desktop and VS Code connect over MCP, with permissions, approvals and an audit log." },
   { title: "Updates in place", body: "A new version installs over the old one with one click; your settings, toolchains and emulators stay." },
 ];
 

@@ -314,12 +314,36 @@ fn start_inner(state: &ApiState, p: &StartSessionParams) -> Result<serde_json::V
     if let Some(Err(e)) = device_api::apply_display(state, &boot.serial, &p.profile) {
         tracing::warn!(profile = %p.profile, error = %e, "setting the screen size failed");
     }
+    // AUD-P1-41: a foldable starts open flat on its inner screen, whatever its snapshot held
+    if let Some(r) = device_api::running(state)
+        .into_iter()
+        .find(|r| r.serial == boot.serial)
+    {
+        let g = r
+            .grpc_port
+            .map(|port| umr_device::grpc::Emulator::new(port, r.grpc_token.clone()));
+        crate::fold_api::on_boot(state, &boot.serial, &r.avd, g.as_ref());
+    }
     let how = format!(
         "{:?} boot in {} s on {}",
         boot.mode, boot.seconds, boot.serial
     )
     .to_lowercase();
     apply(state, &mut s, Event::DeviceOnline, Some(&how))?;
+    // AUD-P1-9: in the first minute and a half after a boot Android's System UI is often slow
+    // and shows "isn't responding" over the app: choose Wait for the user
+    if let Some(weak) = state.self_ref.get().cloned() {
+        let serial = boot.serial.clone();
+        let _ = std::thread::Builder::new()
+            .name("umr-anr-guard".into())
+            .spawn(move || {
+                for _ in 0..30 {
+                    std::thread::sleep(std::time::Duration::from_secs(3));
+                    let Some(st) = weak.upgrade() else { return };
+                    crate::diag_api::clear_system_anr(&st.diag, st.adb_port, &serial);
+                }
+            });
+    }
 
     // Building → Launching / Running
     let package = match (&p.apk, &p.package) {

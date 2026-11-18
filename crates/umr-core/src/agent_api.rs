@@ -400,7 +400,9 @@ fn problems_for_agent(d: &crate::diag_api::DiagStore, since: u64) -> Vec<Value> 
         .iter()
         .filter(|e| {
             let g = &e.diagnostic;
+            // AUD-P2-25: from before a build that is still running: not reported until it ends
             g.origin != Origin::Environment
+                && !d.is_checking(&g.fingerprint)
                 && match g.category {
                     Category::Build => true,
                     // new since the last report, or sent by the user ("Send to agent")
@@ -487,7 +489,9 @@ pub fn check(state: &ApiState, id: Id, p: &AgentCheckParams) -> Response {
             )
         })
         .collect();
-    d.note_check(&reported);
+    if !p.probe {
+        d.note_check(&reported);
+    }
     ok(
         id,
         &json!({ "status": "ok", "problems": problems, "flagged": flagged, "cursor": d.problems.cursor(), "epoch": core_epoch(), "alive": alive }),

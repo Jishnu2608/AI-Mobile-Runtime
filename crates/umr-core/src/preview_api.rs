@@ -47,6 +47,7 @@ fn current_target(state: &ApiState) -> Option<Target> {
         grpc_token: r.grpc_token.clone(),
         width: r.health.width,
         height: r.health.height,
+        view: crate::fold_api::view(state, &r.serial, &r.avd),
     })
 }
 

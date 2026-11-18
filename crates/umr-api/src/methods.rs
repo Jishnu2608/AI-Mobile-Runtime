@@ -36,6 +36,11 @@ pub const DEVICE_LIST: &str = "device.list";
 /// `device.profiles` [`ProfilesParams`] → `{ "api": "36", "profiles": [{profile, avd}] }`:
 /// the size-class catalogue and which AVDs exist. Scope: observe.
 pub const DEVICE_PROFILES: &str = "device.profiles";
+/// `device.prepare` [`CreateDeviceParams`] → `{ profile, status }`: AUD-P1-45 — gets a
+/// profile's emulator ready for fast switching in the background: creates the AVD, cold-boots
+/// it once to save its warm snapshot, then stops it (`status`: `preparing`, `ready` = it has a
+/// snapshot, `running` = it runs now). `device.profiles` reports `warm` per profile. Scope: control.
+pub const DEVICE_PREPARE: &str = "device.prepare";
 /// `device.create` [`CreateDeviceParams`] → AVD info. Creates the AVD for a profile from the
 /// product's own hardware definition (lazy; keeps user data). Scope: control.
 pub const DEVICE_CREATE: &str = "device.create";
@@ -61,8 +66,10 @@ pub const DEVICE_SCREENSHOT: &str = "device.screenshot";
 pub const DEVICE_UI: &str = "device.ui";
 /// `device.input` [`InputParams`] → `{ serial, via }`: tap, swipe, text or key. Scope: interact.
 pub const DEVICE_INPUT: &str = "device.input";
-/// `device.posture` [`PostureParams`] → `{ serial, posture }`: fold / half-open / unfold a
-/// foldable emulator while it runs (DEV-008b). Scope: interact.
+/// `device.posture` [`PostureParams`] → `{ serial, kind, angle, posture, label, cover, steps,
+/// device_state, ms }`: moves the hinge of a foldable emulator to an angle (0 closed … 180 flat)
+/// or a posture; closed, a foldable with a cover screen switches to it (DEV-008b, AUD-P1-41).
+/// Without `angle` and `posture` it reports the hinge as it is. Scope: interact.
 pub const DEVICE_POSTURE: &str = "device.posture";
 /// `device.fingerprint` [`FingerprintParams`] → `{ serial, id, touch, after: {locked,
 /// sensor_active, enrolled} }` (PRV-016): a finger on
@@ -356,12 +363,16 @@ pub struct InputParams {
     pub key: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PostureParams {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub target: Option<String>,
-    /// `closed`, `half-opened`, `opened`, `flipped`, `tent`
-    pub posture: String,
+    /// `closed`, `half-opened`, `opened` (an angle wins when both are given)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub posture: Option<String>,
+    /// Hinge angle in degrees: 0 closed, 90 half open, 180 open flat.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub angle: Option<f32>,
 }
 
 /// Parameters of [`DEVICE_FINGERPRINT`].
@@ -415,6 +426,9 @@ pub struct AgentCheckParams {
     /// restart with the Core: a cursor from an earlier start would hide new problems.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub epoch: Option<u64>,
+    /// A connection test (`umr agent doctor`): answer, but record nothing (feed, flags).
+    #[serde(default)]
+    pub probe: bool,
     /// How long to wait for a rebuild to finish; capped at 170 s. Default 120 s.
     #[serde(default = "default_check_ms")]
     pub timeout_ms: u64,

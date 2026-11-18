@@ -20,6 +20,8 @@ use crate::api_server::ApiState;
 
 /// Quiet time after the last change before reloading (editors save in bursts).
 pub const DEBOUNCE: Duration = Duration::from_millis(300);
+/// AUD-P2-25: how long a React Native Fast Refresh may take to report its errors.
+const FAST_REFRESH_SETTLE: Duration = Duration::from_millis(2500);
 
 /// A running watcher; dropping it stops it.
 pub struct Watch {
@@ -77,6 +79,27 @@ fn kind_name(k: ReloadKind) -> &'static str {
 }
 
 /// Starts watching `root` for the adapter `adapter_id`.
+/// React Native applied the saves itself (Fast Refresh): the new code reports its own errors
+/// again (AUD-P0-2). Metro gives no "done" signal and its errors arrive within about a second,
+/// so the "checking the fix" mark ends shortly after (AUD-P2-25).
+fn fast_refresh_check(state: &Arc<ApiState>) {
+    state
+        .diag
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .reload_started();
+    let later = Arc::downgrade(state);
+    std::thread::spawn(move || {
+        std::thread::sleep(FAST_REFRESH_SETTLE);
+        if let Some(s) = later.upgrade() {
+            s.diag
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .reload_finished();
+        }
+    });
+}
+
 pub fn start(state: &ApiState, root: &Path, adapter_id: &str) -> Result<Watch, String> {
     let weak: Weak<ApiState> = state
         .self_ref
@@ -140,11 +163,7 @@ pub fn start(state: &ApiState, root: &Path, adapter_id: &str) -> Result<Watch, S
                     // the framework applies these itself (React Native Fast Refresh): the new
                     // code reports its own errors again, the old ones are gone (AUD-P0-2)
                     if fast_refreshed(&files) {
-                        state
-                            .diag
-                            .lock()
-                            .unwrap_or_else(std::sync::PoisonError::into_inner)
-                            .reload_started();
+                        fast_refresh_check(&state);
                     }
                     state.watch_busy.store(false, Ordering::SeqCst);
                     continue;

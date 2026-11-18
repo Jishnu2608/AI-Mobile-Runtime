@@ -22,6 +22,39 @@ pub fn token_path(banner: &str) -> Option<String> {
     Some(rest[start..end].trim().to_string())
 }
 
+/// DEV-003b / DEC-014: the emulator keeps its console token in
+/// `%USERPROFILE%\.emulator_console_auth_token` and cannot be pointed elsewhere: emulator
+/// 37.2.13 asks Windows for the profile folder and ignores `ANDROID_SDK_HOME`,
+/// `ANDROID_EMULATOR_HOME`, `ANDROID_USER_HOME` and a redirected `USERPROFILE` / `HOME`
+/// (checked 2026-11-19). The file is shared with Android Studio, so the product only notes when
+/// its own emulator start created it; the uninstaller removes it only then.
+#[cfg(windows)]
+#[must_use]
+pub fn auth_token_file() -> Option<std::path::PathBuf> {
+    umr_platform::folders::profile()
+        .ok()
+        .map(|p| p.join(".emulator_console_auth_token"))
+}
+
+/// The marker under the product's data folder that says the product created the token file.
+pub const TOKEN_MARKER: &str = "emulator-console-token.created";
+
+/// After an emulator start: writes the marker in `data_root` when the token file is there now
+/// but was not before (`existed_before`). A token that was already there (Android Studio, an
+/// earlier start) is never claimed.
+#[must_use]
+pub fn note_token_created(
+    data_root: &std::path::Path,
+    token: &std::path::Path,
+    existed_before: bool,
+) -> bool {
+    if existed_before || !token.is_file() {
+        return false;
+    }
+    let marker = data_root.join(TOKEN_MARKER);
+    std::fs::write(&marker, token.display().to_string()).is_ok()
+}
+
 impl Console {
     /// Connects and authenticates (if the console asks for it).
     pub fn connect(port: u16, timeout: Duration) -> Result<Self, String> {
@@ -97,6 +130,21 @@ mod tests {
             Some("C:\\Users\\u\\.emulator_console_auth_token")
         );
         assert_eq!(token_path("Android Console: type 'help'"), None);
+    }
+
+    #[test]
+    fn marks_the_token_only_when_this_start_created_it() {
+        let dir = std::env::temp_dir().join(format!("umr-token-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let tok = dir.join(".emulator_console_auth_token");
+        let marker = dir.join(TOKEN_MARKER);
+        assert!(!note_token_created(&dir, &tok, false), "no token yet");
+        std::fs::write(&tok, "t").unwrap();
+        assert!(!note_token_created(&dir, &tok, true), "was there before");
+        assert!(!marker.exists());
+        assert!(note_token_created(&dir, &tok, false));
+        assert!(marker.exists());
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

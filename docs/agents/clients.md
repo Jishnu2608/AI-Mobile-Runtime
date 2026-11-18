@@ -23,6 +23,7 @@ The config entry holds no secret. The client's token stays in `%USERPROFILE%\.um
 | Cursor (`cursor`) | `<project>\.cursor\mcp.json` | `%USERPROFILE%\.cursor\mcp.json` | `mcpServers`, `"type": "stdio"` | `.cursor\rules\umr-runtime.mdc` | `umr agent setup cursor` |
 | Claude Desktop (`claude-desktop`) | — | `%LOCALAPPDATA%\Claude-Data\<package>\claude_desktop_config.json` on current builds (below) | `mcpServers` | MCP `instructions` only | `umr agent setup claude-desktop` |
 | VS Code agent mode (`vscode`) | `<project>\.vscode\mcp.json` | `%APPDATA%\Code\User\mcp.json` | `servers`, `"type"` required | `.github\instructions\umr-runtime.instructions.md` | `umr agent setup vscode` |
+| Antigravity (`antigravity`) | `<project>\.agents\mcp_config.json` (CLI and IDE) | `%USERPROFILE%\.gemini\config\mcp_config.json` (App, CLI, IDE) | `mcpServers`, no `type` (`command` = stdio) | `.agents\rules\umr-runtime.md` / `~\.gemini\config\rules\umr-runtime.md` (front matter `trigger: always_on`) | `umr agent setup antigravity` |
 
 ## Per client
 
@@ -60,11 +61,17 @@ The config entry holds no secret. The client's token stays in `%USERPROFILE%\.um
 - Instructions: `.github/instructions/*.instructions.md` (optional `applyTo`, `description`), or `.github/copilot-instructions.md` / `AGENTS.md`.
 - Sources: [VS Code MCP configuration reference](https://code.visualstudio.com/docs/agents/reference/mcp-configuration), [custom instructions](https://code.visualstudio.com/docs/agent-customization/custom-instructions).
 
+### Antigravity
+- Google's agent app, CLI and IDE share one MCP file for all projects: `~/.gemini/config/mcp_config.json`, top-level `mcpServers`. A workspace can add `.agents/mcp_config.json`, which the CLI and the IDE read; the App shows its own file under Customizations → Installed → MCP Servers → Copy Config File Path. That is why setup writes the user file by default.
+- A local server is `command` plus optional `args` and `env`; there is no `type` key (`serverUrl` would make it a remote server).
+- Rules: `.md` files in `.agents/rules/` (workspace) or `~/.gemini/config/rules/` (all projects). Each needs YAML front matter with a valid `trigger` (`always_on`, `model_decision`, `glob`, `manual`), or it is silently skipped. `AGENTS.md` / `GEMINI.md` are read too.
+- Sources: [Antigravity MCP](https://antigravity.google/docs/mcp), [rules](https://antigravity.google/docs/rules), [hooks](https://antigravity.google/docs/hooks).
+
 ## Not covered here
 claude.ai web and mobile connectors: they connect from Anthropic's cloud to a public HTTPS endpoint and cannot reach a program on your PC.
 
 ## Setup, removal and checks
-`umr agent setup <id> [--scope project|user] [--remove] [--print]` and `umr agent doctor [id] [--fix]` work for all five clients. Default scope: project for Claude Code, Cursor and VS Code; user for Codex and Claude Desktop.
+`umr agent setup <id> [--scope project|user] [--remove] [--print]` and `umr agent doctor [id] [--fix]` work for all six clients. Default scope: project for Claude Code, Cursor and VS Code; user for Codex, Claude Desktop and Antigravity.
 
 ## Stop hooks
 `umr agent setup` also registers `umr agent hook <client>` as the agent's stop hook, so build errors and crashes left after the agent's turn go back to it (user guide: `docs/user/agents.md`, *Problems go back to the agent*). Formats checked against each client's documentation on 2026-11-15:
@@ -74,8 +81,9 @@ claude.ai web and mobile connectors: they connect from Anthropic's cloud to a pu
 | Claude Code | `.claude/settings.local.json` / `~/.claude/settings.json` | `hooks.Stop[].hooks[]`: `{type: "command", command: <umr.exe>, args: ["agent","hook","claude-code"], timeout: 150}` (exec form, no shell) | stdout `{"decision":"block","reason":…}` |
 | Codex | `.codex/hooks.json` / `%CODEX_HOME%\hooks.json` | `hooks.Stop[].hooks[]`: `{type: "command", command: "\"<umr.exe>\" agent hook codex", timeout: 150}`; new hooks must be trusted once (`/hooks`) | stdout `{"decision":"block","reason":…}` (the reason becomes the next prompt) |
 | Cursor | `.cursor/hooks.json` / `~/.cursor/hooks.json` | `{version: 1, hooks: {stop: [{command: "& '<umr.exe>' agent hook cursor", timeout: 150, loop_limit: 3}]}}` (PowerShell on Windows) | stdout `{"followup_message":…}` |
+| Antigravity | `.agents/hooks.json` / `~/.gemini/config/hooks.json` | a named entry `umr: {Stop: [{type: "command", command: "\"<umr.exe>\" agent hook antigravity", timeout: 150}]}` (checked 2026-11-19) | stdout `{"decision":"continue","reason":…}` (the reason is added as a system message); `{"decision":"stop"}` lets it stop |
 
-Some Cursor versions on Windows are reported to ignore `followup_message`; there the agent stops as usual and the problems stay in `umr problems`.
+Some Cursor versions on Windows are reported to ignore `followup_message`; there the agent stops as usual and the problems stay in `umr problems`. A forum report says Antigravity IDE 1.107 on Windows did not run Stop hooks from `.agents/hooks.json`; the same fallback applies.
 
 ## Install links
 `umr agent link cursor|vscode [--json]` prints a link made on the PC, because it carries that PC's `umr.exe` path (which is why the website has no install buttons):

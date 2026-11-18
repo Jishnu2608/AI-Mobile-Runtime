@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  Windows 11 · Kotlin · Java · Flutter · React Native · Expo · Claude Code · Codex · Cursor · VS Code
+  Windows 11 · Kotlin · Java · Flutter · React Native · Expo · Claude Code · Codex · Cursor · Antigravity · VS Code
 </p>
 
 ---
@@ -27,7 +27,7 @@ Open a project and run it. The runtime installs exactly what the project needs, 
 - **A real phone beside your code.** A live, interactive emulator in a phone frame with a punch-hole camera and an in-display fingerprint sensor. Click and type in it like on a phone, rotate it, switch between phone, foldable and tablet sizes.
 - **Every framework, one workflow.** Kotlin, Java, Flutter and React Native / Expo, each built with its own tools. Saved files apply themselves: hot reload for Flutter, Fast Refresh for React Native, a quick rebuild for Kotlin and Java.
 - **Problems your agent can act on.** Build errors, runtime errors and crashes are classified, de-duplicated and located at file and line — and marked as your code or the environment.
-- **Agents that check their own work.** Claude Code, Codex, Cursor, Claude Desktop and VS Code connect in one command. When an agent finishes, the runtime hands back any error it left, so it fixes it before stopping.
+- **Agents that check their own work.** Claude Code, Codex, Cursor, Antigravity, Claude Desktop and VS Code connect in one command. When an agent finishes, the runtime hands back any error it left, so it fixes it before stopping.
 - **Built for VS Code too.** Run on the emulator from the Command Palette, see the phone in a panel beside your code, and find runtime problems in the Problems panel.
 - **Private by design.** Everything runs on your computer. No account, no cloud service, no telemetry.
 
@@ -65,7 +65,7 @@ The app tells you if anything is missing and turns on Windows Hypervisor Platfor
 | Guide | |
 |---|---|
 | [Getting started](docs/user/getting-started.md) | Install, set up, run your first app and connect an agent |
-| [Coding agents](docs/user/agents.md) | Connecting Claude Code, Codex, Cursor and other MCP clients; tools and permissions |
+| [Coding agents](docs/user/agents.md) | Connecting Claude Code, Codex, Cursor, Antigravity and other MCP clients; tools and permissions |
 | [VS Code](docs/user/vscode.md) | The extension: run on the emulator, phone preview panel, Problems panel, Copilot |
 | [Troubleshooting](docs/user/troubleshooting.md) | Common problems and how to fix them |
 | [Privacy and security](docs/user/privacy-and-security.md) | What the runtime does on your computer, and what it never does |

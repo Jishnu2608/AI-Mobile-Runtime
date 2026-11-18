@@ -16,6 +16,7 @@ pub mod daemon;
 pub mod device_api;
 pub mod diag_api;
 pub mod doctor;
+pub mod fold_api;
 pub mod home_api;
 pub mod install_api;
 pub mod instance;

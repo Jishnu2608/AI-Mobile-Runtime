@@ -147,6 +147,19 @@ fn agp_default<'p>(
         .map(|(r, _, d)| (r, d))
 }
 
+/// Why the build-tools version is needed (AUD-P3-33): the project's AGP, and the AGP line the
+/// default was recorded for when that is an older one.
+fn build_tools_reason(project_agp: &str, rule_agp: &str) -> String {
+    let line = |v: &str| v.split('.').take(2).collect::<Vec<_>>().join(".");
+    if line(project_agp) == line(rule_agp) {
+        format!("default build-tools of AGP {project_agp} (AGP downloads it if missing)")
+    } else {
+        format!(
+            "default build-tools of AGP {project_agp} (the same as AGP {rule_agp}, the newest line recorded; AGP downloads it if missing)"
+        )
+    }
+}
+
 /// Highest Java version a Gradle version can run on.
 fn max_java_for_gradle(pack: &Pack, gradle: &Version) -> Option<u32> {
     pack.gradle_java
@@ -427,10 +440,9 @@ fn resolve_android(
             "android-build-tools",
             Some(format!("build-tools/{bt}")),
             Some(bt.clone()),
-            format!(
-                "default build-tools of AGP {} (AGP downloads it if missing)",
-                r.agp
-            ),
+            // AUD-P3-33: name the project's own AGP; say where the default comes from when the
+            // knowledge pack's newest entry is an older line (it read "AGP 9.0" for AGP 9.2)
+            build_tools_reason(a.agp.as_deref().unwrap_or(&r.agp), &r.agp),
             c.url(&r.source),
         );
     }
@@ -623,6 +635,21 @@ fn resolve_node(c: &mut Ctx<'_>, facts: &ProjectFacts) {
 mod tests {
     use super::*;
     use crate::project::AndroidFacts;
+
+    #[test]
+    fn the_build_tools_reason_names_the_projects_agp() {
+        // AUD-P3-33: it read "default build-tools of AGP 9.0" for projects on AGP 9.2 and 9.3
+        assert_eq!(
+            build_tools_reason("9.0.1", "9.0"),
+            "default build-tools of AGP 9.0.1 (AGP downloads it if missing)"
+        );
+        let r = build_tools_reason("9.2.1", "9.0");
+        assert!(
+            r.starts_with("default build-tools of AGP 9.2.1 ")
+                && r.contains("AGP 9.0, the newest line recorded"),
+            "{r}"
+        );
+    }
 
     fn pack() -> Pack {
         serde_json::from_str(crate::pack::BUNDLED_PACK).unwrap()

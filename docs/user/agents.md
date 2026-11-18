@@ -10,6 +10,7 @@ The runtime is an MCP server, so any coding agent that speaks MCP can see and dr
 | Cursor | `umr agent setup cursor` | `<project>\.cursor\mcp.json`, the rule `<project>\.cursor\rules\umr-runtime.mdc` and the stop hook in `<project>\.cursor\hooks.json`. With `--scope user`: `%USERPROFILE%\.cursor\mcp.json` and `%USERPROFILE%\.cursor\hooks.json` |
 | Claude Desktop | `umr agent setup claude-desktop` | Claude Desktop's `claude_desktop_config.json` (all chats); then quit Claude Desktop completely and start it again |
 | VS Code (agent mode) | `umr agent setup vscode` | `<project>\.vscode\mcp.json` and `<project>\.github\instructions\umr-runtime.instructions.md`. With `--scope user`: the user `mcp.json` |
+| Antigravity | `umr agent setup antigravity` | `%USERPROFILE%\.gemini\config\mcp_config.json` (App, CLI and IDE), the rule `%USERPROFILE%\.gemini\config\rules\umr-runtime.md` and the stop hook in `%USERPROFILE%\.gemini\config\hooks.json` (all projects). With `--scope project`: `<project>\.agents\mcp_config.json`, `<project>\.agents\rules\umr-runtime.md` and `<project>\.agents\hooks.json` (read by the Antigravity CLI and IDE). Then refresh `umr` under MCP Servers and start a new conversation |
 | Any other MCP client | `umr agent add <name>` | Nothing: add a stdio server yourself, command = the full path of `umr.exe`, arguments = `mcp --client <name>` |
 
 - `<project>` is the current folder, or `--project <folder>`.
@@ -20,13 +21,15 @@ The runtime is an MCP server, so any coding agent that speaks MCP can see and dr
 - `umr agent instructions` prints the instructions agents get.
 
 ### Problems go back to the agent
-For Claude Code, Codex and Cursor, setup also adds a **stop hook**: `umr agent hook <agent>` runs each time the agent ends its turn. It works the same for every framework the runtime runs (Kotlin, Java, Dart/Flutter, React Native/Expo):
+For Claude Code, Codex, Cursor and Antigravity, setup also adds a **stop hook**: `umr agent hook <agent>` runs each time the agent ends its turn. It works the same for every framework the runtime runs (Kotlin, Java, Dart/Flutter, React Native/Expo):
 
 1. It waits until the rebuild or reload started by the agent's last saves has finished (up to two minutes; a Kotlin rebuild takes 15–20 s).
 2. If the app does not build, or a new runtime error or crash appeared, it hands the agent a short report — kind, `file:line`, message, and the fingerprint for `get_diagnostic` — and the agent keeps working on it instead of stopping. Claude Code and Codex get it as the reason the stop was blocked; Cursor as a follow-up message.
 3. When everything builds and runs, the agent stops as usual.
 
 The hook never stands in the way: when nothing of that folder runs, the Runtime Core is not started, or a build is still running after two minutes, the agent simply stops. Each set of problems is reported once until the agent changes the code, and at most three times in a row, so a problem the agent cannot fix (or was told not to touch) does not loop. Problems of the toolchain or the device are not sent to the agent; they are shown to you. The hook uses the agent's own token (read-only scope) and never the administrator token.
+
+**During the turn (Claude Code only).** The stop hook speaks when the agent ends its turn. Claude Code also gets an **after-edit hook** (`umr agent hook claude-code --after-edit`, on its `PostToolUse` event for the edit tools): after each file edit it passes on problems the running app already shows from earlier saves, as extra context, without waiting for a build and without stopping the agent. Each set of problems is said once. For Codex and Cursor the runtime uses only the end-of-turn hook (a mid-turn report there is not built or checked yet), so for them the report comes when they finish; ask them to call `runtime_status` after larger changes if you want it sooner. Older setups get a doctor warning and pick the hook up with `umr agent setup claude-code`.
 
 Codex asks you to trust new hooks once (`/hooks` in Codex). The Claude Code hook goes to `settings.local.json`, which Claude Code keeps out of git, because it holds this PC's `umr.exe` path.
 

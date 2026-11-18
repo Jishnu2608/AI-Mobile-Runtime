@@ -28,6 +28,9 @@ pub struct Target {
     /// Screen size in device pixels.
     pub width: u32,
     pub height: u32,
+    /// AUD-P1-42/43: the part of the screen shown (x, y, width, height), when a foldable is
+    /// closed on its cover screen; touches are offset into it.
+    pub view: Option<(u32, u32, u32, u32)>,
 }
 
 /// How long a handed-out token stays valid before it is used.
@@ -191,14 +194,41 @@ fn forbidden(why: &str) -> ErrorResponse {
 }
 
 /// Streams frames of `emu` at `size` into `out` until aborted or the stream ends.
+/// What part of the screen the window shows: the whole screen, or the cover screen of a closed
+/// foldable (`screen` size, `view` rectangle).
+#[derive(Debug, Clone, Copy)]
+struct Crop {
+    screen: (u32, u32),
+    view: (u32, u32, u32, u32),
+}
+
 fn spawn_frames(
     emu: Emulator,
     size: (u32, u32),
+    crop: Option<Crop>,
     out: mpsc::Sender<Message>,
     inner: Arc<Inner>,
 ) -> tokio::task::JoinHandle<()> {
+    // with a cover screen, ask for the whole screen large enough that its cover part has `size`
+    // (the emulator may send only the cover part; then it is just scaled)
+    let request = crop.map_or(size, |c| {
+        let scale = |v: u32, num: u32, den: u32| {
+            u32::try_from(
+                (u64::from(v) * u64::from(num) / u64::from(den.max(1))).min(u64::from(num)),
+            )
+            .unwrap_or(num)
+        };
+        (
+            scale(size.0, c.screen.0, c.view.2)
+                .min(c.screen.0)
+                .max(size.0),
+            scale(size.1, c.screen.1, c.view.3)
+                .min(c.screen.1)
+                .max(size.1),
+        )
+    });
     tokio::spawn(async move {
-        let mut s = match emu.stream_screenshots(true, size.0, size.1).await {
+        let mut s = match emu.stream_screenshots(true, request.0, request.1).await {
             Ok(s) => s,
             Err(e) => {
                 let _ = out
@@ -212,8 +242,13 @@ fn spawn_frames(
         let mut seq = 0u32;
         while let Ok(Some(img)) = s.message().await {
             let t0 = Instant::now();
-            let (w, h) = img.format.as_ref().map_or(size, |f| (f.width, f.height));
-            let bytes = protocol::frame(w, h, seq, now_us(), &img.image);
+            let (w, h) = img.format.as_ref().map_or(request, |f| (f.width, f.height));
+            // the emulator sent the whole screen: cut out the cover screen here
+            let cut = crop.and_then(|c| protocol::crop_view(&img.image, (w, h), c.screen, c.view));
+            let bytes = match &cut {
+                Some((rgb, cw, ch)) => protocol::frame(*cw, *ch, seq, now_us(), rgb),
+                None => protocol::frame(w, h, seq, now_us(), &img.image),
+            };
             seq = seq.wrapping_add(1);
             match out.try_send(Message::Binary(bytes)) {
                 Ok(()) => inner
@@ -297,14 +332,21 @@ async fn handle(stream: TcpStream, inner: Arc<Inner>) {
             }
             continue;
         };
-        let device = (t.width, t.height);
+        // AUD-P1-42/43: closed on its cover screen, the window sees only that screen
+        let (vx, vy, vw, vh) = t.view.unwrap_or((0, 0, t.width, t.height));
+        let device = (vw, vh);
+        let offset = (vx, vy);
+        let crop = t.view.map(|view| Crop {
+            screen: (t.width, t.height),
+            view,
+        });
         let mut size = protocol::stream_size(device, canvas);
         let hello = |size: (u32, u32)| {
             serde_json::to_string(&Hello {
                 kind: "hello",
                 serial: t.serial.clone(),
-                device_width: t.width,
-                device_height: t.height,
+                device_width: vw,
+                device_height: vh,
                 width: size.0,
                 height: size.1,
                 interact,
@@ -318,7 +360,7 @@ async fn handle(stream: TcpStream, inner: Arc<Inner>) {
         } else {
             None
         };
-        let mut frames = spawn_frames(emu.clone(), size, out.clone(), inner.clone());
+        let mut frames = spawn_frames(emu.clone(), size, crop, out.clone(), inner.clone());
         loop {
             tokio::select! {
                 r = target_rx.changed() => {
@@ -338,7 +380,7 @@ async fn handle(stream: TcpStream, inner: Arc<Inner>) {
                                     size = next;
                                     frames.abort();
                                     let _ = out.send(Message::Text(hello(size))).await;
-                                    frames = spawn_frames(emu.clone(), size, out.clone(), inner.clone());
+                                    frames = spawn_frames(emu.clone(), size, crop, out.clone(), inner.clone());
                                 }
                             }
                             ClientMsg::Stats(ui) => {
@@ -353,7 +395,7 @@ async fn handle(stream: TcpStream, inner: Arc<Inner>) {
                                 }
                             }
                             _ => {
-                                if let (Some(tx), Some(ev)) = (&input, protocol::to_input(&msg, device)) {
+                                if let (Some(tx), Some(ev)) = (&input, protocol::to_input(&msg, device).map(|e| protocol::offset_touch(e, offset))) {
                                     if tx.send(ev).await.is_ok() {
                                         inner.stats.lock().unwrap_or_else(PoisonError::into_inner).input(us(received.elapsed()));
                                     }

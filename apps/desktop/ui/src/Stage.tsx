@@ -128,6 +128,7 @@ export function Stage({ step }: { step: string }) {
     let target: V = { x: p.x, y: p.y }; // where the dragged thing is pulled to
     let down: V | null = null;
     let bw = 0;
+    let bh = 0;
     let raf = 0;
     let last = 0;
     let acc = 0;
@@ -324,9 +325,11 @@ export function Stage({ step }: { step: string }) {
       const deg = (ith * 180) / Math.PI;
       fig.current?.setAttribute("transform", `translate(${ix.toFixed(1)} ${iy.toFixed(1)}) rotate(${deg.toFixed(2)}) scale(${(SCALE / Math.sqrt(sy)).toFixed(4)} ${(SCALE * sy).toFixed(4)})`);
       if (bubblePos.current) {
+        // AUD-P2-31: beside Pocket, but always fully inside the panel (never over the hint or an edge)
         const right = ix + 84 + bw < W - 12;
-        const x = right ? ix + 84 : Math.max(12, ix - 84 - bw);
-        bubblePos.current.style.transform = `translate(${x.toFixed(1)}px, ${(iy + 28).toFixed(1)}px)`;
+        const x = clamp(12, Math.max(12, W - 12 - bw), right ? ix + 84 : ix - 84 - bw);
+        const y = clamp(12, Math.max(12, H - 40 - bh), iy + 28);
+        bubblePos.current.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px)`;
       }
       chips.forEach((c) => {
         const ox = c.pox + (c.ox - c.pox) * alpha;
@@ -417,6 +420,7 @@ export function Stage({ step }: { step: string }) {
           if (!b) return;
           b.textContent = text;
           bw = b.offsetWidth;
+          bh = b.offsetHeight;
           render(1);
           hide?.kill();
           add(() => {

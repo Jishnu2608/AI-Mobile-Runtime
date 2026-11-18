@@ -25,6 +25,24 @@ fn framework(f: Framework) -> &'static str {
     }
 }
 
+/// The plan's total line. AUD-P3-34: "Download ~0 MB" read as an error; say it plainly.
+fn total_line(p: &Plan) -> String {
+    if p.total_download_bytes == 0 {
+        format!(
+            "Everything is already installed.   Free {}",
+            size(p.disk_free_bytes)
+        )
+    } else {
+        format!(
+            "Download  ~{}   Disk ~{}   Free {}{}",
+            size(p.total_download_bytes),
+            size(p.total_disk_bytes),
+            size(p.disk_free_bytes),
+            if p.disk_ok { "" } else { "   NOT ENOUGH SPACE" }
+        )
+    }
+}
+
 pub fn print(f: &ProjectFacts, p: &Plan) {
     println!("Project   {}", f.root);
     println!(
@@ -80,13 +98,7 @@ pub fn print(f: &ProjectFacts, p: &Plan) {
         }
     }
 
-    println!(
-        "\nDownload  ~{}   Disk ~{}   Free {}{}",
-        size(p.total_download_bytes),
-        size(p.total_disk_bytes),
-        size(p.disk_free_bytes),
-        if p.disk_ok { "" } else { "   NOT ENOUGH SPACE" }
-    );
+    println!("\n{}", total_line(p));
     if !p.licences.is_empty() {
         println!("\nLicences (shown in full and accepted by you before anything is installed)");
         for l in &p.licences {

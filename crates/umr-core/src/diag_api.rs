@@ -59,6 +59,10 @@ pub struct DiagStore {
     /// they are gone, and the feed of both for the home screen (newest last, survives runs).
     pub told: HashMap<String, (u64, String)>,
     pub feed: VecDeque<FeedEvent>,
+    /// AUD-P2-25: build and runtime problems of the code before a reload or rebuild that is still
+    /// running ("checking the fix"). They stay listed until that build ends; the ones it does
+    /// not report again are dropped then. Fingerprint → when the check started.
+    pub checking: HashMap<String, u64>,
 }
 
 /// One line of the agent-fix feed on the home screen.
@@ -82,6 +86,7 @@ impl Default for DiagStore {
             flagged: HashSet::new(),
             told: HashMap::new(),
             feed: VecDeque::new(),
+            checking: HashMap::new(),
         }
     }
 }
@@ -98,6 +103,7 @@ impl DiagStore {
         self.logs.clear();
         self.flagged.clear();
         self.told.clear();
+        self.checking.clear();
     }
 
     /// Records what an agent check found: problems it reports now are "told"; problems told
@@ -150,6 +156,8 @@ impl DiagStore {
     pub fn problem(&mut self, d: Diagnostic) {
         // the Core log is a file on disk: sanitised like everything else that leaves the store
         tracing::info!(category = ?d.category, origin = ?d.origin, line = ?d.line, "diagnostic: {} ({})", sanitize(&d.message), d.file.as_deref().map(sanitize).unwrap_or_default());
+        // reported again by the new build: still a problem, no longer "checking"
+        self.checking.remove(&d.fingerprint);
         self.problems.add(d, now_ms());
     }
 
@@ -164,9 +172,34 @@ impl DiagStore {
     /// A reload or rebuild starts: the new code reports its own compile errors and, when it runs,
     /// its own runtime errors again. Earlier ones (at old lines, or already fixed) would
     /// otherwise stay listed after the fix (AUD-P0-1). Crashes stay: they are history.
+    ///
+    /// AUD-P2-25: they are not dropped at once (a problem vanished 5 s after the fix was saved,
+    /// while the rebuild still ran): they are marked as checking and dropped by
+    /// [`Self::reload_finished`] unless the new build reports them again.
     pub fn reload_started(&mut self) {
-        self.problems
-            .retain(|e| !matches!(e.diagnostic.category, Category::Build | Category::Runtime));
+        let now = now_ms();
+        for e in self.problems.entries() {
+            if matches!(e.diagnostic.category, Category::Build | Category::Runtime) {
+                self.checking
+                    .entry(e.diagnostic.fingerprint.clone())
+                    .or_insert(now);
+            }
+        }
+    }
+
+    /// The reload or rebuild ended (well or not): what it did not report again is fixed.
+    pub fn reload_finished(&mut self) {
+        let gone = std::mem::take(&mut self.checking);
+        if !gone.is_empty() {
+            self.problems
+                .retain(|e| !gone.contains_key(&e.diagnostic.fingerprint));
+        }
+    }
+
+    /// Whether `fingerprint` belongs to the code before a build that is still running.
+    #[must_use]
+    pub fn is_checking(&self, fingerprint: &str) -> bool {
+        self.checking.contains_key(fingerprint)
     }
 
     /// A successful reload or rebuild compiled the code: its earlier build problems are fixed.
@@ -206,6 +239,25 @@ impl DiagStore {
 
 fn lock(s: &Mutex<DiagStore>) -> std::sync::MutexGuard<'_, DiagStore> {
     s.lock().unwrap_or_else(PoisonError::into_inner)
+}
+
+/// AUD-P1-9: dismisses Android's own "isn't responding" dialog (System UI, launcher) by choosing
+/// "Wait" and records a device warning; true when there was one. The app's own ANR is left alone.
+pub fn clear_system_anr(store: &Mutex<DiagStore>, port: u16, serial: &str) -> bool {
+    let Some(pkg) = umr_device::anr::system_anr(port, serial) else {
+        return false;
+    };
+    let gone = umr_device::anr::dismiss(port, serial);
+    let msg = if gone {
+        format!("Android's {pkg} was not responding (common right after the emulator starts); the runtime chose Wait and the dialog is gone")
+    } else {
+        format!("Android's {pkg} is not responding; choose Wait on the phone")
+    };
+    let mut d = umr_diagnostics::from_message("device", &msg, Category::Device);
+    d.severity = umr_diagnostics::Severity::Warning;
+    lock(store).problem(d);
+    tracing::info!(package = %pkg, dismissed = gone, "system ANR dialog");
+    true
 }
 
 /// Severity order of logcat levels.
@@ -272,6 +324,7 @@ struct Poll {
     seen_at_last: HashSet<String>,
     /// The project folder: React Native errors are located inside it (AUD-P0-2).
     project: PathBuf,
+    polls: u64,
     /// Metro's answers per bundle position (`None`: not in the project / no answer), so an error
     /// that repeats on every render is mapped once.
     mapped: HashMap<umr_diagnostics::JsFrame, Option<(String, u32, Option<u32>)>>,
@@ -369,6 +422,11 @@ impl Poll {
     }
 
     fn run(&mut self, store: &Mutex<DiagStore>) {
+        // AUD-P1-9: every 10th poll (~15 s), Android's own "isn't responding" dialog
+        self.polls += 1;
+        if self.polls % 10 == 1 {
+            clear_system_anr(store, self.port, &self.serial);
+        }
         let since = since_arg(self.since_ms);
         // crash buffer: count only this package's crashes after the run started
         let text = self.shell(&format!("logcat -d -b crash -v epoch -t {since}"));
@@ -468,6 +526,7 @@ pub fn start_collector(
         seen_at_last: HashSet::new(),
         project: project.to_path_buf(),
         mapped: HashMap::new(),
+        polls: 0,
     };
     let _ = std::thread::Builder::new()
         .name("umr-diagnostics".into())
@@ -506,6 +565,11 @@ fn parse_category(s: &str) -> Result<Category, RpcError> {
 
 /// An entry as clients see it: sanitised, and without the stack unless asked.
 fn entry_json(e: &Entry, stack: bool) -> Value {
+    entry_json_with(e, stack, false)
+}
+
+/// `checking`: listed from before a reload or rebuild that is still running (AUD-P2-25).
+fn entry_json_with(e: &Entry, stack: bool, checking: bool) -> Value {
     let mut d = sanitize_diagnostic(&e.diagnostic);
     let frames = d.stack.len();
     if !stack {
@@ -517,6 +581,9 @@ fn entry_json(e: &Entry, stack: bool) -> Value {
     v["last_seen_ms"] = json!(e.last_seen_ms);
     v["seq"] = json!(e.seq);
     v["stack_frames"] = json!(frames);
+    if checking {
+        v["checking"] = json!(true);
+    }
     v
 }
 
@@ -595,7 +662,10 @@ pub fn list(state: &ApiState, id: Id, p: &DiagnosticsParams) -> Response {
         picked.truncate(limit);
         picked.sort_by_key(|e| e.first_seen_ms);
     }
-    let entries: Vec<Value> = picked.iter().map(|e| entry_json(e, p.stack)).collect();
+    let entries: Vec<Value> = picked
+        .iter()
+        .map(|e| entry_json_with(e, p.stack, s.is_checking(&e.diagnostic.fingerprint)))
+        .collect();
     ok(
         id,
         &json!({
@@ -722,13 +792,25 @@ mod tests {
             Category::Crash,
         ));
         s.reload_started();
-        let left: Vec<_> = s
-            .problems
-            .entries()
-            .iter()
-            .map(|e| e.diagnostic.message.clone())
-            .collect();
-        assert_eq!(left, ["crashed earlier"]);
+        let left = |s: &DiagStore| -> Vec<String> {
+            s.problems
+                .entries()
+                .iter()
+                .map(|e| e.diagnostic.message.clone())
+                .collect()
+        };
+        // AUD-P2-25: still listed while the build runs, marked as checking
+        assert_eq!(left(&s).len(), 3);
+        assert_eq!(s.checking.len(), 2, "build and runtime, not the crash");
+        // the new build reports the runtime error again: it stays, the compile error is fixed
+        s.problem(umr_diagnostics::from_message(
+            "flutter",
+            "old widget error",
+            Category::Runtime,
+        ));
+        s.reload_finished();
+        assert_eq!(left(&s), ["old widget error", "crashed earlier"]);
+        assert!(s.checking.is_empty());
     }
 
     #[test]
@@ -786,6 +868,7 @@ mod tests {
             seen_at_last: HashSet::new(),
             project: PathBuf::from(project),
             mapped: HashMap::new(),
+            polls: 0,
         }
     }
 
@@ -843,6 +926,7 @@ mod tests {
         assert_eq!(s.feed.len(), 1);
         // gone at the next check: fixed
         s.reload_started();
+        s.reload_finished();
         s.note_check(&[]);
         assert_eq!(s.feed.len(), 2);
         assert_eq!(

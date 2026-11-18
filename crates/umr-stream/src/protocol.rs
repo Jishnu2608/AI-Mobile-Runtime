@@ -137,6 +137,69 @@ pub fn to_input(m: &ClientMsg, device: (u32, u32)) -> Option<InputEvent> {
     }
 }
 
+/// AUD-P1-42/43: a touch in the cover screen's pixels → the emulator's screen pixels (the cover
+/// screen is a centred part of the inner screen; the emulator does not remap touches).
+#[must_use]
+pub fn offset_touch(mut e: InputEvent, offset: (u32, u32)) -> InputEvent {
+    if offset == (0, 0) {
+        return e;
+    }
+    let (dx, dy) = (
+        i32::try_from(offset.0).unwrap_or(0),
+        i32::try_from(offset.1).unwrap_or(0),
+    );
+    if let Some(t) = e.touch_event.as_mut() {
+        for p in &mut t.touches {
+            p.x += dx;
+            p.y += dy;
+        }
+    }
+    e
+}
+
+/// The cover-screen part of an RGB888 frame of the whole screen (`view` in screen pixels,
+/// `screen` the screen's size). `None` when the frame is already the cover screen (the
+/// emulator cropped it) or the numbers do not fit.
+#[must_use]
+pub fn crop_view(
+    rgb: &[u8],
+    frame: (u32, u32),
+    screen: (u32, u32),
+    view: (u32, u32, u32, u32),
+) -> Option<(Vec<u8>, u32, u32)> {
+    let (fw, fh) = frame;
+    let (sw, sh) = screen;
+    if fw == 0 || fh == 0 || sw == 0 || sh == 0 {
+        return None;
+    }
+    let ratio = |w: u32, h: u32| f64::from(w) / f64::from(h);
+    // already the cover screen's shape: nothing to do
+    if (ratio(fw, fh) - ratio(view.2, view.3)).abs() < 0.02 * ratio(view.2, view.3) {
+        return None;
+    }
+    if (ratio(fw, fh) - ratio(sw, sh)).abs() > 0.02 * ratio(sw, sh) {
+        return None;
+    }
+    let sx = f64::from(fw) / f64::from(sw);
+    let sy = f64::from(fh) / f64::from(sh);
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    let px = |v: u32, s: f64| (f64::from(v) * s).round() as u32;
+    let (x, y) = (px(view.0, sx), px(view.1, sy));
+    let (w, h) = (
+        px(view.2, sx).min(fw - x) & !1,
+        px(view.3, sy).min(fh - y) & !1,
+    );
+    if w == 0 || h == 0 || rgb.len() < (fw * fh * 3) as usize {
+        return None;
+    }
+    let mut out = Vec::with_capacity((w * h * 3) as usize);
+    for row in y..y + h {
+        let start = ((row * fw + x) * 3) as usize;
+        out.extend_from_slice(&rgb[start..start + (w * 3) as usize]);
+    }
+    Some((out, w, h))
+}
+
 /// Builds a binary frame.
 #[must_use]
 pub fn frame(width: u32, height: u32, seq: u32, sent_us: u64, rgba: &[u8]) -> Vec<u8> {
@@ -164,6 +227,20 @@ pub fn stream_size(device: (u32, u32), canvas: (u32, u32)) -> (u32, u32) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_cover_screen_offsets_touches_and_crops_frames() {
+        let t = offset_touch(InputEvent::touch(10, 20, 1, 0), (442, 0));
+        let p = &t.touch_event.unwrap().touches[0];
+        assert_eq!((p.x, p.y), (452, 20));
+        // a 4 x 2 frame of a 4 x 2 screen, view = the middle 2 x 2
+        let rgb: Vec<u8> = (0..24).collect();
+        let (out, w, h) = crop_view(&rgb, (4, 2), (4, 2), (1, 0, 2, 2)).unwrap();
+        assert_eq!((w, h), (2, 2));
+        assert_eq!(out, [3, 4, 5, 6, 7, 8, 15, 16, 17, 18, 19, 20]);
+        // the emulator already sent the cover screen: unchanged
+        assert!(crop_view(&rgb[..12], (2, 2), (4, 2), (1, 0, 2, 2)).is_none());
+    }
 
     #[test]
     #[allow(clippy::many_single_char_names)]

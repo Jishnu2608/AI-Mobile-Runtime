@@ -8,6 +8,7 @@
 //! | `screenshot`, `ui_tree`, `list_device_profiles` | `device.screenshot` (scaled), `device.ui`, `device.profiles` | observe |
 //! | `tap`, `swipe`, `type_text`, `press_key`, `rotate` | `device.input`, `device.rotate` | interact |
 //! | `fingerprint` | `device.fingerprint` (+ `device.auth_state` after the touch) | interact |
+//! | `fold` | `device.posture` (hinge angle; closed = cover screen) | interact |
 //! | `reload`, `run_project`, `stop_app`, `switch_device` | `project.reload`, `project.run`, `project.stop`, `session.start` | control (+ user approval for new folders / device switches) |
 //!
 //! Results are compact text (and a PNG for `screenshot`); errors come back as tool errors
@@ -136,6 +137,14 @@ const TOOLS: &[Tool] = &[
         schema: || json!({ "type": "object", "properties": {
             "touch": { "type": "string", "enum": ["tap", "down", "up"] },
             "finger": { "type": "integer", "minimum": 1, "maximum": 10 } } }),
+        read_only: false,
+    },
+    Tool {
+        name: "fold",
+        title: "Fold (hinge angle)",
+        description: "Foldable emulators only (fold, flip): set the hinge angle in degrees (0 closed, 90 half open / tabletop, 180 open flat). Android's posture and Jetpack WindowManager's FoldingFeature follow the angle; closed, the app moves to the cover screen. Without `angle` it reports the hinge as it is.",
+        schema: || json!({ "type": "object", "properties": {
+            "angle": { "type": "number", "minimum": 0, "maximum": 180 } } }),
         read_only: false,
     },
     Tool {
@@ -471,6 +480,16 @@ pub async fn run<C: Core>(
                 &json!({ "touched": touch, "finger": finger,
                 "locked": a["locked"], "sensor_waiting": a["sensor_active"], "enrolled": a["enrolled"] }),
             ))])
+        }
+        "fold" => {
+            let params = match args["angle"].as_f64() {
+                Some(a) => json!({ "angle": a }),
+                None => json!({}),
+            };
+            let v = s.core.call("device.posture", params).await?;
+            Ok(vec![text(&compact(&json!({
+                "angle": v["angle"], "posture": v["posture"], "label": v["label"],
+                "cover_screen": v["cover"], "android_state": v["device_state"] })))])
         }
         "reload" => {
             let kind = args["kind"].as_str().unwrap_or("hot");

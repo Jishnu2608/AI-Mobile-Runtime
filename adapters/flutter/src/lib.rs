@@ -415,84 +415,6 @@ struct Session {
     attached: bool,
 }
 
-/// SHA-256 of a file as lower-case hex.
-fn sha256_file(path: &Path) -> Option<String> {
-    use sha2::{Digest, Sha256};
-    use std::io::Read;
-    let mut f = std::fs::File::open(path).ok()?;
-    let mut h = Sha256::new();
-    let mut buf = vec![0u8; 1 << 20];
-    loop {
-        let n = f.read(&mut buf).ok()?;
-        if n == 0 {
-            break;
-        }
-        h.update(&buf[..n]);
-    }
-    Some(
-        h.finalize()
-            .iter()
-            .fold(String::with_capacity(64), |mut s, b| {
-                use std::fmt::Write as _;
-                let _ = write!(s, "{b:02x}");
-                s
-            }),
-    )
-}
-
-/// The local APK's hash, cached next to it (keyed by size and modification time).
-fn apk_hash(apk: &Path) -> Option<String> {
-    let m = std::fs::metadata(apk).ok()?;
-    let mtime = m
-        .modified()
-        .ok()?
-        .duration_since(std::time::UNIX_EPOCH)
-        .ok()?
-        .as_millis();
-    let key = format!("{} {}", m.len(), mtime);
-    let cache = apk.with_extension("apk.umr-sha256");
-    if let Ok(t) = std::fs::read_to_string(&cache) {
-        if let Some((k, h)) = t.trim().rsplit_once(' ') {
-            if k == key {
-                return Some(h.to_string());
-            }
-        }
-    }
-    let h = sha256_file(apk)?;
-    let _ = std::fs::write(&cache, format!("{key} {h}"));
-    Some(h)
-}
-
-/// Whether the device has exactly this APK installed for `package`: one adb round trip instead
-/// of three (pm path / stat / sha256sum), since each costs seconds under host load (PRV-012),
-/// so the fast path stays fast only if it asks the device once.
-fn installed_same(ctx: &AdapterContext, package: &str, apk: &Path) -> bool {
-    let (port, serial) = (ctx.device.adb.port, ctx.device.serial.as_str());
-    let local = std::fs::metadata(apk).map_or(0, |m| m.len());
-    let Some(hash) = apk_hash(apk) else {
-        return false;
-    };
-    let cmd = format!(
-        "p=$(pm path {package} 2>/dev/null | sed -n 's/^package://p' | grep base.apk | head -n1); \
-         [ -n \"$p\" ] && stat -c %s \"$p\" && sha256sum \"$p\""
-    );
-    let Ok(out) = umr_device::adb::shell(port, serial, &cmd) else {
-        return false;
-    };
-    let mut lines = out.lines();
-    let Some(size) = lines.next().and_then(|v| v.trim().parse::<u64>().ok()) else {
-        return false;
-    };
-    if size != local {
-        return false;
-    }
-    let remote = lines
-        .next()
-        .and_then(|v| v.split_whitespace().next())
-        .map(str::to_lowercase);
-    remote.as_deref() == Some(hash.as_str())
-}
-
 /// Caches the launcher component resolved for an APK (`pkg/.MainActivity`), keyed like
 /// [`apk_hash`]: avoids a `cmd package resolve-activity` round trip on every attach.
 fn cached_component(apk: &Path, resolve: impl FnOnce() -> Option<String>) -> Option<String> {
@@ -689,7 +611,7 @@ pub fn vm_service(line: &str) -> Option<(u16, String)> {
 /// the tool to that address (no install, no discovery race).
 fn attach_app(ctx: &AdapterContext, sink: &Sink, package: &str) -> Option<Session> {
     let apk = reusable_apk(&ctx.project)?;
-    if !installed_same(ctx, package, &apk) {
+    if !umr_device::app::installed_same(ctx.device.adb.port, &ctx.device.serial, package, &apk) {
         return None;
     }
     sink(Event::Phase {

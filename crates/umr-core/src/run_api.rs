@@ -269,6 +269,71 @@ fn context(
 }
 
 /// Stops the running app (if any) and its tools.
+/// Clears the "run starting" mark when `run_inner` ends, whatever the outcome.
+struct StartingGuard<'a>(&'a ApiState);
+
+/// `cancelled` when Cancel stopped the run, else `status`.
+fn cancelled_or<'a>(state: &ApiState, status: &'a str) -> &'a str {
+    if state
+        .run_cancelled
+        .swap(false, std::sync::atomic::Ordering::SeqCst)
+    {
+        "cancelled"
+    } else {
+        status
+    }
+}
+
+/// Marks a run as starting (Cancel can stop it) until the guard is dropped. The group is empty
+/// until the device is ready; `prepare` fills it in.
+fn mark_starting(state: &ApiState) -> StartingGuard<'_> {
+    state
+        .run_cancelled
+        .store(false, std::sync::atomic::Ordering::SeqCst);
+    *state
+        .run_starting
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner) = Some(String::new());
+    StartingGuard(state)
+}
+
+/// Whether Cancel was pressed during this run (the flag stays for `cancelled_or`).
+fn is_cancelled(state: &ApiState) -> bool {
+    state
+        .run_cancelled
+        .load(std::sync::atomic::Ordering::SeqCst)
+}
+
+impl Drop for StartingGuard<'_> {
+    fn drop(&mut self) {
+        *self
+            .0
+            .run_starting
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner) = None;
+    }
+}
+
+/// AUD-P1-6: stops a run that is still building or starting (Cancel in the Run step).
+/// Returns whether one was running.
+pub(crate) fn cancel_starting(state: &ApiState) -> bool {
+    let group = state
+        .run_starting
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .clone();
+    let Some(group) = group else {
+        return false;
+    };
+    state
+        .run_cancelled
+        .store(true, std::sync::atomic::Ordering::SeqCst);
+    if !group.is_empty() {
+        state.supervisor.stop_group(&group);
+    }
+    true
+}
+
 pub(crate) fn stop_run(state: &ApiState) -> Option<RunInfo> {
     let info = stop_app(state);
     if let Some(i) = &info {
@@ -380,6 +445,11 @@ fn prepare(
     }
     let group = format!("run:{}", s.id);
     let ctx = context(state, path, &serial, &group, tools)?;
+    // from here Cancel stops the run's processes (the build); before, it stops at this point
+    *state
+        .run_starting
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner) = Some(group.clone());
     let issues = adapter.validate(&ctx);
     if !issues.is_empty() {
         let text: Vec<String> = issues
@@ -389,6 +459,11 @@ fn prepare(
         return Err(fail(codes::UNAVAILABLE, text.join("; ")));
     }
     Ok((adapter, confidence, ctx, s))
+}
+
+/// Seconds with one decimal.
+fn round1(s: f64) -> f64 {
+    (s * 10.0).round() / 10.0
 }
 
 pub fn run(state: &ApiState, id: Id, p: &RunParams) -> Response {
@@ -405,6 +480,7 @@ pub fn run(state: &ApiState, id: Id, p: &RunParams) -> Response {
 }
 
 /// `project.run` (also used when a device switch takes the running project along).
+#[allow(clippy::too_many_lines)] // the run in order: device, build, launch, watch, result
 pub(crate) fn run_inner(
     state: &ApiState,
     raw_path: &str,
@@ -412,8 +488,12 @@ pub(crate) fn run_inner(
     cold: bool,
     watch: bool,
 ) -> Result<Value, RpcError> {
+    // AUD-P2-27: one clock for the whole run, from the request to the app on screen (the result
+    // showed only the build-and-launch part: 74.4 s while the user waited 99 s)
+    let begun = std::time::Instant::now();
     let path = normalise(raw_path);
     stop_run(state);
+    let _starting = mark_starting(state);
     state
         .diag
         .lock()
@@ -422,6 +502,11 @@ pub(crate) fn run_inner(
     // missing toolchain, untrusted folder, device that does not boot: shown as problems too
     let (adapter, confidence, ctx, mut s) = prepare(state, raw_path, &path, profile, cold)
         .inspect_err(|e| record_message(state, &e.message))?;
+    // Cancel while the emulator booted: stop before the build starts
+    if is_cancelled(state) {
+        cancelled_or(state, "");
+        return Ok(json!({ "status": "cancelled", "adapter": adapter.id(), "session": s }));
+    }
     crate::preview_api::refresh_target(state);
     let since_ms =
         crate::diag_api::device_now_ms(ctx.device.adb.port, &ctx.device.serial).unwrap_or(0);
@@ -430,6 +515,8 @@ pub(crate) fn run_inner(
     let sink = events_sink(state);
     let _ = session_api::apply(state, &mut s, SessionEvent::Rebuild, Some(adapter.id()));
     crate::home_api::record_run(&state.data_root, &path, adapter.id());
+    // the device part: stopping the previous app, the emulator (boot or switch), the toolchain
+    let device_s = begun.elapsed().as_secs_f64();
     let start = std::time::Instant::now();
     tracing::info!(adapter = adapter.id(), project = %path, "run");
     match adapter.start(&ctx, sink) {
@@ -486,12 +573,18 @@ pub(crate) fn run_inner(
             Ok(json!({
                 "status": "running", "adapter": adapter.id(), "confidence": confidence,
                 "capabilities": adapter.capabilities(), "package": package, "watching": watching,
-                "serial": info.serial, "seconds": (start.elapsed().as_secs_f64() * 10.0).round() / 10.0,
+                "serial": info.serial,
+                "seconds": round1(begun.elapsed().as_secs_f64()),
+                "device_seconds": round1(device_s),
+                "app_seconds": round1(start.elapsed().as_secs_f64()),
                 "session": s,
             }))
         }
         Err(e) => {
-            record_error(state, &e);
+            // a cancelled build is no problem of the app
+            if !is_cancelled(state) {
+                record_error(state, &e);
+            }
             let (ev, status) = match &e {
                 AdapterError::BuildFailed { .. } => {
                     (Some(SessionEvent::BuildFailed), "build_failed")
@@ -507,6 +600,7 @@ pub(crate) fn run_inner(
             }
             state.supervisor.stop_group(&ctx.group);
             tracing::warn!(adapter = adapter.id(), error = %e, "run failed");
+            let status = cancelled_or(state, status);
             Ok(json!({
                 "status": status, "adapter": adapter.id(), "error": e.to_string(),
                 "problems": problems_of(&e), "session": s,
@@ -565,6 +659,12 @@ pub(crate) fn reload_kind(state: &ApiState, kind: ReloadKind) -> Result<Value, R
         .reload_started();
     let r = app.reload(kind, &sink);
     drop(guard);
+    // AUD-P2-25: the build is over; what it did not report again is fixed now (not before)
+    state
+        .diag
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .reload_finished();
     match r {
         Ok(d) => {
             state
@@ -629,6 +729,7 @@ pub(crate) fn reload_kind(state: &ApiState, kind: ReloadKind) -> Result<Value, R
 }
 
 pub fn stop(state: &ApiState, id: Id) -> Response {
+    let cancelled = cancel_starting(state);
     let info = stop_run(state);
     if let (Some(i), Some(mut s)) = (&info, session_api::current(state)) {
         if s.state == umr_session::State::Running && s.app.as_deref() == Some(i.package.as_str()) {
@@ -640,7 +741,10 @@ pub fn stop(state: &ApiState, id: Id) -> Response {
             );
         }
     }
-    ok(id, &json!({ "stopped": info }))
+    ok(
+        id,
+        &json!({ "stopped": info, "cancelled_build": cancelled }),
+    )
 }
 
 pub fn status(state: &ApiState, id: Id, p: &RunStatusParams) -> Response {
@@ -685,6 +789,25 @@ pub fn check(state: &ApiState, id: Id, p: &AdapterCheckParams) -> Response {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn cancel_reaches_a_run_until_it_ends() {
+        // AUD-P1-6: the mark lives for the whole run, not only while it prepares
+        let tmp = crate::test_support::TempRoot::new("run-cancel");
+        let auth =
+            crate::auth::AuthStore::load(&tmp.path().join("clients.json"), "umr_admin").unwrap();
+        let db = umr_storage::Db::open_in(tmp.path()).unwrap();
+        let state = ApiState::new(tmp.path().to_path_buf(), auth, db);
+        assert!(!cancel_starting(&state), "nothing runs");
+        {
+            let _run = mark_starting(&state);
+            assert!(cancel_starting(&state), "Cancel while the emulator boots");
+            assert!(is_cancelled(&state));
+            assert_eq!(cancelled_or(&state, "failed"), "cancelled");
+            assert_eq!(cancelled_or(&state, "failed"), "failed", "reported once");
+        }
+        assert!(!cancel_starting(&state), "the run ended");
+    }
 
     #[test]
     fn event_log_cursor_and_limit() {
