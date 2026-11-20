@@ -1,6 +1,6 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
-  "name": "io.github.jishnu2608/tumr",
+  "name": "io.github.Jishnu2608/tumr",
   "title": "Toolchain Universal Mobile Runtime",
   "description": "Android app on a live emulator for agents: status, problems with file:line, screenshots, taps",
   "repository": {
