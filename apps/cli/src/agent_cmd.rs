@@ -1,4 +1,4 @@
-//! `umr agent …` and `umr approvals` (Phase 6: MCP-003, MCP-004, MCP-005).
+//! `tumr agent …` and `tumr approvals` (Phase 6: MCP-003, MCP-004, MCP-005).
 //!
 //! * `agent add|list|remove|grant|ungrant|audit`: agent clients (own token, scopes, grants).
 //! * `agent setup` / `agent doctor`: see `agent_setup.rs`.
@@ -8,7 +8,7 @@ use std::path::Path;
 use std::process::ExitCode;
 
 use serde_json::{json, Value};
-use umr_api::methods;
+use tumr_api::methods;
 
 use crate::core_process::CoreTarget;
 use crate::fail;
@@ -76,7 +76,7 @@ pub(crate) async fn ensure_client(
     .await?;
     let token = v["token"].as_str().ok_or("the Core returned no token")?;
     std::fs::create_dir_all(target.paths.agent_tokens_dir()).map_err(|e| e.to_string())?;
-    umr_core::auth::write_secret(&file, token.as_bytes())
+    tumr_core::auth::write_secret(&file, token.as_bytes())
         .map_err(|e| format!("{}: {e}", file.display()))?;
     Ok(true)
 }
@@ -94,7 +94,7 @@ pub async fn add(target: &CoreTarget, name: &str, scopes: Option<String>) -> Exi
     match ensure_client(target, name, &scopes).await {
         Ok(true) => {
             println!(
-                "Agent client '{name}' created ({}). Its MCP server: `umr mcp --client {name}`.",
+                "Agent client '{name}' created ({}). Its MCP server: `tumr mcp --client {name}`.",
                 scopes.join(", ")
             );
             ExitCode::SUCCESS
@@ -120,7 +120,7 @@ pub async fn list(target: &CoreTarget, json_out: bool) -> ExitCode {
     }
     let clients = v.as_array().cloned().unwrap_or_default();
     if clients.is_empty() {
-        println!("No agent clients. See the agents on this PC with `umr agent clients`, then `umr agent setup <agent>`.");
+        println!("No agent clients. See the agents on this PC with `tumr agent clients`, then `tumr agent setup <agent>`.");
     }
     for c in clients {
         let name = c["name"].as_str().unwrap_or("?");
@@ -148,7 +148,7 @@ pub async fn list(target: &CoreTarget, json_out: bool) -> ExitCode {
             if token_path(target, name).is_file() {
                 ""
             } else {
-                "  (no token file: run `umr agent add` again)"
+                "  (no token file: run `tumr agent add` again)"
             }
         );
     }
@@ -311,7 +311,7 @@ pub async fn approvals(target: &CoreTarget, decide: Option<(String, bool, bool)>
             p["detail"].as_str().unwrap_or("")
         );
         println!(
-            "    `umr approvals allow {0}` [--always] · `umr approvals deny {0}`",
+            "    `tumr approvals allow {0}` [--always] · `tumr approvals deny {0}`",
             p["id"].as_str().unwrap_or("?")
         );
     }

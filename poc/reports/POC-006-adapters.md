@@ -14,7 +14,7 @@
 | Expo Go (SDK 58) | `create-expo-app` 12 s + `npm install` 185 s | Expo Go auto-downloaded + installed; first bundle 8.2 s | Fast Refresh **251–321 ms** | Metro watcher |
 | Expo dev build / React Native native build (RN 0.88.1) | `expo run:android` (prebuild) | **22 m 3 s** cold Gradle (C++ via CMake), bundle 4.8 s | Fast Refresh **239–297 ms** | Metro watcher |
 
-Edit-to-render was measured by changing a `UMR_RENDER <label>` marker printed from a render/build method and timing until the new label appeared in logcat (Flutter: machine-mode `app.log` event).
+Edit-to-render was measured by changing a `TUMR_RENDER <label>` marker printed from a render/build method and timing until the new label appeared in logcat (Flutter: machine-mode `app.log` event).
 
 ## Android CLI coverage checklist (POC-001 Part B)
 | Check | Result |

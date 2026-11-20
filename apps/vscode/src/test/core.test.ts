@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { CoreClient } from "../core";
 
-// A stand-in for `umr rpc --stdio`: answers `echo` with its params, `slow` after 200 ms (so the
+// A stand-in for `tumr rpc --stdio`: answers `echo` with its params, `slow` after 200 ms (so the
 // answers arrive out of order), anything else with an error.
 const FAKE = `
 const rl = require("node:readline").createInterface({ input: process.stdin });
@@ -28,7 +28,7 @@ test("answers come back to the right caller, out of order", async () => {
 });
 
 test("a missing program fails the call instead of hanging", async () => {
-  const c = new CoreClient("C:\\no\\such\\umr.exe");
+  const c = new CoreClient("C:\\no\\such\\tumr.exe");
   await assert.rejects(c.call("echo", {}, 5000), /cannot start|stopped/);
   c.dispose();
 });

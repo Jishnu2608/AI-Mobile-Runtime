@@ -5,7 +5,7 @@ name: Release build
 # SHA256SUMS and releases.json (download URLs point at this repository's GitHub Releases, W5).
 # Nothing is published and nothing is signed yet: publishing to GitHub Releases is a later step
 # of DIST-001, and signing waits for the code-signing decision (W8).
-# It also installs the new installer silently, runs the installed umr, and uninstalls it again,
+# It also installs the new installer silently, runs the installed tumr, and uninstalls it again,
 # so every release build is checked on a clean machine.
 on:
   workflow_dispatch:
@@ -75,14 +75,14 @@ jobs:
           $setup = Get-ChildItem $env:RELEASE_DIR -Filter "*-setup.exe" | Select-Object -First 1
           $p = Start-Process $setup.FullName -ArgumentList "/S" -Wait -PassThru
           if ($p.ExitCode -ne 0) { throw "installer exit code $($p.ExitCode)" }
-          $umr = Get-ChildItem $env:LOCALAPPDATA -Recurse -Filter umr.exe -Depth 3 -ErrorAction SilentlyContinue |
+          $tumr = Get-ChildItem $env:LOCALAPPDATA -Recurse -Filter tumr.exe -Depth 3 -ErrorAction SilentlyContinue |
             Where-Object { $_.FullName -notmatch 'cargo|target' } | Select-Object -First 1
-          if (-not $umr) { throw "umr.exe not found after the install" }
-          "installed: $($umr.FullName)"
-          & $umr.FullName --version
-          if ($LASTEXITCODE -ne 0) { throw "installed umr --version failed" }
-          & $umr.FullName agent clients
-          $uninst = Get-ChildItem $umr.DirectoryName -Filter "uninstall*.exe" | Select-Object -First 1
+          if (-not $tumr) { throw "tumr.exe not found after the install" }
+          "installed: $($tumr.FullName)"
+          & $tumr.FullName --version
+          if ($LASTEXITCODE -ne 0) { throw "installed tumr --version failed" }
+          & $tumr.FullName agent clients
+          $uninst = Get-ChildItem $tumr.DirectoryName -Filter "uninstall*.exe" | Select-Object -First 1
           if ($uninst) {
             $u = Start-Process $uninst.FullName -ArgumentList "/S" -Wait -PassThru
             "uninstaller exit code $($u.ExitCode)"

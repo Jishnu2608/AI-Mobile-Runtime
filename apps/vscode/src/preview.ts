@@ -8,7 +8,7 @@ import * as vscode from "vscode";
 import { CoreClient } from "./core";
 
 /** Links the page may open (the user guides). */
-const DOCS = "https://github.com/Jishnu2608/AI-Mobile-Runtime/blob/main/docs/user/";
+const DOCS = "https://github.com/Jishnu2608/TUMR/blob/main/docs/user/";
 
 export class PreviewPanel {
   private static current: PreviewPanel | undefined;
@@ -20,7 +20,7 @@ export class PreviewPanel {
       return;
     }
     const panel = vscode.window.createWebviewPanel(
-      "umrPreview",
+      "tumrPreview",
       "Mobile Preview",
       { viewColumn: vscode.ViewColumn.Beside, preserveFocus: true },
       {
@@ -44,7 +44,7 @@ export class PreviewPanel {
         if (m?.type === "rpc" && typeof m.id === "number" && typeof m.method === "string") {
           const c = core();
           if (!c) {
-            panel.webview.postMessage({ type: "rpc", id: m.id, error: "umr.exe was not found" });
+            panel.webview.postMessage({ type: "rpc", id: m.id, error: "tumr.exe was not found" });
             return;
           }
           try {
@@ -102,7 +102,7 @@ ${styles}
 </head>
 <body>
 <div id="root">${files.length ? "" : "The preview page is missing from this build of the extension."}</div>
-<script nonce="${nonce}">window.__UMR_VIEW__ = "preview";</script>
+<script nonce="${nonce}">window.__TUMR_VIEW__ = "preview";</script>
 ${scripts}
 </body>
 </html>`;

@@ -9,22 +9,22 @@ React Native and Expo projects run through Metro. Which path the runtime takes d
 <Steps>
 <Step title="Install Node.js and the Android parts">
 ```powershell
-umr plan .
-umr install .
-umr trust .
+tumr plan .
+tumr install .
+tumr trust .
 ```
 The Node.js version follows `engines.node` in `package.json`.
 </Step>
 <Step title="Run it">
 ```powershell
-umr run
+tumr run
 ```
 Metro runs on `localhost` and the runtime forwards its port to the emulator with `adb reverse`.
 </Step>
 <Step title="Edit and save">
 Fast Refresh applies saved JavaScript and TypeScript by itself. After native changes:
 ```powershell
-umr reload full
+tumr reload full
 ```
 </Step>
 </Steps>

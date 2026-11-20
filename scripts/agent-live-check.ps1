@@ -9,7 +9,7 @@
 
   The bug: `_counter++;` in lib/main.dart becomes `_counter += int.parse("one");`, which throws a
   FormatException on every tap while the app keeps running. The runtime reports it as a runtime
-  problem in the app's code with file and line; the agent should find it through the umr tools,
+  problem in the app's code with file and line; the agent should find it through the tumr tools,
   fix it, reload and tap + to verify. Works on the `flutter create` template.
 #>
 param(

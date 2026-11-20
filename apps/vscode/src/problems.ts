@@ -55,7 +55,7 @@ export function place(p: RuntimeProblem, project: string): Placed {
     column: Math.max(0, (p.column ?? 1) - 1),
     severity: p.severity === "error" ? "error" : p.severity === "warning" ? "warning" : "info",
     message: `${p.message}${times}`,
-    source: `AI Mobile Runtime · ${what}${p.origin === "environment" ? " (environment)" : ""}`,
+    source: `Toolchain Universal Mobile Runtime · ${what}${p.origin === "environment" ? " (environment)" : ""}`,
     code: p.fingerprint,
   };
 }

@@ -1,8 +1,8 @@
 # Failure corpus (TEST-006)
 
 Seeded failures for the diagnostics pipeline (Phase 5, exit M5: ≥ 90 % correct category,
-≥ 80 % correct file:line). Run by `crates/umr-diagnostics/tests/corpus.rs`
-(`cargo test -p umr-diagnostics --test corpus -- --nocapture` prints the table).
+≥ 80 % correct file:line). Run by `crates/tumr-diagnostics/tests/corpus.rs`
+(`cargo test -p tumr-diagnostics --test corpus -- --nocapture` prints the table).
 
 Each `*.txt` file holds cases:
 

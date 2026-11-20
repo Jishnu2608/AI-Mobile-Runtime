@@ -2,7 +2,7 @@
 
 **Date:** 2026-11-11 · **Host:** Windows 11, Intel Core Ultra 7 258V (8 cores), Intel Arc 140V, ~31.5 GB RAM
 **Code (throwaway):** `poc/preview/` — `bridge` (Rust, tokio, tokio-tungstenite), `viewer` (Tauri 2), `web/index.html` (WebCodecs), `sweep.ps1`
-**Device:** AVD `medium_phone` (Android 16, 1080×2400, 420 dpi) in `D:\UMR-poc`
+**Device:** AVD `medium_phone` (Android 16, 1080×2400, 420 dpi) in `D:\TUMR-poc`
 **Status:** Pipeline **works end-to-end**. Latency target **met at 1280 px** and close at 1920 px. Frame-rate target (≥ 30 fps) **not met** for emulator targets at useful resolutions — limited by the emulator's software H.264 encoder, not by Tauri/WebView2.
 
 ## Architecture tested

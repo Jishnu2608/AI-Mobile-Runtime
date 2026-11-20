@@ -28,12 +28,12 @@ use std::sync::{Arc, Condvar, Mutex, PoisonError};
 use std::time::{Duration, Instant};
 
 use serde_json::{json, Value};
-use umr_adapter::problems::{flutter_exception, parse_line};
-use umr_adapter::{
+use tumr_adapter::problems::{flutter_exception, parse_line};
+use tumr_adapter::{
     Adapter, AdapterContext, AdapterError, Capabilities, Event, Framework, Issue, Phase, Problem,
     ReloadKind, RunningApp, Severity, Sink,
 };
-use umr_supervisor::ProcessSpec;
+use tumr_supervisor::ProcessSpec;
 
 /// Longest first run (Gradle build of the Android shell, pub get).
 pub const START_TIMEOUT: Duration = Duration::from_secs(30 * 60);
@@ -176,7 +176,7 @@ pub fn application_id(root: &Path) -> Option<String> {
                     .trim_start_matches([' ', '='])
                     .trim()
                     .trim_matches(['"', '\'']);
-                if umr_device::app::valid_package(v) {
+                if tumr_device::app::valid_package(v) {
                     return Some(v.to_string());
                 }
             }
@@ -426,7 +426,7 @@ fn cached_component(apk: &Path, resolve: impl FnOnce() -> Option<String>) -> Opt
         .ok()?
         .as_millis();
     let key = format!("{} {}", m.len(), mtime);
-    let cache = apk.with_extension("apk.umr-activity");
+    let cache = apk.with_extension("apk.tumr-activity");
     if let Ok(t) = std::fs::read_to_string(&cache) {
         if let Some((k, c)) = t.trim().rsplit_once(' ') {
             if k == key {
@@ -491,7 +491,7 @@ fn launch_tool(
         .map(|r| r.join("bin").join("flutter.bat"))
         .filter(|p| p.is_file())
         .ok_or_else(|| {
-            AdapterError::Missing("Flutter SDK (run `umr install` for this project)".into())
+            AdapterError::Missing("Flutter SDK (run `tumr install` for this project)".into())
         })?;
     let name = format!("flutter:{}", ctx.group);
     let log = ctx
@@ -580,7 +580,7 @@ fn launch_tool(
     let state: State = Arc::default();
     let (root, s2, st2) = (ctx.project.clone(), sink.clone(), state.clone());
     std::thread::Builder::new()
-        .name("umr-flutter-reader".into())
+        .name("tumr-flutter-reader".into())
         .spawn(move || reader(stdout, root, s2, st2))
         .map_err(|e| AdapterError::Failed(e.to_string()))?;
     Ok(Session {
@@ -611,7 +611,7 @@ pub fn vm_service(line: &str) -> Option<(u16, String)> {
 /// the tool to that address (no install, no discovery race).
 fn attach_app(ctx: &AdapterContext, sink: &Sink, package: &str) -> Option<Session> {
     let apk = reusable_apk(&ctx.project)?;
-    if !umr_device::app::installed_same(ctx.device.adb.port, &ctx.device.serial, package, &apk) {
+    if !tumr_device::app::installed_same(ctx.device.adb.port, &ctx.device.serial, package, &apk) {
         return None;
     }
     sink(Event::Phase {
@@ -620,7 +620,7 @@ fn attach_app(ctx: &AdapterContext, sink: &Sink, package: &str) -> Option<Sessio
     });
     let (port, serial) = (ctx.device.adb.port, ctx.device.serial.as_str());
     let component = cached_component(&apk, || {
-        umr_device::app::launcher_activity(port, serial, package).ok()
+        tumr_device::app::launcher_activity(port, serial, package).ok()
     })?;
     sink(Event::Phase {
         phase: Phase::Launching,
@@ -628,13 +628,13 @@ fn attach_app(ctx: &AdapterContext, sink: &Sink, package: &str) -> Option<Sessio
     });
     // one round trip for force-stop + the launch instead of three (resolve-activity, force-stop,
     // am start): PRV-012, each round trip costs seconds under host load
-    let out = umr_device::adb::shell(
+    let out = tumr_device::adb::shell(
         port,
         serial,
         &format!("am force-stop {package}; am start -W -n {component}"),
     )
     .ok()?;
-    let (ok, ..) = umr_device::app::parse_am_start(&out);
+    let (ok, ..) = tumr_device::app::parse_am_start(&out);
     if !ok {
         return None;
     }
@@ -649,11 +649,11 @@ fn attach_app(ctx: &AdapterContext, sink: &Sink, package: &str) -> Option<Sessio
             return None;
         }
         std::thread::sleep(Duration::from_millis(250));
-        let Some(pid) = umr_device::app::pid(port, serial, package) else {
+        let Some(pid) = tumr_device::app::pid(port, serial, package) else {
             continue;
         };
         let log =
-            umr_device::adb::shell(port, serial, &format!("logcat -d --pid={pid} -s flutter:I"))
+            tumr_device::adb::shell(port, serial, &format!("logcat -d --pid={pid} -s flutter:I"))
                 .unwrap_or_default();
         if let Some(found) = log.lines().rev().find_map(vm_service) {
             break found;
@@ -703,7 +703,7 @@ fn run_app(ctx: &AdapterContext, sink: &Sink, package: &str) -> Result<Session, 
                 problems.push(p);
             }
         }
-        let summary = umr_adapter::problems::gradle_failure(&text).unwrap_or(why);
+        let summary = tumr_adapter::problems::gradle_failure(&text).unwrap_or(why);
         if problems.is_empty() {
             problems.push(Problem {
                 severity: Severity::Error,
@@ -759,7 +759,7 @@ impl Adapter for Flutter {
         {
             v.push(Issue {
                 message: "Flutter SDK is not installed".into(),
-                fix: "run `umr install` for this project".into(),
+                fix: "run `tumr install` for this project".into(),
             });
         }
         if !ctx
@@ -769,7 +769,7 @@ impl Adapter for Flutter {
         {
             v.push(Issue {
                 message: "no JDK selected for the Android build".into(),
-                fix: "run `umr install` for this project".into(),
+                fix: "run `tumr install` for this project".into(),
             });
         }
         v
@@ -807,7 +807,7 @@ impl Adapter for Flutter {
         };
         app.sync_after_attach(&sink);
         app.errors_to_console(&sink);
-        let pid = umr_device::app::pid(ctx.device.adb.port, &ctx.device.serial, &package);
+        let pid = tumr_device::app::pid(ctx.device.adb.port, &ctx.device.serial, &package);
         sink(Event::AppStarted { package, pid });
         Ok(Box::new(app))
     }
@@ -1034,7 +1034,7 @@ impl RunningApp for FlutterApp {
             .session
             .as_ref()
             .is_some_and(|s| self.ctx.supervisor.is_running(&s.name));
-        tool && umr_device::app::pid(
+        tool && tumr_device::app::pid(
             self.ctx.device.adb.port,
             &self.ctx.device.serial,
             &self.package,
@@ -1044,7 +1044,7 @@ impl RunningApp for FlutterApp {
 
     fn stop(mut self: Box<Self>) {
         self.end_tool();
-        let _ = umr_device::app::force_stop(
+        let _ = tumr_device::app::force_stop(
             self.ctx.device.adb.port,
             &self.ctx.device.serial,
             &self.package,
@@ -1220,7 +1220,7 @@ mod tests {
     #[test]
     fn stale_installed_build_is_detected() {
         // PRV-015: lib/ newer than the APK → the attached app runs old code
-        let d = std::env::temp_dir().join(format!("umr-flutter-stale-{}", std::process::id()));
+        let d = std::env::temp_dir().join(format!("tumr-flutter-stale-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&d);
         std::fs::create_dir_all(d.join("lib")).unwrap();
         let apk = d.join("app-debug.apk");
@@ -1240,7 +1240,7 @@ mod tests {
 
     #[test]
     fn apk_is_reused_only_without_native_changes() {
-        let d = std::env::temp_dir().join(format!("umr-flutter-apk-{}", std::process::id()));
+        let d = std::env::temp_dir().join(format!("tumr-flutter-apk-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&d);
         std::fs::create_dir_all(d.join("android/app")).unwrap();
         std::fs::write(d.join("pubspec.yaml"), "name: x").unwrap();
@@ -1258,7 +1258,7 @@ mod tests {
 
     #[test]
     fn component_is_cached_and_invalidated_with_the_apk() {
-        let d = std::env::temp_dir().join(format!("umr-flutter-activity-{}", std::process::id()));
+        let d = std::env::temp_dir().join(format!("tumr-flutter-activity-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&d);
         std::fs::create_dir_all(&d).unwrap();
         let apk = d.join("app.apk");
@@ -1293,7 +1293,7 @@ mod tests {
 
     #[test]
     fn direct_tool_only_when_prepared() {
-        let d = std::env::temp_dir().join(format!("umr-flutter-direct-{}", std::process::id()));
+        let d = std::env::temp_dir().join(format!("tumr-flutter-direct-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&d);
         let cache = d.join("bin/cache");
         std::fs::create_dir_all(cache.join("dart-sdk/bin")).unwrap();
@@ -1342,17 +1342,17 @@ mod tests {
 
     #[test]
     fn application_id_from_gradle() {
-        let d = std::env::temp_dir().join(format!("umr-flutter-appid-{}", std::process::id()));
+        let d = std::env::temp_dir().join(format!("tumr-flutter-appid-{}", std::process::id()));
         std::fs::create_dir_all(d.join("android").join("app")).unwrap();
         std::fs::write(
             d.join("android").join("app").join("build.gradle.kts"),
-            "android {\n    defaultConfig {\n        applicationId = \"com.umr.flutterdemo\"\n    }\n}\n",
+            "android {\n    defaultConfig {\n        applicationId = \"com.tumr.flutterdemo\"\n    }\n}\n",
         )
         .unwrap();
-        assert_eq!(application_id(&d).as_deref(), Some("com.umr.flutterdemo"));
+        assert_eq!(application_id(&d).as_deref(), Some("com.tumr.flutterdemo"));
         let _ = std::fs::remove_dir_all(&d);
         assert_eq!(
-            umr_adapter::contract::check_static(&Flutter),
+            tumr_adapter::contract::check_static(&Flutter),
             Vec::<String>::new()
         );
     }

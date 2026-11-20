@@ -5,7 +5,7 @@ plugins {
 }
 
 android {
-    namespace = "com.umr.samples.dartcalc"
+    namespace = "com.tumr.samples.dartcalc"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -15,7 +15,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.umr.samples.dartcalc"
+        applicationId = "com.tumr.samples.dartcalc"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion

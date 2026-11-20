@@ -14,7 +14,7 @@ const categories: Record<string, { label: string; kind: StatusKind }> = {
 
 /**
  * One troubleshooting entry: symptoms, likely cause, how to check, resolution (directive §7.5).
- * The category matches what `umr problems` prints, so a reader can find their problem by it.
+ * The category matches what `tumr problems` prints, so a reader can find their problem by it.
  */
 export function Issue({
   title,

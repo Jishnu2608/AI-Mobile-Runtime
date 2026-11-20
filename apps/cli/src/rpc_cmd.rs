@@ -1,4 +1,4 @@
-//! VSC-001: `umr rpc --stdio`, the VS Code extension's line to the Runtime Core.
+//! VSC-001: `tumr rpc --stdio`, the VS Code extension's line to the Runtime Core.
 //!
 //! The extension starts this once and talks newline-delimited JSON on stdin / stdout:
 //! `{"id": 1, "method": "preview.open", "params": {…}}` → `{"id": 1, "result": …}` or
@@ -13,7 +13,7 @@ use std::sync::Arc;
 use serde_json::{json, Value};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::sync::Mutex;
-use umr_api::methods;
+use tumr_api::methods;
 
 use crate::core_process::CoreTarget;
 
@@ -66,7 +66,7 @@ pub async fn answer(target: &CoreTarget, line: &str) -> Option<Value> {
     })
 }
 
-/// `umr rpc --stdio`: serves until stdin closes.
+/// `tumr rpc --stdio`: serves until stdin closes.
 pub async fn stdio(target: &CoreTarget) -> ExitCode {
     let target = Arc::new(target.clone());
     let out = Arc::new(Mutex::new(tokio::io::stdout()));
@@ -109,8 +109,10 @@ mod tests {
     #[tokio::test]
     async fn refused_and_malformed_requests() {
         let target = CoreTarget {
-            paths: umr_core::paths::CorePaths::with_root(std::env::temp_dir().join("umr-rpc-test")),
-            pipe: r"\\.\pipe\umr-rpc-test-no-core".into(),
+            paths: tumr_core::paths::CorePaths::with_root(
+                std::env::temp_dir().join("tumr-rpc-test"),
+            ),
+            pipe: r"\\.\pipe\tumr-rpc-test-no-core".into(),
         };
         let r = answer(&target, r#"{"id":7,"method":"install.start"}"#)
             .await

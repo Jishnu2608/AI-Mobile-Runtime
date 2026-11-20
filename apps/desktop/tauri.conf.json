@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "AI Mobile Runtime",
-  "mainBinaryName": "umr-desktop",
-  "identifier": "dev.umr.desktop",
+  "productName": "Toolchain Universal Mobile Runtime",
+  "mainBinaryName": "tumr-desktop",
+  "identifier": "dev.tumr.desktop",
   "build": {
     "frontendDist": "ui/dist",
     "devUrl": "http://127.0.0.1:27300"
@@ -18,7 +18,7 @@
     "targets": ["nsis"],
     "icon": ["icons/icon.ico"],
     "shortDescription": "See and test your Android app beside your AI coding agent.",
-    "longDescription": "AI Mobile Runtime prepares the Android toolchain, runs an emulator, shows the running app beside your coding agent and gives the agent the screen, the errors and the controls (CLI and MCP).",
+    "longDescription": "Toolchain Universal Mobile Runtime prepares the Android toolchain, runs an emulator, shows the running app beside your coding agent and gives the agent the screen, the errors and the controls (CLI and MCP).",
     "category": "DeveloperTool",
     "windows": {
       "nsis": {

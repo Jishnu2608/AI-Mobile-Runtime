@@ -1,8 +1,8 @@
-# AI Mobile Runtime for VS Code
+# Toolchain Universal Mobile Runtime for VS Code
 
 **Run your Android app on an emulator without leaving VS Code** — for Kotlin, Java, Flutter (Dart) and React Native / Expo.
 
-AI Mobile Runtime builds your app, boots an Android emulator and shows the running app in a phone frame beside your code. Saved files apply themselves, build errors and crashes land in the Problems panel, and Copilot's agent mode can see the screen and check its own changes.
+Toolchain Universal Mobile Runtime builds your app, boots an Android emulator and shows the running app in a phone frame beside your code. Saved files apply themselves, build errors and crashes land in the Problems panel, and Copilot's agent mode can see the screen and check its own changes.
 
 ## Features
 
@@ -19,9 +19,9 @@ AI Mobile Runtime builds your app, boots an Android emulator and shows the runni
 ## Requirements
 
 - **Windows 11 x64** with CPU virtualization turned on.
-- **AI Mobile Runtime** installed on the same PC. It sets up the Android toolchain for your project and runs the emulator. Get it from the [AI Mobile Runtime project](https://github.com/Jishnu2608/AI-Mobile-Runtime).
+- **Toolchain Universal Mobile Runtime** installed on the same PC. It sets up the Android toolchain for your project and runs the emulator. Get it from the [Toolchain Universal Mobile Runtime project](https://github.com/Jishnu2608/TUMR).
 
-The extension finds `umr.exe` on `PATH` or in the default install folder. Elsewhere, run **AI Mobile Runtime: Locate umr.exe** or set `umr.path`.
+The extension finds `tumr.exe` on `PATH` or in the default install folder. Elsewhere, run **Toolchain Universal Mobile Runtime: Locate tumr.exe** or set `tumr.path`.
 
 ## Getting started
 
@@ -31,24 +31,24 @@ The extension finds `umr.exe` on `PATH` or in the default install folder. Elsewh
 
 | Command | |
 |---|---|
-| AI Mobile Runtime: Run on Emulator | Build, install and launch the app in the open folder |
-| AI Mobile Runtime: Open Mobile Preview | The live phone beside the editor |
-| AI Mobile Runtime: Reload (hot) · Restart the App · Rebuild and Reinstall · Stop the App | Apply changes or stop the app |
-| AI Mobile Runtime: Connect Copilot (agent mode) | Give Copilot the runtime's tools |
-| AI Mobile Runtime: Locate umr.exe | Point the extension at the runtime |
+| Toolchain Universal Mobile Runtime: Run on Emulator | Build, install and launch the app in the open folder |
+| Toolchain Universal Mobile Runtime: Open Mobile Preview | The live phone beside the editor |
+| Toolchain Universal Mobile Runtime: Reload (hot) · Restart the App · Rebuild and Reinstall · Stop the App | Apply changes or stop the app |
+| Toolchain Universal Mobile Runtime: Connect Copilot (agent mode) | Give Copilot the runtime's tools |
+| Toolchain Universal Mobile Runtime: Locate tumr.exe | Point the extension at the runtime |
 
 ## Settings
 
 | Setting | Default | |
 |---|---|---|
-| `umr.path` | empty | Full path of `umr.exe` |
-| `umr.openPreviewOnRun` | `true` | Open the Mobile Preview when a run starts |
-| `umr.problems` | `true` | Show the runtime's problems in the Problems panel |
+| `tumr.path` | empty | Full path of `tumr.exe` |
+| `tumr.openPreviewOnRun` | `true` | Open the Mobile Preview when a run starts |
+| `tumr.problems` | `true` | Show the runtime's problems in the Problems panel |
 
 ## Privacy
 
-Everything runs on your computer. The extension talks only to the AI Mobile Runtime on this PC; the preview streams over a local connection with a single-use token. No telemetry.
+Everything runs on your computer. The extension talks only to the Toolchain Universal Mobile Runtime on this PC; the preview streams over a local connection with a single-use token. No telemetry.
 
 ## Support
 
-Questions and bug reports: [GitHub issues](https://github.com/Jishnu2608/AI-Mobile-Runtime/issues). Full guide: [VS Code](https://github.com/Jishnu2608/AI-Mobile-Runtime/blob/main/docs/user/vscode.md).
+Questions and bug reports: [GitHub issues](https://github.com/Jishnu2608/TUMR/issues). Full guide: [VS Code](https://github.com/Jishnu2608/TUMR/blob/main/docs/user/vscode.md).

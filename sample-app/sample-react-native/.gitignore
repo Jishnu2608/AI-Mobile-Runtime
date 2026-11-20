@@ -74,6 +74,6 @@ yarn-error.log
 !.yarn/sdks
 !.yarn/versions
 
-# written by `umr agent setup` with this PC's paths
+# written by `tumr agent setup` with this PC's paths
 .mcp.json
 .claude/settings.local.json

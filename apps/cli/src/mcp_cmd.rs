@@ -1,5 +1,5 @@
-//! `umr mcp` (MCP-001 / MCP-006): the MCP server on stdin/stdout for one agent, connected to
-//! the Core's named pipe with that agent's own client token (`umr agent setup` writes it).
+//! `tumr mcp` (MCP-001 / MCP-006): the MCP server on stdin/stdout for one agent, connected to
+//! the Core's named pipe with that agent's own client token (`tumr agent setup` writes it).
 //! Only MCP messages go to stdout; diagnostics go to stderr. Ending this process (the agent
 //! quits or is killed) leaves the Core, the device and the running app untouched.
 
@@ -8,8 +8,8 @@ use std::process::ExitCode;
 
 use serde_json::{json, Value};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
-use umr_api::client::Client;
-use umr_mcp::{Core, Server};
+use tumr_api::client::Client;
+use tumr_mcp::{Core, Server};
 
 use crate::core_process::CoreTarget;
 use crate::fail;
@@ -46,9 +46,9 @@ impl Core for PipeCore {
             let c = self.client().await?;
             match c.call_raw(method, params.clone()).await {
                 Ok(v) => return Ok(v),
-                Err(umr_api::client::ClientError::Rpc(e)) => return Err(e.message),
+                Err(tumr_api::client::ClientError::Rpc(e)) => return Err(e.message),
                 Err(e) if attempt == 0 => {
-                    eprintln!("umr mcp: connection lost ({e}); reconnecting");
+                    eprintln!("tumr mcp: connection lost ({e}); reconnecting");
                     self.client = None;
                 }
                 Err(e) => return Err(e.to_string()),
@@ -64,7 +64,7 @@ pub async fn run(target: &CoreTarget, client: &str) -> ExitCode {
         Ok(t) => t.trim().to_string(),
         Err(_) => {
             return fail(&format!(
-                "no agent client '{client}' ({} missing); connect the agent with `umr agent setup <agent>` (see `umr agent clients`) or create it with `umr agent add {client}`",
+                "no agent client '{client}' ({} missing); connect the agent with `tumr agent setup <agent>` (see `tumr agent clients`) or create it with `tumr agent add {client}`",
                 path.display()
             ))
         }

@@ -20,9 +20,9 @@ mod updates;
 
 use serde_json::Value;
 use tokio::sync::Mutex;
-use umr_api::client::{Client, ClientError};
-use umr_api::methods;
-use umr_core::launcher::CoreTarget;
+use tumr_api::client::{Client, ClientError};
+use tumr_api::methods;
+use tumr_core::launcher::CoreTarget;
 
 /// API methods the web view may call.
 const ALLOWED: &[&str] = &[
@@ -152,7 +152,7 @@ fn wizard_save(bridge: tauri::State<'_, Bridge>, state: Value) -> Result<(), Str
     .map_err(|e| e.to_string())
 }
 
-/// The "Connect your agent" page (CON-005): runs `umr agent … --json` (see `agents.rs`).
+/// The "Connect your agent" page (CON-005): runs `tumr agent … --json` (see `agents.rs`).
 #[tauri::command]
 async fn agent_cli(request: agents::AgentRequest) -> Result<Value, String> {
     tauri::async_runtime::spawn_blocking(move || agents::run(&request))
@@ -282,7 +282,7 @@ fn open_preview(app: &tauri::App, dock: Dock) -> tauri::Result<()> {
         "preview",
         tauri::WebviewUrl::App("index.html?view=preview".into()),
     )
-    .title("Phone — AI Mobile Runtime")
+    .title("Phone — Toolchain Universal Mobile Runtime")
     .inner_size(420.0, 860.0)
     .min_inner_size(240.0, 400.0)
     .visible(false)
@@ -310,7 +310,7 @@ fn open_preview(app: &tauri::App, dock: Dock) -> tauri::Result<()> {
 
 fn open_wizard(app: &tauri::App) -> tauri::Result<()> {
     tauri::WebviewWindowBuilder::new(app, "main", tauri::WebviewUrl::App("index.html".into()))
-        .title("AI Mobile Runtime")
+        .title("Toolchain Universal Mobile Runtime")
         .inner_size(960.0, 720.0)
         .min_inner_size(720.0, 560.0)
         .build()?;
@@ -318,7 +318,7 @@ fn open_wizard(app: &tauri::App) -> tauri::Result<()> {
 }
 
 /// AUD-P1-5: one preview window. A second `--preview` (another Run, "Open the live preview",
-/// `umr preview`) brings the running one to the front and ends instead of opening a copy.
+/// `tumr preview`) brings the running one to the front and ends instead of opening a copy.
 fn preview_already_open(root: &std::path::Path) -> bool {
     let file = root.join("run").join("preview.pid");
     let me = std::process::id();
@@ -327,11 +327,11 @@ fn preview_already_open(root: &std::path::Path) -> bool {
         .and_then(|t| t.trim().parse::<u32>().ok())
         .filter(|pid| *pid != me);
     if let Some(pid) = other {
-        let is_preview = umr_platform::process::list_processes().is_ok_and(|all| {
+        let is_preview = tumr_platform::process::list_processes().is_ok_and(|all| {
             all.iter()
-                .any(|p| p.pid == pid && p.exe_name.eq_ignore_ascii_case("umr-desktop.exe"))
+                .any(|p| p.pid == pid && p.exe_name.eq_ignore_ascii_case("tumr-desktop.exe"))
         });
-        if is_preview && umr_platform::window::focus_window_of(pid) {
+        if is_preview && tumr_platform::window::focus_window_of(pid) {
             return true;
         }
     }
@@ -441,7 +441,7 @@ fn main() {
             widen_window
         ])
         .run(tauri::generate_context!())
-        .unwrap_or_else(|e| eprintln!("umr-desktop: {e}"));
+        .unwrap_or_else(|e| eprintln!("tumr-desktop: {e}"));
 }
 
 #[cfg(test)]

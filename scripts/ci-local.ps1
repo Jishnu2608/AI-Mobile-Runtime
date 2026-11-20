@@ -38,7 +38,7 @@ $steps = @(
 )
 if (-not $SkipRelease) {
     $steps += @{ Name = 'Release build'; Cmd = { cargo build --workspace --release --locked } }
-    $steps += @{ Name = 'Smoke test';    Cmd = { & "$root\target\release\umr.exe" --version; & "$root\target\release\umr-core.exe" --version } }
+    $steps += @{ Name = 'Smoke test';    Cmd = { & "$root\target\release\tumr.exe" --version; & "$root\target\release\tumr-core.exe" --version } }
 }
 
 $results = @()

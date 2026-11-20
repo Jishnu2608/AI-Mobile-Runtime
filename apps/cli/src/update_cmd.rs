@@ -1,6 +1,6 @@
-//! `umr update` (REL-002): checks the release manifest and installs a newer version.
+//! `tumr update` (REL-002): checks the release manifest and installs a newer version.
 //!
-//! Installed copies (the NSIS per-user installer leaves `uninstall.exe` next to `umr.exe`) are
+//! Installed copies (the NSIS per-user installer leaves `uninstall.exe` next to `tumr.exe`) are
 //! updated by downloading the new installer, verifying its size and SHA-256 against the manifest
 //! (and its Authenticode signature when `[update] require_signed`), stopping the Runtime Core and
 //! running the installer silently. Portable / developer copies are told where to download.
@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode, Stdio};
 
 use serde_json::json;
-use umr_installer::self_update::{self, Release};
+use tumr_installer::self_update::{self, Release};
 
 use crate::core_process::CoreTarget;
 use crate::fail;
@@ -18,8 +18,8 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 fn settings(target: &CoreTarget) -> Result<(String, String, bool), String> {
     let cfg =
-        umr_storage::config::Config::load_in(target.paths.root()).map_err(|e| e.to_string())?;
-    let url = std::env::var("UMR_UPDATE_URL")
+        tumr_storage::config::Config::load_in(target.paths.root()).map_err(|e| e.to_string())?;
+    let url = std::env::var("TUMR_UPDATE_URL")
         .ok()
         .filter(|v| !v.is_empty())
         .unwrap_or(cfg.update.manifest_url);
@@ -40,7 +40,7 @@ fn installed_dir() -> Option<PathBuf> {
 }
 
 fn windows_build() -> u32 {
-    umr_platform::os::windows_version().map_or(0, |v| v.build)
+    tumr_platform::os::windows_version().map_or(0, |v| v.build)
 }
 
 fn signature_ok(path: &Path) -> bool {
@@ -88,7 +88,7 @@ pub async fn run(
         if json_out {
             println!("{}", json!({ "current": VERSION, "configured": false }));
         } else {
-            println!("AI Mobile Runtime {VERSION}. No update channel is configured ([update] manifest_url in config.toml).");
+            println!("Toolchain Universal Mobile Runtime {VERSION}. No update channel is configured ([update] manifest_url in config.toml).");
         }
         return ExitCode::SUCCESS;
     }
@@ -110,12 +110,12 @@ pub async fn run(
         }
     }
     let Some(rel) = newer else {
-        println!("AI Mobile Runtime {VERSION} is up to date ({channel}).");
+        println!("Toolchain Universal Mobile Runtime {VERSION} is up to date ({channel}).");
         return ExitCode::SUCCESS;
     };
     println!("Update available: {VERSION} → {}", describe(&rel));
     if check_only {
-        println!("Install it with `umr update`.");
+        println!("Install it with `tumr update`.");
         return ExitCode::SUCCESS;
     }
     let Some(dir) = installed_dir() else {
@@ -145,7 +145,7 @@ pub async fn run(
     let nonce = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_or(0, |d| d.as_nanos());
-    let tmp = std::env::temp_dir().join(format!("umr-update-{}-{nonce}", std::process::id()));
+    let tmp = std::env::temp_dir().join(format!("tumr-update-{}-{nonce}", std::process::id()));
     let u = url.clone();
     let f = file.clone();
     let t = tmp.clone();
@@ -161,17 +161,17 @@ pub async fn run(
         let _ = std::fs::remove_file(&installer);
         return fail("the installer has no valid Authenticode signature; not installed");
     }
-    // the installer replaces umr-core.exe: close the preview window first (it would start the
+    // the installer replaces tumr-core.exe: close the preview window first (it would start the
     // Core again), then stop the Core; the installer's hook does the same
     let _ = Command::new("taskkill")
-        .args(["/F", "/IM", "umr-desktop.exe"])
+        .args(["/F", "/IM", "tumr-desktop.exe"])
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .status();
     crate::stop_quiet(target).await;
     match spawn_installer(&installer, &dir, relaunch) {
         Ok(()) => {
-            println!("Installing {} in the background (about a minute). Run `umr --version` afterwards to check.", rel.version);
+            println!("Installing {} in the background (about a minute). Run `tumr --version` afterwards to check.", rel.version);
             ExitCode::SUCCESS
         }
         Err(e) => fail(&format!("cannot start the installer: {e}")),
@@ -186,11 +186,11 @@ fn relaunch_script(installer: &Path, dir: &Path) -> String {
         "Start-Process -FilePath '{}' -ArgumentList '/S /D={}' -Wait; Start-Process -FilePath '{}'",
         q(installer),
         q(dir),
-        q(&dir.join("umr-desktop.exe"))
+        q(&dir.join("tumr-desktop.exe"))
     )
 }
 
-/// Runs the installer silently into the same folder, detached so it can replace this umr.exe
+/// Runs the installer silently into the same folder, detached so it can replace this tumr.exe
 /// after we exit; with `relaunch`, the desktop app opens again afterwards.
 fn spawn_installer(installer: &Path, dir: &Path, relaunch: bool) -> std::io::Result<()> {
     let mut cmd = if relaunch {
@@ -230,13 +230,13 @@ mod tests {
     fn relaunch_runs_the_installer_then_the_app() {
         let s = relaunch_script(
             Path::new(r"C:\Temp\it's\setup.exe"),
-            Path::new(r"C:\Users\u\AppData\Local\AI Mobile Runtime"),
+            Path::new(r"C:\Users\u\AppData\Local\Toolchain Universal Mobile Runtime"),
         );
         assert!(s.contains(r"-FilePath 'C:\Temp\it''s\setup.exe'"), "{s}");
         assert!(
-            s.contains(r"-ArgumentList '/S /D=C:\Users\u\AppData\Local\AI Mobile Runtime' -Wait"),
+            s.contains(r"-ArgumentList '/S /D=C:\Users\u\AppData\Local\Toolchain Universal Mobile Runtime' -Wait"),
             "{s}"
         );
-        assert!(s.ends_with(r"Start-Process -FilePath 'C:\Users\u\AppData\Local\AI Mobile Runtime\umr-desktop.exe'"), "{s}");
+        assert!(s.ends_with(r"Start-Process -FilePath 'C:\Users\u\AppData\Local\Toolchain Universal Mobile Runtime\tumr-desktop.exe'"), "{s}");
     }
 }

@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "umr-poc-viewer",
+  "productName": "tumr-poc-viewer",
   "version": "0.0.0",
-  "identifier": "dev.umr.poc.viewer",
+  "identifier": "dev.tumr.poc.viewer",
   "build": {
     "frontendDist": "http://127.0.0.1:27200",
     "devUrl": "http://127.0.0.1:27200"

@@ -1,21 +1,21 @@
 {
-  "name": "umr-vscode",
-  "displayName": "AI Mobile Runtime",
+  "name": "tumr-vscode",
+  "displayName": "Toolchain Universal Mobile Runtime",
   "description": "Run your Android app on an emulator right inside VS Code: a live phone preview beside your code, build errors and crashes in the Problems panel, and Copilot agent tools. Kotlin, Java, Flutter and React Native.",
-  "version": "0.1.2",
-  "publisher": "ai-mobile-runtime",
+  "version": "0.1.3",
+  "publisher": "tumr",
   "preview": true,
   "pricing": "Free",
   "license": "SEE LICENSE IN LICENSE.md",
   "icon": "media/icon.png",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Jishnu2608/AI-Mobile-Runtime.git",
+    "url": "https://github.com/Jishnu2608/TUMR.git",
     "directory": "apps/vscode"
   },
-  "homepage": "https://github.com/Jishnu2608/AI-Mobile-Runtime/blob/main/docs/user/vscode.md",
+  "homepage": "https://github.com/Jishnu2608/TUMR/blob/main/docs/user/vscode.md",
   "bugs": {
-    "url": "https://github.com/Jishnu2608/AI-Mobile-Runtime/issues"
+    "url": "https://github.com/Jishnu2608/TUMR/issues"
   },
   "qna": false,
   "galleryBanner": {
@@ -69,95 +69,95 @@
   "contributes": {
     "commands": [
       {
-        "command": "umr.run",
+        "command": "tumr.run",
         "title": "Run on Emulator",
-        "category": "AI Mobile Runtime",
+        "category": "Toolchain Universal Mobile Runtime",
         "icon": "$(play)"
       },
       {
-        "command": "umr.reload",
+        "command": "tumr.reload",
         "title": "Reload (hot)",
-        "category": "AI Mobile Runtime",
+        "category": "Toolchain Universal Mobile Runtime",
         "icon": "$(refresh)"
       },
       {
-        "command": "umr.restart",
+        "command": "tumr.restart",
         "title": "Restart the App",
-        "category": "AI Mobile Runtime"
+        "category": "Toolchain Universal Mobile Runtime"
       },
       {
-        "command": "umr.rebuild",
+        "command": "tumr.rebuild",
         "title": "Rebuild and Reinstall",
-        "category": "AI Mobile Runtime"
+        "category": "Toolchain Universal Mobile Runtime"
       },
       {
-        "command": "umr.stop",
+        "command": "tumr.stop",
         "title": "Stop the App",
-        "category": "AI Mobile Runtime",
+        "category": "Toolchain Universal Mobile Runtime",
         "icon": "$(debug-stop)"
       },
       {
-        "command": "umr.openPreview",
+        "command": "tumr.openPreview",
         "title": "Open Mobile Preview",
-        "category": "AI Mobile Runtime",
+        "category": "Toolchain Universal Mobile Runtime",
         "icon": "$(device-mobile)"
       },
       {
-        "command": "umr.connectCopilot",
+        "command": "tumr.connectCopilot",
         "title": "Connect Copilot (agent mode)",
-        "category": "AI Mobile Runtime"
+        "category": "Toolchain Universal Mobile Runtime"
       },
       {
-        "command": "umr.locate",
-        "title": "Locate umr.exe",
-        "category": "AI Mobile Runtime"
+        "command": "tumr.locate",
+        "title": "Locate tumr.exe",
+        "category": "Toolchain Universal Mobile Runtime"
       },
       {
-        "command": "umr.menu",
+        "command": "tumr.menu",
         "title": "Show Actions",
-        "category": "AI Mobile Runtime"
+        "category": "Toolchain Universal Mobile Runtime"
       }
     ],
     "menus": {
       "editor/title": [
         {
-          "command": "umr.run",
+          "command": "tumr.run",
           "group": "navigation@90",
-          "when": "umr.active && !umr.running"
+          "when": "tumr.active && !tumr.running"
         },
         {
-          "command": "umr.reload",
+          "command": "tumr.reload",
           "group": "navigation@90",
-          "when": "umr.active && umr.running"
+          "when": "tumr.active && tumr.running"
         },
         {
-          "command": "umr.openPreview",
+          "command": "tumr.openPreview",
           "group": "navigation@91",
-          "when": "umr.active"
+          "when": "tumr.active"
         }
       ],
       "commandPalette": [
         {
-          "command": "umr.menu",
+          "command": "tumr.menu",
           "when": "false"
         }
       ]
     },
     "configuration": {
-      "title": "AI Mobile Runtime",
+      "title": "Toolchain Universal Mobile Runtime",
       "properties": {
-        "umr.path": {
+        "tumr.path": {
           "type": "string",
           "default": "",
-          "markdownDescription": "Full path of `umr.exe`. Empty: found on `PATH` or in the default install folder (`%LOCALAPPDATA%\\AI Mobile Runtime`).",
+          "markdownDescription": "Full path of `tumr.exe`. Empty: found on `PATH` or in the default install folder (`%LOCALAPPDATA%\\Toolchain Universal Mobile Runtime`).",
           "scope": "machine"
         },
-        "umr.openPreviewOnRun": {
+        "tumr.openPreviewOnRun": {
           "type": "boolean",
           "default": true,
           "description": "Open the Mobile Preview panel when a run starts."
         },
-        "umr.problems": {
+        "tumr.problems": {
           "type": "boolean",
           "default": true,
           "description": "Show the runtime's build errors, runtime errors and crashes in the Problems panel."
@@ -169,16 +169,16 @@
     "ui": "node scripts/copy-ui.mjs",
     "compile": "tsc -p .",
     "vscode:prepublish": "npm run ui && npm run compile",
-    "package": "node -e \"require('fs').mkdirSync('dist',{recursive:true})\" && vsce package --target win32-x64 -o dist/umr-vscode.vsix",
-    "publish:marketplace": "vsce publish --target win32-x64 --packagePath dist/umr-vscode.vsix",
-    "publish:openvsx": "ovsx publish dist/umr-vscode.vsix",
+    "package": "node -e \"require('fs').mkdirSync('dist',{recursive:true})\" && vsce package --target win32-x64 -o dist/tumr-vscode.vsix",
+    "publish:marketplace": "vsce publish --azure-credential --packagePath dist/tumr-vscode.vsix",
+    "publish:openvsx": "ovsx publish dist/tumr-vscode.vsix",
     "test": "node --test \"out/test/**/*.test.js\""
   },
   "devDependencies": {
     "@types/node": "^20.11.0",
     "@types/vscode": "~1.90.0",
-    "@vscode/vsce": "^3.2.0",
-    "typescript": "^5.6.0",
-    "ovsx": "^0.10.0"
+    "@vscode/vsce": "4.1.0",
+    "ovsx": "^0.10.0",
+    "typescript": "^5.6.0"
   }
 }

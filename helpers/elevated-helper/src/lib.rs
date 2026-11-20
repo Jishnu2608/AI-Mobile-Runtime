@@ -1,6 +1,6 @@
 //! INS-005: the administrator actions the product may ever perform, and nothing else.
 //!
-//! The helper binary (`umr-elevate.exe`) accepts exactly one argument: an action name from
+//! The helper binary (`tumr-elevate.exe`) accepts exactly one argument: an action name from
 //! [`Action`]. It takes no paths, values or commands from its caller, so even a compromised
 //! caller cannot make it do anything outside this list. Windows' UAC prompt is the user's
 //! consent for each single run.
@@ -12,7 +12,7 @@
 
 use std::path::{Path, PathBuf};
 
-/// Exit codes of `umr-elevate.exe`.
+/// Exit codes of `tumr-elevate.exe`.
 pub mod exit {
     /// Done; nothing else needed.
     pub const DONE: u32 = 0;

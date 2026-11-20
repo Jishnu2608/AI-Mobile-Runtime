@@ -1,11 +1,11 @@
-# `umr` command reference
+# `tumr` command reference
 
-Generated from `umr --help` by `scripts/cli-reference.ps1` - do not edit by hand.
+Generated from `tumr --help` by `scripts/cli-reference.ps1` - do not edit by hand.
 
 ```text
-AI Mobile Runtime — run and preview mobile apps next to your coding agent
+Toolchain Universal Mobile Runtime — run and preview mobile apps next to your coding agent
 
-Usage: umr <COMMAND>
+Usage: tumr <COMMAND>
 
 Commands:
   status      Show whether the Runtime Core is running
@@ -13,18 +13,18 @@ Commands:
   stop        Stop the Runtime Core
   doctor      Check this machine (starts the Runtime Core if needed)
   plan        Show what a project needs and what would be installed (installs nothing, changes nothing)
-  install     Install what `umr plan` lists into the managed folder (asks before anything is installed)
+  install     Install what `tumr plan` lists into the managed folder (asks before anything is installed)
   components  List installed components, check that they work, and show disk usage
-  remove      Remove one component the product installed (id from `umr components`)
+  remove      Remove one component the product installed (id from `tumr components`)
   repair      Remove broken components; with a project folder, install them again
   project     Show what kind of project a folder is, with the evidence, and whether it is trusted
   trust       Trust a project folder so its build scripts may run (or `--revoke` the trust)
   device      Devices seen by the product's adb server
   run         Build, install and launch a project on the session's device (Kotlin/Java via Gradle, Flutter, React Native / Expo) and open the preview. The folder must be trusted and its toolchain installed
   preview     The live preview window (docked beside your terminal), its status and the latency self-test
-  problems    Problems of the current run, classified (build, runtime, crash, environment, device, network) and deduplicated; `umr problems show <fingerprint>` for one with its stack
+  problems    Problems of the current run, classified (build, runtime, crash, environment, device, network) and deduplicated; `tumr problems show <fingerprint>` for one with its stack
   logs        Log lines of the current run: tool output, progress and the app's device log
-  mcp         MCP server for an AI coding agent on stdin/stdout (the agent starts it; see `umr agent setup`)
+  mcp         MCP server for an AI coding agent on stdin/stdout (the agent starts it; see `tumr agent setup`)
   agent       Connect AI coding agents: setup, clients, grants, audit log
   approvals   Requests from agents waiting for your answer (running a new project folder, switching the device)
   reload      Apply code changes to the running app: hot (default), restart or full
@@ -36,6 +36,7 @@ Commands:
   input       Send input to the current device
   update      Check for a newer version and install it (installed copies; portable copies get a link)
   clean       Delete the download cache and old logs
+  path        The install folder on your user PATH, so `tumr` works in any new terminal (off by default): `status`, `add`, `remove`. `restore` (the installer) adds it back only if you chose it
   admin       Run one administrator action through a Windows UAC prompt: `enable-whpx` or `enable-long-paths`
   help        Print this message or the help of the given subcommand(s)
 
@@ -44,58 +45,58 @@ Options:
   -V, --version  Print version
 ```
 
-## umr status
+## tumr status
 
 ```text
 Show whether the Runtime Core is running
 
-Usage: umr status [OPTIONS]
+Usage: tumr status [OPTIONS]
 
 Options:
       --json  Print machine-readable JSON
   -h, --help  Print help
 ```
 
-## umr start
+## tumr start
 
 ```text
 Start the Runtime Core in the background (no-op if already running)
 
-Usage: umr start
+Usage: tumr start
 
 Options:
   -h, --help  Print help
 ```
 
-## umr stop
+## tumr stop
 
 ```text
 Stop the Runtime Core
 
-Usage: umr stop
+Usage: tumr stop
 
 Options:
   -h, --help  Print help
 ```
 
-## umr doctor
+## tumr doctor
 
 ```text
 Check this machine (starts the Runtime Core if needed)
 
-Usage: umr doctor [OPTIONS]
+Usage: tumr doctor [OPTIONS]
 
 Options:
       --json  Print machine-readable JSON
   -h, --help  Print help
 ```
 
-## umr plan
+## tumr plan
 
 ```text
 Show what a project needs and what would be installed (installs nothing, changes nothing)
 
-Usage: umr plan [OPTIONS] [PATH]
+Usage: tumr plan [OPTIONS] [PATH]
 
 Arguments:
   [PATH]  Project folder (default: current folder)
@@ -106,12 +107,12 @@ Options:
   -h, --help    Print help
 ```
 
-## umr install
+## tumr install
 
 ```text
-Install what `umr plan` lists into the managed folder (asks before anything is installed)
+Install what `tumr plan` lists into the managed folder (asks before anything is installed)
 
-Usage: umr install [OPTIONS] [PATH]
+Usage: tumr install [OPTIONS] [PATH]
 
 Arguments:
   [PATH]  Project folder (default: current folder)
@@ -121,24 +122,24 @@ Options:
   -h, --help  Print help
 ```
 
-## umr components
+## tumr components
 
 ```text
 List installed components, check that they work, and show disk usage
 
-Usage: umr components [OPTIONS]
+Usage: tumr components [OPTIONS]
 
 Options:
       --json  Print machine-readable JSON
   -h, --help  Print help
 ```
 
-## umr remove
+## tumr remove
 
 ```text
-Remove one component the product installed (id from `umr components`)
+Remove one component the product installed (id from `tumr components`)
 
-Usage: umr remove [OPTIONS] <ID>
+Usage: tumr remove [OPTIONS] <ID>
 
 Arguments:
   <ID>  
@@ -149,12 +150,12 @@ Options:
   -h, --help   Print help
 ```
 
-## umr repair
+## tumr repair
 
 ```text
 Remove broken components; with a project folder, install them again
 
-Usage: umr repair [OPTIONS] [PATH]
+Usage: tumr repair [OPTIONS] [PATH]
 
 Arguments:
   [PATH]  
@@ -164,12 +165,12 @@ Options:
   -h, --help  Print help
 ```
 
-## umr project
+## tumr project
 
 ```text
 Show what kind of project a folder is, with the evidence, and whether it is trusted
 
-Usage: umr project [OPTIONS] [PATH]
+Usage: tumr project [OPTIONS] [PATH]
 
 Arguments:
   [PATH]  
@@ -179,12 +180,12 @@ Options:
   -h, --help  Print help
 ```
 
-## umr trust
+## tumr trust
 
 ```text
 Trust a project folder so its build scripts may run (or `--revoke` the trust)
 
-Usage: umr trust [OPTIONS] [PATH]
+Usage: tumr trust [OPTIONS] [PATH]
 
 Arguments:
   [PATH]  
@@ -195,12 +196,12 @@ Options:
   -h, --help    Print help
 ```
 
-## umr device
+## tumr device
 
 ```text
 Devices seen by the product's adb server
 
-Usage: umr device <COMMAND>
+Usage: tumr device <COMMAND>
 
 Commands:
   list         List devices and emulators (starts the product's private adb server if needed)
@@ -219,36 +220,36 @@ Options:
   -h, --help  Print help
 ```
 
-### umr device list
+### tumr device list
 
 ```text
 List devices and emulators (starts the product's private adb server if needed)
 
-Usage: umr device list [OPTIONS]
+Usage: tumr device list [OPTIONS]
 
 Options:
       --json  Print machine-readable JSON
   -h, --help  Print help
 ```
 
-### umr device profiles
+### tumr device profiles
 
 ```text
 Show the device size classes (compact, standard, large, fold, flip, tablet)
 
-Usage: umr device profiles [OPTIONS]
+Usage: tumr device profiles [OPTIONS]
 
 Options:
       --json  Print machine-readable JSON
   -h, --help  Print help
 ```
 
-### umr device create
+### tumr device create
 
 ```text
 Create the emulator (AVD) for a size class from the product's own hardware definition
 
-Usage: umr device create [OPTIONS] <PROFILE>
+Usage: tumr device create [OPTIONS] <PROFILE>
 
 Arguments:
   <PROFILE>  
@@ -258,12 +259,12 @@ Options:
   -h, --help       Print help
 ```
 
-### umr device boot
+### tumr device boot
 
 ```text
 Boot the emulator for a size class headless (creates it if needed). Warm boots from the product's snapshot when the GPU mode still matches; checks that the screen renders
 
-Usage: umr device boot [OPTIONS] <PROFILE>
+Usage: tumr device boot [OPTIONS] <PROFILE>
 
 Arguments:
   <PROFILE>  
@@ -277,12 +278,12 @@ Options:
   -h, --help       Print help
 ```
 
-### umr device stop
+### tumr device stop
 
 ```text
 Stop an emulator the product started
 
-Usage: umr device stop [OPTIONS] <PROFILE>
+Usage: tumr device stop [OPTIONS] <PROFILE>
 
 Arguments:
   <PROFILE>  
@@ -292,12 +293,12 @@ Options:
   -h, --help       Print help
 ```
 
-### umr device use
+### tumr device use
 
 ```text
 Start a session on a size class: boot it (switching from another device), optionally install and launch an app
 
-Usage: umr device use [OPTIONS] <PROFILE>
+Usage: tumr device use [OPTIONS] <PROFILE>
 
 Arguments:
   <PROFILE>  
@@ -311,12 +312,12 @@ Options:
   -h, --help               Print help
 ```
 
-### umr device rotate
+### tumr device rotate
 
 ```text
 Rotate the emulator 90° (left or right)
 
-Usage: umr device rotate [DIRECTION]
+Usage: tumr device rotate [DIRECTION]
 
 Arguments:
   [DIRECTION]  [default: left]
@@ -325,12 +326,12 @@ Options:
   -h, --help  Print help
 ```
 
-### umr device posture
+### tumr device posture
 
 ```text
 Fold or unfold a foldable emulator while it runs: a posture (closed, half-opened, opened) or `--angle` in degrees (0 closed, 90 half open, 180 open flat). Closed, the app moves to the cover screen. Without either it shows the hinge as it is
 
-Usage: umr device posture [OPTIONS] [POSTURE]
+Usage: tumr device posture [OPTIONS] [POSTURE]
 
 Arguments:
   [POSTURE]  
@@ -341,12 +342,12 @@ Options:
   -h, --help             Print help
 ```
 
-### umr device fingerprint
+### tumr device fingerprint
 
 ```text
 Touch the emulator's fingerprint sensor: unlocks the lock screen and answers an app's biometric prompt once a finger is enrolled (Settings, with a screen lock set). `down` / `up` hold the finger, e.g. while Settings enrols it
 
-Usage: umr device fingerprint [OPTIONS] [TOUCH]
+Usage: tumr device fingerprint [OPTIONS] [TOUCH]
 
 Arguments:
   [TOUCH]  tap (default), down or up [default: tap]
@@ -357,24 +358,24 @@ Options:
   -h, --help             Print help
 ```
 
-### umr device auth
+### tumr device auth
 
 ```text
 Lock screen and fingerprint state: locked, sensor waiting for a finger, fingers enrolled
 
-Usage: umr device auth [OPTIONS]
+Usage: tumr device auth [OPTIONS]
 
 Options:
       --target <TARGET>  
   -h, --help             Print help
 ```
 
-## umr run
+## tumr run
 
 ```text
 Build, install and launch a project on the session's device (Kotlin/Java via Gradle, Flutter, React Native / Expo) and open the preview. The folder must be trusted and its toolchain installed
 
-Usage: umr run [OPTIONS] [PATH]
+Usage: tumr run [OPTIONS] [PATH]
 
 Arguments:
   [PATH]  Project folder (default: current folder)
@@ -389,12 +390,12 @@ Options:
   -h, --help               Print help
 ```
 
-## umr preview
+## tumr preview
 
 ```text
 The live preview window (docked beside your terminal), its status and the latency self-test
 
-Usage: umr preview [OPTIONS] [COMMAND]
+Usage: tumr preview [OPTIONS] [COMMAND]
 
 Commands:
   status    Frames, windows and the time the runtime adds
@@ -406,24 +407,24 @@ Options:
   -h, --help         Print help
 ```
 
-### umr preview status
+### tumr preview status
 
 ```text
 Frames, windows and the time the runtime adds
 
-Usage: umr preview status [OPTIONS]
+Usage: tumr preview status [OPTIONS]
 
 Options:
       --json  
   -h, --help  Print help
 ```
 
-### umr preview selftest
+### tumr preview selftest
 
 ```text
 Touch-to-screen latency and frame rate on the device; taps the home screen
 
-Usage: umr preview selftest [OPTIONS]
+Usage: tumr preview selftest [OPTIONS]
 
 Options:
       --taps <TAPS>  [default: 20]
@@ -431,12 +432,12 @@ Options:
   -h, --help         Print help
 ```
 
-## umr problems
+## tumr problems
 
 ```text
-Problems of the current run, classified (build, runtime, crash, environment, device, network) and deduplicated; `umr problems show <fingerprint>` for one with its stack
+Problems of the current run, classified (build, runtime, crash, environment, device, network) and deduplicated; `tumr problems show <fingerprint>` for one with its stack
 
-Usage: umr problems [OPTIONS] [COMMAND]
+Usage: tumr problems [OPTIONS] [COMMAND]
 
 Commands:
   show  One problem with its stack
@@ -448,12 +449,12 @@ Options:
   -h, --help                 Print help
 ```
 
-### umr problems show
+### tumr problems show
 
 ```text
 One problem with its stack
 
-Usage: umr problems show [OPTIONS] <FINGERPRINT>
+Usage: tumr problems show [OPTIONS] <FINGERPRINT>
 
 Arguments:
   <FINGERPRINT>  
@@ -463,15 +464,15 @@ Options:
   -h, --help  Print help
 ```
 
-## umr logs
+## tumr logs
 
 ```text
 Log lines of the current run: tool output, progress and the app's device log
 
-Usage: umr logs [OPTIONS]
+Usage: tumr logs [OPTIONS]
 
 Options:
-      --source <SOURCE>  `tool`, `umr` or `logcat`
+      --source <SOURCE>  `tool`, `tumr` or `logcat`
       --level <LEVEL>    Lowest level: V, D, I, W, E or F
       --grep <GREP>      Only lines containing this text (or tag)
   -n, --lines <LINES>    How many recent lines [default: 100]
@@ -480,12 +481,12 @@ Options:
   -h, --help             Print help
 ```
 
-## umr mcp
+## tumr mcp
 
 ```text
-MCP server for an AI coding agent on stdin/stdout (the agent starts it; see `umr agent setup`)
+MCP server for an AI coding agent on stdin/stdout (the agent starts it; see `tumr agent setup`)
 
-Usage: umr mcp [OPTIONS]
+Usage: tumr mcp [OPTIONS]
 
 Options:
       --client <CLIENT>  The agent client whose token and permissions to use [default: claude-code]
@@ -493,18 +494,19 @@ Options:
   -h, --help             Print help
 ```
 
-## umr agent
+## tumr agent
 
 ```text
 Connect AI coding agents: setup, clients, grants, audit log
 
-Usage: umr agent <COMMAND>
+Usage: tumr agent <COMMAND>
 
 Commands:
   setup         Connect a coding agent (claude-code, codex, cursor, claude-desktop, vscode, antigravity): creates its client, writes its MCP server entry and agent instructions (shows the changes and asks first). `--remove` disconnects it again
   hook          The agent's stop hook (written by `setup` for claude-code, codex, cursor and antigravity): reads the hook input on stdin, waits for the rebuild the agent's saves started, and keeps the agent working while the app has a build error, a new runtime error or a crash. Never blocks when nothing of this folder runs
-  link          One-click install link for Cursor or VS Code, made for this PC's umr (creates the agent client if needed)
-  doctor        Check each connected agent end to end: config entry, program path, token, a real MCP handshake and its last call. `--fix` repoints entries at this umr
+  link          One-click install link for Cursor or VS Code, made for this PC's tumr (creates the agent client if needed)
+  repoint       DEC-055: point every all-projects agent entry that runs another tumr at this one (the installer runs it after an install). Changes nothing else and starts nothing
+  doctor        Check each connected agent end to end: config entry, program path, token, a real MCP handshake and its last call. `--fix` repoints entries at this tumr
   add           Create an agent client with its own token (default scopes: observe, interact, control)
   clients       Coding agents on this PC (Claude Code, Codex, Cursor, Claude Desktop, VS Code, Antigravity): installed, connected, and how to connect each one. Does not need the Core
   list          Agent clients, their scopes and grants
@@ -519,12 +521,12 @@ Options:
   -h, --help  Print help
 ```
 
-### umr agent setup
+### tumr agent setup
 
 ```text
 Connect a coding agent (claude-code, codex, cursor, claude-desktop, vscode, antigravity): creates its client, writes its MCP server entry and agent instructions (shows the changes and asks first). `--remove` disconnects it again
 
-Usage: umr agent setup [OPTIONS] <AGENT>
+Usage: tumr agent setup [OPTIONS] <AGENT>
 
 Arguments:
   <AGENT>  claude-code, codex, cursor, claude-desktop, vscode or antigravity
@@ -540,12 +542,12 @@ Options:
   -h, --help               Print help
 ```
 
-### umr agent hook
+### tumr agent hook
 
 ```text
 The agent's stop hook (written by `setup` for claude-code, codex, cursor and antigravity): reads the hook input on stdin, waits for the rebuild the agent's saves started, and keeps the agent working while the app has a build error, a new runtime error or a crash. Never blocks when nothing of this folder runs
 
-Usage: umr agent hook [OPTIONS] <AGENT>
+Usage: tumr agent hook [OPTIONS] <AGENT>
 
 Arguments:
   <AGENT>  claude-code, codex, cursor or antigravity
@@ -555,12 +557,12 @@ Options:
   -h, --help        Print help
 ```
 
-### umr agent link
+### tumr agent link
 
 ```text
-One-click install link for Cursor or VS Code, made for this PC's umr (creates the agent client if needed)
+One-click install link for Cursor or VS Code, made for this PC's tumr (creates the agent client if needed)
 
-Usage: umr agent link [OPTIONS] <AGENT>
+Usage: tumr agent link [OPTIONS] <AGENT>
 
 Arguments:
   <AGENT>  cursor or vscode
@@ -570,29 +572,40 @@ Options:
   -h, --help  Print help
 ```
 
-### umr agent doctor
+### tumr agent repoint
 
 ```text
-Check each connected agent end to end: config entry, program path, token, a real MCP handshake and its last call. `--fix` repoints entries at this umr
+DEC-055: point every all-projects agent entry that runs another tumr at this one (the installer runs it after an install). Changes nothing else and starts nothing
 
-Usage: umr agent doctor [OPTIONS] [AGENT]
+Usage: tumr agent repoint
+
+Options:
+  -h, --help  Print help
+```
+
+### tumr agent doctor
+
+```text
+Check each connected agent end to end: config entry, program path, token, a real MCP handshake and its last call. `--fix` repoints entries at this tumr
+
+Usage: tumr agent doctor [OPTIONS] [AGENT]
 
 Arguments:
   [AGENT]  Only this agent
 
 Options:
       --project <PROJECT>  Project folder whose project-scope configs are checked; default: current folder
-      --fix                Rewrite entries whose program path is missing or points at another umr
+      --fix                Rewrite entries whose program path is missing or points at another tumr
       --json               
   -h, --help               Print help
 ```
 
-### umr agent add
+### tumr agent add
 
 ```text
 Create an agent client with its own token (default scopes: observe, interact, control)
 
-Usage: umr agent add [OPTIONS] <NAME>
+Usage: tumr agent add [OPTIONS] <NAME>
 
 Arguments:
   <NAME>  
@@ -602,12 +615,12 @@ Options:
   -h, --help             Print help
 ```
 
-### umr agent clients
+### tumr agent clients
 
 ```text
 Coding agents on this PC (Claude Code, Codex, Cursor, Claude Desktop, VS Code, Antigravity): installed, connected, and how to connect each one. Does not need the Core
 
-Usage: umr agent clients [OPTIONS]
+Usage: tumr agent clients [OPTIONS]
 
 Options:
       --project <PROJECT>  Project folder whose config files are checked; default: current folder
@@ -615,24 +628,24 @@ Options:
   -h, --help               Print help
 ```
 
-### umr agent list
+### tumr agent list
 
 ```text
 Agent clients, their scopes and grants
 
-Usage: umr agent list [OPTIONS]
+Usage: tumr agent list [OPTIONS]
 
 Options:
       --json  
   -h, --help  Print help
 ```
 
-### umr agent remove
+### tumr agent remove
 
 ```text
 Remove an agent client (its token stops working)
 
-Usage: umr agent remove <NAME>
+Usage: tumr agent remove <NAME>
 
 Arguments:
   <NAME>  
@@ -641,12 +654,12 @@ Options:
   -h, --help  Print help
 ```
 
-### umr agent grant
+### tumr agent grant
 
 ```text
 Let an agent run a project folder (or `device:switch`) without asking each time
 
-Usage: umr agent grant <NAME> <WHAT>
+Usage: tumr agent grant <NAME> <WHAT>
 
 Arguments:
   <NAME>  
@@ -656,12 +669,12 @@ Options:
   -h, --help  Print help
 ```
 
-### umr agent ungrant
+### tumr agent ungrant
 
 ```text
 Take a grant back
 
-Usage: umr agent ungrant <NAME> <WHAT>
+Usage: tumr agent ungrant <NAME> <WHAT>
 
 Arguments:
   <NAME>  
@@ -671,12 +684,12 @@ Options:
   -h, --help  Print help
 ```
 
-### umr agent audit
+### tumr agent audit
 
 ```text
 What agents called (newest last)
 
-Usage: umr agent audit [OPTIONS]
+Usage: tumr agent audit [OPTIONS]
 
 Options:
       --client <CLIENT>  Only this agent
@@ -685,24 +698,24 @@ Options:
   -h, --help             Print help
 ```
 
-### umr agent instructions
+### tumr agent instructions
 
 ```text
 Print the agent instructions (`skill` = Claude Code SKILL.md, `agents` = AGENTS.md section, `short` = MCP instructions)
 
-Usage: umr agent instructions [OPTIONS]
+Usage: tumr agent instructions [OPTIONS]
 
 Options:
       --format <FORMAT>  [default: skill]
   -h, --help             Print help
 ```
 
-## umr approvals
+## tumr approvals
 
 ```text
 Requests from agents waiting for your answer (running a new project folder, switching the device)
 
-Usage: umr approvals [COMMAND]
+Usage: tumr approvals [COMMAND]
 
 Commands:
   allow  Allow a request
@@ -713,12 +726,12 @@ Options:
   -h, --help  Print help
 ```
 
-### umr approvals allow
+### tumr approvals allow
 
 ```text
 Allow a request
 
-Usage: umr approvals allow [OPTIONS] <ID>
+Usage: tumr approvals allow [OPTIONS] <ID>
 
 Arguments:
   <ID>  
@@ -728,12 +741,12 @@ Options:
   -h, --help    Print help
 ```
 
-### umr approvals deny
+### tumr approvals deny
 
 ```text
 Deny a request
 
-Usage: umr approvals deny <ID>
+Usage: tumr approvals deny <ID>
 
 Arguments:
   <ID>  
@@ -742,12 +755,12 @@ Options:
   -h, --help  Print help
 ```
 
-## umr reload
+## tumr reload
 
 ```text
 Apply code changes to the running app: hot (default), restart or full
 
-Usage: umr reload [OPTIONS] [KIND]
+Usage: tumr reload [OPTIONS] [KIND]
 
 Arguments:
   [KIND]  
@@ -757,12 +770,12 @@ Options:
   -h, --help  Print help
 ```
 
-## umr adapter
+## tumr adapter
 
 ```text
 Framework adapters
 
-Usage: umr adapter <COMMAND>
+Usage: tumr adapter <COMMAND>
 
 Commands:
   check  Run the adapter contract test kit live: start, every reload kind, stop
@@ -772,12 +785,12 @@ Options:
   -h, --help  Print help
 ```
 
-### umr adapter check
+### tumr adapter check
 
 ```text
 Run the adapter contract test kit live: start, every reload kind, stop
 
-Usage: umr adapter check [OPTIONS] [PATH]
+Usage: tumr adapter check [OPTIONS] [PATH]
 
 Arguments:
   [PATH]  
@@ -788,12 +801,12 @@ Options:
   -h, --help               Print help
 ```
 
-## umr session
+## tumr session
 
 ```text
 The current runtime session (device and app)
 
-Usage: umr session [COMMAND]
+Usage: tumr session [COMMAND]
 
 Commands:
   status  State, recent events, supervised processes and ports (default)
@@ -805,47 +818,47 @@ Options:
   -h, --help  Print help
 ```
 
-### umr session status
+### tumr session status
 
 ```text
 State, recent events, supervised processes and ports (default)
 
-Usage: umr session status [OPTIONS]
+Usage: tumr session status [OPTIONS]
 
 Options:
       --json  
   -h, --help  Print help
 ```
 
-### umr session stop
+### tumr session stop
 
 ```text
 Stop the session and its emulator
 
-Usage: umr session stop
+Usage: tumr session stop
 
 Options:
   -h, --help  Print help
 ```
 
-### umr session follow
+### tumr session follow
 
 ```text
 Print each session change as it happens (state, device, app) until Ctrl+C. Uses `session.wait`, so nothing polls
 
-Usage: umr session follow [OPTIONS]
+Usage: tumr session follow [OPTIONS]
 
 Options:
       --json  
   -h, --help  Print help
 ```
 
-## umr app
+## tumr app
 
 ```text
 Install, launch, stop or uninstall an app on the current device
 
-Usage: umr app <COMMAND>
+Usage: tumr app <COMMAND>
 
 Commands:
   install    
@@ -858,10 +871,10 @@ Options:
   -h, --help  Print help
 ```
 
-### umr app install
+### tumr app install
 
 ```text
-Usage: umr app install [OPTIONS] <APK>
+Usage: tumr app install [OPTIONS] <APK>
 
 Arguments:
   <APK>  
@@ -871,10 +884,10 @@ Options:
   -h, --help             Print help
 ```
 
-### umr app launch
+### tumr app launch
 
 ```text
-Usage: umr app launch [OPTIONS] <PACKAGE>
+Usage: tumr app launch [OPTIONS] <PACKAGE>
 
 Arguments:
   <PACKAGE>  
@@ -885,10 +898,10 @@ Options:
   -h, --help                 Print help
 ```
 
-### umr app stop
+### tumr app stop
 
 ```text
-Usage: umr app stop [OPTIONS] <PACKAGE>
+Usage: tumr app stop [OPTIONS] <PACKAGE>
 
 Arguments:
   <PACKAGE>  
@@ -898,10 +911,10 @@ Options:
   -h, --help             Print help
 ```
 
-### umr app uninstall
+### tumr app uninstall
 
 ```text
-Usage: umr app uninstall [OPTIONS] <PACKAGE>
+Usage: tumr app uninstall [OPTIONS] <PACKAGE>
 
 Arguments:
   <PACKAGE>  
@@ -911,12 +924,12 @@ Options:
   -h, --help             Print help
 ```
 
-## umr screenshot
+## tumr screenshot
 
 ```text
 Save a screenshot of the current device (PNG)
 
-Usage: umr screenshot [OPTIONS]
+Usage: tumr screenshot [OPTIONS]
 
 Options:
       --out <OUT>        Copy the PNG here as well
@@ -925,12 +938,12 @@ Options:
   -h, --help             Print help
 ```
 
-## umr ui
+## tumr ui
 
 ```text
 Show the UI tree of the current screen (text, ids, bounds, clickable elements)
 
-Usage: umr ui [OPTIONS]
+Usage: tumr ui [OPTIONS]
 
 Options:
       --target <TARGET>  
@@ -938,12 +951,12 @@ Options:
   -h, --help             Print help
 ```
 
-## umr input
+## tumr input
 
 ```text
 Send input to the current device
 
-Usage: umr input [OPTIONS] <COMMAND>
+Usage: tumr input [OPTIONS] <COMMAND>
 
 Commands:
   tap    Tap at device pixels
@@ -957,12 +970,12 @@ Options:
   -h, --help             Print help
 ```
 
-### umr input tap
+### tumr input tap
 
 ```text
 Tap at device pixels
 
-Usage: umr input tap [OPTIONS] <X> <Y>
+Usage: tumr input tap [OPTIONS] <X> <Y>
 
 Arguments:
   <X>  
@@ -973,12 +986,12 @@ Options:
   -h, --help             Print help
 ```
 
-### umr input swipe
+### tumr input swipe
 
 ```text
 Swipe from (x1, y1) to (x2, y2)
 
-Usage: umr input swipe [OPTIONS] <X1> <Y1> <X2> <Y2>
+Usage: tumr input swipe [OPTIONS] <X1> <Y1> <X2> <Y2>
 
 Arguments:
   <X1>  
@@ -992,12 +1005,12 @@ Options:
   -h, --help             Print help
 ```
 
-### umr input text
+### tumr input text
 
 ```text
 Type text into the focused field
 
-Usage: umr input text [OPTIONS] <TEXT>
+Usage: tumr input text [OPTIONS] <TEXT>
 
 Arguments:
   <TEXT>  
@@ -1007,12 +1020,12 @@ Options:
   -h, --help             Print help
 ```
 
-### umr input key
+### tumr input key
 
 ```text
 Press a key: home, back, recents, enter, delete, tab, escape, menu, power, `volume_up`, `volume_down`, up, down, left, right
 
-Usage: umr input key [OPTIONS] <NAME>
+Usage: tumr input key [OPTIONS] <NAME>
 
 Arguments:
   <NAME>  
@@ -1022,12 +1035,12 @@ Options:
   -h, --help             Print help
 ```
 
-## umr update
+## tumr update
 
 ```text
 Check for a newer version and install it (installed copies; portable copies get a link)
 
-Usage: umr update [OPTIONS]
+Usage: tumr update [OPTIONS]
 
 Options:
       --check     Only check, do not install
@@ -1037,23 +1050,39 @@ Options:
   -h, --help      Print help
 ```
 
-## umr clean
+## tumr clean
 
 ```text
 Delete the download cache and old logs
 
-Usage: umr clean
+Usage: tumr clean
 
 Options:
   -h, --help  Print help
 ```
 
-## umr admin
+## tumr path
+
+```text
+The install folder on your user PATH, so `tumr` works in any new terminal (off by default): `status`, `add`, `remove`. `restore` (the installer) adds it back only if you chose it
+
+Usage: tumr path [OPTIONS] [ACTION]
+
+Arguments:
+  [ACTION]  [default: status]
+
+Options:
+      --keep-choice  With `remove`: keep the choice, so the next install adds it back (the uninstaller)
+      --json         
+  -h, --help         Print help
+```
+
+## tumr admin
 
 ```text
 Run one administrator action through a Windows UAC prompt: `enable-whpx` or `enable-long-paths`
 
-Usage: umr admin [OPTIONS] <ACTION>
+Usage: tumr admin [OPTIONS] <ACTION>
 
 Arguments:
   <ACTION>  

@@ -1,7 +1,7 @@
 // Copies the repository's own documents into content/generated so the site renders the same text
 // the repository ships (dev_plan §11.1, principle 4: docs live next to the code).
 // Runs before `dev` and `build`. Generated files are committed so the site also builds without
-// the Rust toolchain; the MCP tool list is refreshed when a built `umr.exe` is present.
+// the Rust toolchain; the MCP tool list is refreshed when a built `tumr.exe` is present.
 import { execFileSync } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
@@ -48,11 +48,11 @@ for (const [from, to] of files) {
   }
 }
 
-// MCP tool catalogue straight from the product (`umr mcp --list-tools`)
-const umr = ["target/release/umr.exe", "target/debug/umr.exe"].map((p) => join(repo, p)).find(existsSync);
-if (umr) {
+// MCP tool catalogue straight from the product (`tumr mcp --list-tools`)
+const tumr = ["target/release/tumr.exe", "target/debug/tumr.exe"].map((p) => join(repo, p)).find(existsSync);
+if (tumr) {
   try {
-    const json = execFileSync(umr, ["mcp", "--list-tools"], { encoding: "utf8" });
+    const json = execFileSync(tumr, ["mcp", "--list-tools"], { encoding: "utf8" });
     JSON.parse(json);
     writeFileSync(join(out, "mcp-tools.json"), json.trim() + "\n");
     copied++;
@@ -64,7 +64,7 @@ if (umr) {
 // the release manifest the release pipeline publishes (DIST-002); none published yet
 const manifest = join(site, "content", "releases.json");
 if (!existsSync(manifest)) {
-  writeFileSync(manifest, JSON.stringify({ schema: 1, product: "AI Mobile Runtime", releases: [] }, null, 2) + "\n");
+  writeFileSync(manifest, JSON.stringify({ schema: 1, product: "Toolchain Universal Mobile Runtime", releases: [] }, null, 2) + "\n");
 }
 copyFileSync(manifest, join(out, "releases.json"));
 

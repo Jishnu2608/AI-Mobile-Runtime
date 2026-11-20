@@ -41,7 +41,7 @@ const CHIPS: { kind: Kind; Icon: LucideIcon; c: string; x: number; y: number; s:
   { kind: "coffee", Icon: Coffee, c: "var(--c-sun)", x: 18, y: 62, s: 44, d: 1.0, say: "Refill! Thank you." },
   { kind: "cog", Icon: Cog, c: "var(--c-sky)", x: 80, y: 50, s: 52, d: 1.4, say: "Gradle is thinking. Give it a second." },
   { kind: "git", Icon: GitBranch, c: "var(--c-pink)", x: 8, y: 86, s: 40, d: 0.6, say: "New branch. Commit early, commit often." },
-  { kind: "terminal", Icon: Terminal, c: "var(--lime)", x: 58, y: 80, s: 42, d: 0.9, say: "umr run — that's the whole trick." },
+  { kind: "terminal", Icon: Terminal, c: "var(--lime)", x: 58, y: 80, s: 42, d: 0.9, say: "tumr run — that's the whole trick." },
   { kind: "play", Icon: Play, c: "var(--c-sky)", x: 84, y: 82, s: 38, d: 0.7, say: "Press play — dance break!" },
   { kind: "phone", Icon: Smartphone, c: "var(--c-sun)", x: 40, y: 92, s: 36, d: 0.5, say: "That's my cousin." },
 ];

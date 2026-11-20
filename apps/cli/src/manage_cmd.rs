@@ -1,11 +1,11 @@
-//! `umr components`, `umr remove`, `umr repair`, `umr clean`, `umr admin` (INS-005/006).
+//! `tumr components`, `tumr remove`, `tumr repair`, `tumr clean`, `tumr admin` (INS-005/006).
 
 use std::io::IsTerminal;
 use std::process::ExitCode;
 
 use serde_json::{json, Value};
-use umr_api::methods::{self, AdminRunResult};
-use umr_installer::manage::{ComponentHealth, DiskUsage, Removed};
+use tumr_api::methods::{self, AdminRunResult};
+use tumr_installer::manage::{ComponentHealth, DiskUsage, Removed};
 
 use crate::core_process::CoreTarget;
 use crate::fail;
@@ -38,7 +38,7 @@ fn confirm(question: &str, yes: bool) -> Result<bool, String> {
     ))
 }
 
-async fn client(target: &CoreTarget) -> Result<umr_api::client::Client, ExitCode> {
+async fn client(target: &CoreTarget) -> Result<tumr_api::client::Client, ExitCode> {
     match target.connect_or_start().await {
         Ok((c, _)) => Ok(c),
         Err(e) => Err(fail(&e)),
@@ -62,7 +62,7 @@ pub async fn components(target: &CoreTarget, json_out: bool) -> ExitCode {
         serde_json::from_value(v["components"].clone()).unwrap_or_default();
     let disk: DiskUsage = serde_json::from_value(v["disk"].clone()).unwrap_or_default();
     if list.is_empty() {
-        println!("No components recorded yet. Run `umr install` for a project.");
+        println!("No components recorded yet. Run `tumr install` for a project.");
     }
     for h in &list {
         let mark = if h.ok { "[ ok ]" } else { "[FAIL]" };
@@ -90,7 +90,7 @@ pub async fn components(target: &CoreTarget, json_out: bool) -> ExitCode {
         size(disk.total_bytes)
     );
     if list.iter().any(|h| !h.ok) {
-        println!("Some components are broken: `umr repair <project>` reinstalls them.");
+        println!("Some components are broken: `tumr repair <project>` reinstalls them.");
         return ExitCode::FAILURE;
     }
     ExitCode::SUCCESS
@@ -147,7 +147,7 @@ pub async fn repair(target: &CoreTarget, project: Option<String>, yes: bool) -> 
             crate::install_cmd::install(target, dir, yes).await
         }
         None if !removed.is_empty() => {
-            println!("Run `umr install <project>` to install them again.");
+            println!("Run `tumr install <project>` to install them again.");
             ExitCode::SUCCESS
         }
         None => ExitCode::SUCCESS,
@@ -175,8 +175,8 @@ pub async fn clean(target: &CoreTarget) -> ExitCode {
 }
 
 pub async fn admin(target: &CoreTarget, action: &str, yes: bool) -> ExitCode {
-    let Some(a) = umr_elevate::Action::parse(action) else {
-        let names: Vec<&str> = umr_elevate::Action::ALL.iter().map(|a| a.name()).collect();
+    let Some(a) = tumr_elevate::Action::parse(action) else {
+        let names: Vec<&str> = tumr_elevate::Action::ALL.iter().map(|a| a.name()).collect();
         return fail(&format!(
             "unknown action '{action}'; choose one of: {}",
             names.join(", ")

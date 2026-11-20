@@ -21,13 +21,13 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use serde::Serialize;
-use umr_device::server::AdbServer;
-use umr_supervisor::Supervisor;
+use tumr_device::server::AdbServer;
+use tumr_supervisor::Supervisor;
 
 pub mod contract;
 pub mod problems;
 
-pub use umr_resolver::project::Framework;
+pub use tumr_resolver::project::Framework;
 
 /// What an adapter can do. The Core never assumes more.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -169,7 +169,7 @@ pub struct DeviceTarget {
 #[derive(Debug, Clone)]
 pub struct AdapterContext {
     pub project: PathBuf,
-    /// Isolated child environment (umr-env recipe: `JAVA_HOME`, `ANDROID_HOME`, `FLUTTER_ROOT`, `PATH`,
+    /// Isolated child environment (tumr-env recipe: `JAVA_HOME`, `ANDROID_HOME`, `FLUTTER_ROOT`, `PATH`,
     /// `ANDROID_USER_HOME`, `TEMP`, adb port, ...).
     pub env: HashMap<String, String>,
     pub sdk: PathBuf,
@@ -191,7 +191,7 @@ pub trait Adapter: Send + Sync {
     fn capabilities(&self) -> Capabilities;
     /// 0 = not this framework; 100 = certain.
     fn detect(&self, root: &Path) -> u8 {
-        let d = umr_resolver::detect::detect(root);
+        let d = tumr_resolver::detect::detect(root);
         if self.frameworks().contains(&d.framework) {
             d.confidence
         } else {
@@ -220,7 +220,7 @@ pub const IGNORED_DIRS: &[&str] = &[
     ".cxx",
     ".dart_tool",
     ".expo",
-    ".umr",
+    ".tumr",
     "build",
     "node_modules",
     "Pods",

@@ -1,4 +1,4 @@
-//! `umr` — command-line interface of the AI Mobile Runtime (CLI-001).
+//! `tumr` — command-line interface of the Toolchain Universal Mobile Runtime (CLI-001).
 //!
 //! Commands now: `status`, `start`, `stop`, `doctor`, `plan`, `install`, `components`, `remove`,
 //! `repair`, `clean`, `admin`, `project`, `trust`, `device list|profiles|create|boot|stop|use|posture`, `session`, `app`, `screenshot`, `ui`, `input`. More (`run`, `device`, `logs`, `mcp`, …)
@@ -17,6 +17,7 @@ mod env_print;
 mod install_cmd;
 mod manage_cmd;
 mod mcp_cmd;
+mod path_cmd;
 mod plan_print;
 mod preview_cmd;
 mod project_cmd;
@@ -30,7 +31,7 @@ use std::time::Duration;
 
 use clap::{Parser, Subcommand};
 use serde_json::Value;
-use umr_api::methods::{
+use tumr_api::methods::{
     self, CheckStatus, CoreInfo, DoctorReport, ProjectPlanParams, ShutdownAccepted,
 };
 
@@ -38,9 +39,9 @@ use crate::core_process::CoreTarget;
 
 #[derive(Debug, Parser)]
 #[command(
-    name = "umr",
+    name = "tumr",
     version,
-    about = "AI Mobile Runtime — run and preview mobile apps next to your coding agent"
+    about = "Toolchain Universal Mobile Runtime — run and preview mobile apps next to your coding agent"
 )]
 struct Cli {
     #[command(subcommand)]
@@ -76,7 +77,7 @@ enum Command {
         #[arg(long)]
         json: bool,
     },
-    /// Install what `umr plan` lists into the managed folder (asks before anything is installed).
+    /// Install what `tumr plan` lists into the managed folder (asks before anything is installed).
     Install {
         /// Project folder (default: current folder).
         path: Option<std::path::PathBuf>,
@@ -90,7 +91,7 @@ enum Command {
         #[arg(long)]
         json: bool,
     },
-    /// Remove one component the product installed (id from `umr components`).
+    /// Remove one component the product installed (id from `tumr components`).
     Remove {
         id: String,
         /// Remove even if other components need it.
@@ -162,7 +163,7 @@ enum Command {
         dock: String,
     },
     /// Problems of the current run, classified (build, runtime, crash, environment, device,
-    /// network) and deduplicated; `umr problems show <fingerprint>` for one with its stack.
+    /// network) and deduplicated; `tumr problems show <fingerprint>` for one with its stack.
     Problems {
         #[command(subcommand)]
         action: Option<ProblemsAction>,
@@ -174,7 +175,7 @@ enum Command {
     },
     /// Log lines of the current run: tool output, progress and the app's device log.
     Logs {
-        /// `tool`, `umr` or `logcat`.
+        /// `tool`, `tumr` or `logcat`.
         #[arg(long)]
         source: Option<String>,
         /// Lowest level: V, D, I, W, E or F.
@@ -202,7 +203,7 @@ enum Command {
         stdio: bool,
     },
     /// MCP server for an AI coding agent on stdin/stdout (the agent starts it; see
-    /// `umr agent setup`).
+    /// `tumr agent setup`).
     Mcp {
         /// The agent client whose token and permissions to use.
         #[arg(long, default_value = "claude-code")]
@@ -285,6 +286,17 @@ enum Command {
     },
     /// Delete the download cache and old logs.
     Clean,
+    /// The install folder on your user PATH, so `tumr` works in any new terminal (off by default):
+    /// `status`, `add`, `remove`. `restore` (the installer) adds it back only if you chose it.
+    Path {
+        #[arg(default_value = "status")]
+        action: String,
+        /// With `remove`: keep the choice, so the next install adds it back (the uninstaller).
+        #[arg(long)]
+        keep_choice: bool,
+        #[arg(long)]
+        json: bool,
+    },
     /// Run one administrator action through a Windows UAC prompt:
     /// `enable-whpx` or `enable-long-paths`.
     Admin {
@@ -453,7 +465,7 @@ enum AgentAction {
         #[arg(long)]
         after_edit: bool,
     },
-    /// One-click install link for Cursor or VS Code, made for this PC's umr.exe (creates the
+    /// One-click install link for Cursor or VS Code, made for this PC's tumr.exe (creates the
     /// agent client if needed).
     Link {
         /// cursor or vscode.
@@ -461,15 +473,18 @@ enum AgentAction {
         #[arg(long)]
         json: bool,
     },
+    /// DEC-055: point every all-projects agent entry that runs another tumr.exe at this one (the
+    /// installer runs it after an install). Changes nothing else and starts nothing.
+    Repoint,
     /// Check each connected agent end to end: config entry, program path, token, a real MCP
-    /// handshake and its last call. `--fix` repoints entries at this umr.exe.
+    /// handshake and its last call. `--fix` repoints entries at this tumr.exe.
     Doctor {
         /// Only this agent.
         agent: Option<String>,
         /// Project folder whose project-scope configs are checked; default: current folder.
         #[arg(long)]
         project: Option<std::path::PathBuf>,
-        /// Rewrite entries whose program path is missing or points at another umr.exe.
+        /// Rewrite entries whose program path is missing or points at another tumr.exe.
         #[arg(long)]
         fix: bool,
         #[arg(long)]
@@ -653,6 +668,11 @@ fn main() -> ExitCode {
                 manage_cmd::repair(&target, dir, yes).await
             }
             Command::Clean => manage_cmd::clean(&target).await,
+            Command::Path {
+                action,
+                keep_choice,
+                json,
+            } => path_cmd::run(&target, &action, keep_choice, json),
             Command::Device { action } => match action {
                 DeviceAction::List { json } => device_cmd::list(&target, json).await,
                 DeviceAction::Profiles { json } => device_cmd::profiles(&target, json).await,
@@ -724,7 +744,7 @@ fn main() -> ExitCode {
                 // AC-CLI-01: the app appears in the docked window
                 if !no_preview && !json {
                     if let Err(e) = preview_cmd::open_window(&target, "right").await {
-                        eprintln!("umr: preview window: {e}");
+                        eprintln!("tumr: preview window: {e}");
                     }
                 }
                 run_cmd::run(&target, path, profile, cold, !no_watch, json).await
@@ -745,7 +765,7 @@ fn main() -> ExitCode {
             }
             Command::Update { check, yes, relaunch, json } => update_cmd::run(&target, check, yes, relaunch, json).await,
             Command::Mcp { list_tools: true, .. } => {
-                println!("{}", serde_json::to_string_pretty(&umr_mcp::tools::catalogue()).unwrap_or_default());
+                println!("{}", serde_json::to_string_pretty(&tumr_mcp::tools::catalogue()).unwrap_or_default());
                 ExitCode::SUCCESS
             }
             Command::Mcp { client, .. } => mcp_cmd::run(&target, &client).await,
@@ -766,6 +786,7 @@ fn main() -> ExitCode {
                 AgentAction::Doctor { agent, project, fix, json } => {
                     agent_setup::doctor(&target, agent, project, fix, json).await
                 }
+                AgentAction::Repoint => agent_setup::repoint(),
                 AgentAction::Add { name, scopes } => agent_cmd::add(&target, &name, scopes).await,
                 AgentAction::List { json } => agent_cmd::list(&target, json).await,
                 AgentAction::Clients { project, json } => {
@@ -778,9 +799,9 @@ fn main() -> ExitCode {
                 AgentAction::Audit { client, lines, json } => agent_cmd::audit(&target, client, lines, json).await,
                 AgentAction::Instructions { format } => {
                     match format.as_str() {
-                        "skill" => print!("{}", umr_mcp::instructions::skill_markdown(true)),
-                        "agents" => print!("{}", umr_mcp::instructions::skill_markdown(false)),
-                        "short" => println!("{}", umr_mcp::instructions::INSTRUCTIONS),
+                        "skill" => print!("{}", tumr_mcp::instructions::skill_markdown(true)),
+                        "agents" => print!("{}", tumr_mcp::instructions::skill_markdown(false)),
+                        "short" => println!("{}", tumr_mcp::instructions::INSTRUCTIONS),
                         _ => return fail("--format is skill, agents or short"),
                     }
                     ExitCode::SUCCESS
@@ -864,7 +885,7 @@ fn project_dir(path: Option<std::path::PathBuf>) -> Result<String, String> {
 }
 
 pub(crate) fn fail(msg: &str) -> ExitCode {
-    eprintln!("umr: {msg}");
+    eprintln!("tumr: {msg}");
     ExitCode::FAILURE
 }
 
@@ -878,7 +899,7 @@ async fn status(target: &CoreTarget, json: bool) -> ExitCode {
             println!("{}", serde_json::json!({ "running": false }));
         } else {
             println!("Runtime Core: not running");
-            println!("Start it with: umr start");
+            println!("Start it with: tumr start");
         }
         return ExitCode::FAILURE;
     };
@@ -989,7 +1010,7 @@ async fn doctor(target: &CoreTarget, json: bool) -> ExitCode {
         }
         println!("\nScanning the development environment…");
     }
-    let env: umr_env::EnvReport = match client.call(methods::ENV_SCAN, Value::Null).await {
+    let env: tumr_env::EnvReport = match client.call(methods::ENV_SCAN, Value::Null).await {
         Ok(r) => r,
         Err(e) => return fail(&format!("environment scan failed: {e}")),
     };
@@ -1048,9 +1069,9 @@ async fn plan(
         println!("{}", serde_json::to_string_pretty(&out).unwrap_or_default());
         return ExitCode::SUCCESS;
     }
-    let facts: Result<umr_resolver::project::ProjectFacts, _> =
+    let facts: Result<tumr_resolver::project::ProjectFacts, _> =
         serde_json::from_value(out["project"].clone());
-    let plan: Result<umr_resolver::plan::Plan, _> = serde_json::from_value(out["plan"].clone());
+    let plan: Result<tumr_resolver::plan::Plan, _> = serde_json::from_value(out["plan"].clone());
     match (facts, plan) {
         (Ok(f), Ok(p)) => {
             plan_print::print(&f, &p);

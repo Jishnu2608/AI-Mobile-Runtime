@@ -7,10 +7,10 @@ The runtime needs a Windows 11 PC that can run an accelerated Android emulator. 
   rows={[
     { item: "Windows", need: "Windows 11, x64", level: "required", notes: "Windows 10 and Arm PCs are not supported." },
     { item: "CPU virtualization", need: "VT-x or AMD-V enabled in the firmware", level: "required", notes: "Task Manager → Performance → CPU shows `Virtualization: Enabled`. Software cannot turn this on." },
-    { item: "Windows Hypervisor Platform", need: "On", level: "required", notes: "`umr admin enable-whpx` turns it on (administrator prompt, then a restart)." },
+    { item: "Windows Hypervisor Platform", need: "On", level: "required", notes: "`tumr admin enable-whpx` turns it on (administrator prompt, then a restart)." },
     { item: "Memory", need: "16 GB", level: "recommended", notes: "8 GB is the minimum: use the `compact` profile and close other heavy apps." },
     { item: "Disk", need: "8–15 GB for toolchains and one emulator image", level: "required", notes: "About 25 MB for the app itself. Each extra emulator image takes 2–4 GB. You choose the folder." },
-    { item: "Long paths", need: "Enabled", level: "recommended", notes: "`umr admin enable-long-paths` (administrator prompt). Deep `node_modules` trees need it." },
+    { item: "Long paths", need: "Enabled", level: "recommended", notes: "`tumr admin enable-long-paths` (administrator prompt). Deep `node_modules` trees need it." },
     { item: "Network", need: "Internet for the first setup", level: "required", notes: "Windows proxy settings are used; company TLS inspection works when its root certificate is in the Windows store." },
   ]}
 />

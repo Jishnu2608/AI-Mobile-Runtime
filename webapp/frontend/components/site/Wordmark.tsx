@@ -11,12 +11,12 @@ export function LogoMark({ className = "size-7" }: { className?: string }) {
   return (
     <svg viewBox="0 0 64 64" className={className} aria-hidden focusable="false">
       <defs>
-        <linearGradient id={`umr-tile-${id}`} x1="0" y1="0" x2="0" y2="1">
+        <linearGradient id={`tumr-tile-${id}`} x1="0" y1="0" x2="0" y2="1">
           <stop offset="0" stopColor="#2c312e" />
           <stop offset="1" stopColor="#1a1d1b" />
         </linearGradient>
       </defs>
-      <rect width="64" height="64" rx="15" fill={`url(#umr-tile-${id})`} />
+      <rect width="64" height="64" rx="15" fill={`url(#tumr-tile-${id})`} />
       <rect x="0.75" y="0.75" width="62.5" height="62.5" rx="14.25" fill="none" stroke="#ffffff" strokeOpacity="0.09" strokeWidth="1.5" />
       <rect x="17.5" y="8.5" width="29" height="47" rx="7.5" fill="#202321" stroke="#f0f1ed" strokeWidth="4" />
       <path d="M25 25.5 32 32l-7 6.5" fill="none" stroke="#b9e769" strokeWidth="4.5" strokeLinecap="round" strokeLinejoin="round" />
@@ -25,12 +25,15 @@ export function LogoMark({ className = "size-7" }: { className?: string }) {
   );
 }
 
-/** Mark + product name. */
+/** Mark + product name; the short name on narrow screens (W1, 2026-11-20: the full name is long). */
 export function Wordmark() {
   return (
     <span className="inline-flex items-center gap-2.5 font-semibold tracking-[-0.02em] text-ink">
       <LogoMark className="size-7" />
-      <span>{site.name}</span>
+      <span className="hidden sm:inline">{site.name}</span>
+      <span className="sm:hidden" aria-label={site.name}>
+        {site.shortName}
+      </span>
     </span>
   );
 }

@@ -1,5 +1,6 @@
 // Sample answers for the "Connect your agent" page in a plain browser (UI development,
-// screenshots). Shapes match `umr agent clients|setup|doctor --json`.
+// screenshots). Shapes match `tumr agent clients|setup|doctor --json`.
+let pathOn = false;
 const connected: Record<string, boolean> = { "claude-code": true };
 const userScoped = new Set(["codex", "claude-desktop", "antigravity"]);
 const project = String.raw`D:\Work\my-app`;
@@ -17,9 +18,9 @@ const entryDiff = (id: string) =>
   [
     "+ {",
     '+   "mcpServers": {',
-    '+     "umr": {',
+    '+     "tumr": {',
     '+       "type": "stdio",',
-    String.raw`+       "command": "C:\\Users\\you\\AppData\\Local\\AI Mobile Runtime\\umr.exe",`,
+    String.raw`+       "command": "C:\\Users\\you\\AppData\\Local\\Toolchain Universal Mobile Runtime\\tumr.exe",`,
     `+       "args": ["mcp", "--client", "${id}"]`,
     "+     }",
     "+   }",
@@ -29,6 +30,10 @@ const entryDiff = (id: string) =>
 export async function mockAgent(req: { action: string; client?: string; remove?: boolean; scope?: string }): Promise<unknown> {
   await new Promise((r) => setTimeout(r, 300));
   const id = req.client ?? "";
+  if (req.action.startsWith("path_")) {
+    if (req.action !== "path_status") pathOn = req.action === "path_add";
+    return { on: pathOn, changed: req.action !== "path_status", dir: String.raw`C:\Users\you\AppData\Local\Toolchain Universal Mobile Runtime`, chosen: pathOn };
+  }
   if (req.action === "clients") {
     return clients.map(([cid, name, installed]) => ({
       id: cid,
@@ -48,7 +53,7 @@ export async function mockAgent(req: { action: string; client?: string; remove?:
       remove: !!req.remove,
       client_exists: !!connected[id],
       applied: req.action === "apply",
-      next_step: req.remove ? "Disconnected; restart the agent if it is open." : "Start the agent in your project; it lists the umr server.",
+      next_step: req.remove ? "Disconnected; restart the agent if it is open." : "Start the agent in your project; it lists the tumr server.",
       changes: [
         {
           path: `${project}\\.cursor\\mcp.json`,

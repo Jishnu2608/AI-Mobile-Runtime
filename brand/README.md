@@ -1,4 +1,4 @@
-# Brand: the AI Mobile Runtime mark
+# Brand: the Toolchain Universal Mobile Runtime mark
 
 The product mark (owner request, 2026-11-14): a phone whose screen shows a coding agent's prompt
 `›_` — a mobile runtime for AI coding agents. Graphite & Lime, the website's palette.

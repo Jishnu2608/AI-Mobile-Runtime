@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="brand/logo-mark.svg" width="96" height="96" alt="AI Mobile Runtime logo" />
+  <img src="brand/logo-mark.svg" width="96" height="96" alt="Toolchain Universal Mobile Runtime logo" />
 </p>
 
-<h1 align="center">AI Mobile Runtime</h1>
+<h1 align="center">Toolchain Universal Mobile Runtime</h1>
 
 <p align="center">
   <strong>See and test your Android app while an AI coding agent builds it.</strong><br />
@@ -15,9 +15,9 @@
 
 ---
 
-## Why AI Mobile Runtime
+## Why Toolchain Universal Mobile Runtime
 
-AI coding agents write mobile code quickly, but they cannot see the app they are building, and setting up Android tooling by hand takes hours. AI Mobile Runtime closes that gap.
+AI coding agents write mobile code quickly, but they cannot see the app they are building, and setting up Android tooling by hand takes hours. Toolchain Universal Mobile Runtime closes that gap.
 
 Open a project and run it. The runtime installs exactly what the project needs, boots an Android emulator, builds and launches your app, and shows it live in a phone frame beside your editor. Your coding agent gets the same view you have: the screen, the errors with file and line, and the controls to tap, reload and check its own work.
 
@@ -35,12 +35,12 @@ Open a project and run it. The runtime installs exactly what the project needs, 
 
 1. **Install** — download the installer and run it. It installs for your Windows user, without administrator rights.
 2. **Set up** — the setup wizard scans your PC, lets you choose your app's folder, and shows exactly what will be installed before anything downloads.
-3. **Run** — one click (or `umr run`) boots the emulator, builds your app and opens the live preview.
-4. **Connect your agent** — one click (or `umr agent setup claude-code`) gives your coding agent the runtime's tools.
+3. **Run** — one click (or `tumr run`) boots the emulator, builds your app and opens the live preview.
+4. **Connect your agent** — one click (or `tumr agent setup claude-code`) gives your coding agent the runtime's tools.
 
 ```powershell
-umr run                          # build, launch and preview the app in this folder
-umr agent setup claude-code      # or codex, cursor, claude-desktop, vscode
+tumr run                          # build, launch and preview the app in this folder
+tumr agent setup claude-code      # or codex, cursor, claude-desktop, vscode
 ```
 
 The full walk-through is in the **[getting-started guide](docs/user/getting-started.md)**.
@@ -69,7 +69,7 @@ The app tells you if anything is missing and turns on Windows Hypervisor Platfor
 | [VS Code](docs/user/vscode.md) | The extension: run on the emulator, phone preview panel, Problems panel, Copilot |
 | [Troubleshooting](docs/user/troubleshooting.md) | Common problems and how to fix them |
 | [Privacy and security](docs/user/privacy-and-security.md) | What the runtime does on your computer, and what it never does |
-| [Command reference](docs/user/cli-reference.md) | Every `umr` command |
+| [Command reference](docs/user/cli-reference.md) | Every `tumr` command |
 | [Uninstall and your data](docs/user/uninstall-and-data.md) | Where everything is kept and how to remove it |
 
 ## Privacy and security

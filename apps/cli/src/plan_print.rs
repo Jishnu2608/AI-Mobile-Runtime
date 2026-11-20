@@ -1,7 +1,7 @@
-//! Human-readable output of `umr plan`.
+//! Human-readable output of `tumr plan`.
 
-use umr_resolver::plan::{Action, Plan};
-use umr_resolver::project::{Framework, ProjectFacts};
+use tumr_resolver::plan::{Action, Plan};
+use tumr_resolver::project::{Framework, ProjectFacts};
 
 #[allow(clippy::cast_precision_loss)]
 fn size(bytes: u64) -> String {
@@ -137,5 +137,5 @@ pub fn print(f: &ProjectFacts, p: &Plan) {
             println!("  - {n}");
         }
     }
-    println!("\nNothing was installed. Run `umr install` to install the components above.");
+    println!("\nNothing was installed. Run `tumr install` to install the components above.");
 }

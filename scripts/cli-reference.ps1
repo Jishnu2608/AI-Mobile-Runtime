@@ -1,18 +1,18 @@
 <#
 .SYNOPSIS
-  Writes docs/user/cli-reference.md from the `umr` binary's own help (REL-004), so the reference
+  Writes docs/user/cli-reference.md from the `tumr` binary's own help (REL-004), so the reference
   never drifts from the code. Run from the repository root after building:
-  powershell -File scripts\cli-reference.ps1 [-Umr target\release\umr.exe]
+  powershell -File scripts\cli-reference.ps1 [-Tumr target\release\tumr.exe]
 #>
-param([string]$Umr = "target\release\umr.exe", [string]$Out = "docs\user\cli-reference.md")
+param([string]$Tumr = "target\release\tumr.exe", [string]$Out = "docs\user\cli-reference.md")
 $ErrorActionPreference = "Stop"
-if (-not (Test-Path $Umr)) { throw "$Umr not found; build first (cargo build --release -p umr-cli)" }
-# umr writes UTF-8 (em dashes, arrows); read it as UTF-8, not the console code page
+if (-not (Test-Path $Tumr)) { throw "$Tumr not found; build first (cargo build --release -p tumr-cli)" }
+# tumr writes UTF-8 (em dashes, arrows); read it as UTF-8, not the console code page
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $OutputEncoding = [System.Text.Encoding]::UTF8
 
 function Help([string[]]$cmd) {
-  $text = & $Umr @cmd --help 2>&1 | Out-String
+  $text = & $Tumr @cmd --help 2>&1 | Out-String
   return $text.TrimEnd()
 }
 
@@ -28,22 +28,22 @@ function Subcommands([string]$help) {
 }
 
 $lines = [System.Collections.Generic.List[string]]::new()
-$lines.Add("# ``umr`` command reference")
+$lines.Add("# ``tumr`` command reference")
 $lines.Add("")
-$lines.Add("Generated from ``umr --help`` by ``scripts/cli-reference.ps1`` - do not edit by hand.")
+$lines.Add("Generated from ``tumr --help`` by ``scripts/cli-reference.ps1`` - do not edit by hand.")
 $lines.Add("")
 $top = Help @()
 $lines.Add('```text'); $lines.Add($top); $lines.Add('```')
 foreach ($c in Subcommands $top) {
   $h = Help @($c)
-  $lines.Add(""); $lines.Add("## umr $c"); $lines.Add("")
+  $lines.Add(""); $lines.Add("## tumr $c"); $lines.Add("")
   $lines.Add('```text'); $lines.Add($h); $lines.Add('```')
   foreach ($s in Subcommands $h) {
-    $lines.Add(""); $lines.Add("### umr $c $s"); $lines.Add("")
+    $lines.Add(""); $lines.Add("### tumr $c $s"); $lines.Add("")
     $lines.Add('```text'); $lines.Add((Help @($c, $s))); $lines.Add('```')
   }
 }
-$text = (($lines -join "`n") -replace 'umr\.exe', 'umr') + "`n"
+$text = (($lines -join "`n") -replace 'tumr\.exe', 'tumr') + "`n"
 New-Item -ItemType Directory -Force (Split-Path $Out) | Out-Null
 [System.IO.File]::WriteAllText((Join-Path (Get-Location) $Out), $text, [System.Text.UTF8Encoding]::new($false))
 Write-Host "$Out written"

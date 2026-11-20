@@ -4,7 +4,7 @@ import { Home, useHome } from "./Home";
 import { applyUpdate, call, checkUpdate, DocsPage, inTauri, loadWizard, openDocs, openInEditor, openPreview, openProblems, pickFolder, saveWizard, size, Step, UpdateInfo, WizardState } from "./api";
 import { AgentsStep } from "./Agents";
 import { STEP_WHY, Why } from "./why";
-import { CopyAll } from "./Problems";
+import { Approvals, CopyAll } from "./Problems";
 // the product mark, shared with the website and the app icon (brand/)
 import logo from "../../../../brand/logo-mark.svg";
 
@@ -69,7 +69,7 @@ export function App() {
   // AUD-P3-38: Pocket can be switched off, and the choice is remembered on this PC
   const [pocket, setPocket] = useState(() => {
     try {
-      return localStorage.getItem("umr.pocket") !== "off";
+      return localStorage.getItem("tumr.pocket") !== "off";
     } catch {
       return true;
     }
@@ -77,7 +77,7 @@ export function App() {
   const togglePocket = () => {
     setPocket((on) => {
       try {
-        localStorage.setItem("umr.pocket", on ? "off" : "on");
+        localStorage.setItem("tumr.pocket", on ? "off" : "on");
       } catch {
         /* not remembered: still switched for now */
       }
@@ -118,7 +118,7 @@ export function App() {
       <header>
         <h1 className="brand">
           <img src={logo} alt="" width={30} height={30} />
-          AI Mobile Runtime
+          Toolchain Universal Mobile Runtime
         </h1>
         <p className="sub">
           {atHome ? "Your projects, the running app and your agent's work." : "Set up everything your project needs to run on the Android emulator."}
@@ -133,6 +133,8 @@ export function App() {
         </button>
         {!inTauri && <p className="demo">Browser preview with sample data — open the desktop app for real results.</p>}
         <UpdateBanner />
+        {/* #54: agents waiting for an answer (run a folder, switch the device), also here */}
+        <Approvals className="ap-main" />
       </header>
       {atHome ? (
         <main>
@@ -254,7 +256,7 @@ function StepDocs({ step }: { step: Step }) {
 }
 
 const ORIGIN: Record<string, string> = {
-  managed: "installed by AI Mobile Runtime",
+  managed: "installed by Toolchain Universal Mobile Runtime",
   envvar: "named by an environment variable",
   path: "on PATH",
   registry: "Windows registry",
@@ -834,7 +836,7 @@ function DiskBreakdown({ components, disk }: { components: any[]; disk: any }) {
         </tbody>
       </table>
       <p className="muted small">
-        Only what the runtime installed is counted; tools you had before stay where they are. <code>umr components</code> lists every item;
+        Only what the runtime installed is counted; tools you had before stay where they are. <code>tumr components</code> lists every item;
         removing a project type's tools frees its share.
       </p>
     </details>
@@ -1031,7 +1033,7 @@ function RunStep({ path, onBack, onNext }: { path: string; onBack: () => void; o
         </div>
       )}
       <p className="small muted">
-        From a terminal the same is <code>umr run</code> in the project folder.
+        From a terminal the same is <code>tumr run</code> in the project folder.
       </p>
       <Nav onBack={onBack} onNext={onNext} nextLabel={ok ? "Connect your agent" : "Skip to your agent"} />
     </section>

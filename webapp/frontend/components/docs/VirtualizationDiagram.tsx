@@ -3,9 +3,9 @@
  * A technical diagram, not a screenshot: every label is a real setting or command.
  */
 const layers = [
-  { name: "Android system image (x86_64)", detail: "installed by the runtime for your project", check: "umr plan ." },
-  { name: "Android Emulator, accelerated", detail: "uses Windows Hypervisor Platform", check: "umr doctor" },
-  { name: "Windows Hypervisor Platform", detail: "a Windows feature; the app can turn it on", check: "umr admin enable-whpx" },
+  { name: "Android system image (x86_64)", detail: "installed by the runtime for your project", check: "tumr plan ." },
+  { name: "Android Emulator, accelerated", detail: "uses Windows Hypervisor Platform", check: "tumr doctor" },
+  { name: "Windows Hypervisor Platform", detail: "a Windows feature; the app can turn it on", check: "tumr admin enable-whpx" },
   { name: "CPU virtualization (VT-x / AMD-V)", detail: "a firmware (BIOS/UEFI) setting", check: "Task Manager → Performance → CPU" },
 ];
 

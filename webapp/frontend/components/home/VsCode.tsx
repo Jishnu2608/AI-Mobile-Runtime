@@ -115,10 +115,10 @@ function EditorSketch() {
       </div>
       <div className="vs-problems">
         <Status kind="warn">Problems 1</Status>
-        <code>Calculator.kt:53 · Unresolved reference &apos;bb&apos; · AI Mobile Runtime · build</code>
+        <code>Calculator.kt:53 · Unresolved reference &apos;bb&apos; · Toolchain Universal Mobile Runtime · build</code>
       </div>
       <div className="vs-statusbar">
-        <span>▣ com.umr.samples.kotlincalc</span>
+        <span>▣ com.tumr.samples.kotlincalc</span>
         <span>emulator-5554</span>
       </div>
       <figcaption className="sr-only">

@@ -2,7 +2,7 @@
 //! Test-only: it is an example, not part of the shipped CLI.
 //!
 //! ```text
-//! cargo run --release -p umr-cli --example clean_machine -- <project> [--out summary.json] [--no-interrupt]
+//! cargo run --release -p tumr-cli --example clean_machine -- <project> [--out summary.json] [--no-interrupt]
 //! ```
 //!
 //! 1. `install.prepare` for the project; accepts the licences through the API, as a user does
@@ -18,9 +18,9 @@ use std::process::ExitCode;
 use std::time::{Duration, Instant};
 
 use serde_json::{json, Value};
-use umr_api::client::Client;
-use umr_api::methods;
-use umr_core::launcher::CoreTarget;
+use tumr_api::client::Client;
+use tumr_api::methods;
+use tumr_core::launcher::CoreTarget;
 
 struct Run {
     log: Vec<String>,

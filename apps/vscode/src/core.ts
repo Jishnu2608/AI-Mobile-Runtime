@@ -1,4 +1,4 @@
-// The extension's line to the Runtime Core: one `umr rpc --stdio` process, newline-delimited
+// The extension's line to the Runtime Core: one `tumr rpc --stdio` process, newline-delimited
 // JSON both ways, requests answered out of order (each carries its id). No `vscode` import, so it
 // can be unit-tested with any program that speaks the same lines.
 import { ChildProcessWithoutNullStreams, spawn } from "node:child_process";
@@ -15,7 +15,7 @@ export class CoreClient {
   private waiting = new Map<number, Waiting>();
   private nextId = 1;
 
-  /** `command` + `args` start the bridge (normally `umr.exe rpc --stdio`). */
+  /** `command` + `args` start the bridge (normally `tumr.exe rpc --stdio`). */
   constructor(
     private readonly command: string,
     private readonly args: string[] = ["rpc", "--stdio"],
@@ -26,7 +26,7 @@ export class CoreClient {
     const p = spawn(this.command, this.args, { windowsHide: true, stdio: ["pipe", "pipe", "pipe"] });
     p.stdout.setEncoding("utf8");
     createInterface({ input: p.stdout }).on("line", (line) => this.onLine(line));
-    p.on("exit", () => this.failAll("the umr bridge stopped"));
+    p.on("exit", () => this.failAll("the tumr bridge stopped"));
     p.on("error", (e) => this.failAll(`cannot start ${this.command}: ${e.message}`));
     this.proc = p;
     return p;

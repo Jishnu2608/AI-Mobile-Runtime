@@ -1,29 +1,29 @@
-// VSC-001: AI Mobile Runtime for VS Code.
+// VSC-001: Toolchain Universal Mobile Runtime for VS Code.
 //
-// * Run on Emulator: `umr run --no-preview <folder>` as a task (its output and the trust question
+// * Run on Emulator: `tumr run --no-preview <folder>` as a task (its output and the trust question
 //   in VS Code's terminal), then the Mobile Preview panel beside the editor.
 // * Reload / Restart / Rebuild / Stop and the status bar: Core API calls through the bridge.
 // * Problems: the run's build errors, runtime errors and crashes in the Problems panel.
-// * Connect Copilot: `umr agent setup vscode` (MCP tools + instructions for agent mode).
+// * Connect Copilot: `tumr agent setup vscode` (MCP tools + instructions for agent mode).
 // Saved files reload by themselves: the Runtime Core watches the project.
 import * as path from "node:path";
 import * as vscode from "vscode";
 import { CoreClient } from "./core";
-import { findUmr } from "./locate";
+import { findTumr } from "./locate";
 import { PreviewPanel } from "./preview";
 import { place, RuntimeProblem } from "./problems";
 
 let core: CoreClient | undefined;
 let coreExe = "";
 
-function umrExe(): string | undefined {
-  const setting = vscode.workspace.getConfiguration("umr").get<string>("path") ?? "";
+function tumrExe(): string | undefined {
+  const setting = vscode.workspace.getConfiguration("tumr").get<string>("path") ?? "";
   const folders = (vscode.workspace.workspaceFolders ?? []).map((f) => f.uri.fsPath);
-  return findUmr(setting, process.env, folders);
+  return findTumr(setting, process.env, folders);
 }
 
 function getCore(): CoreClient | undefined {
-  const exe = umrExe();
+  const exe = tumrExe();
   if (!exe) return undefined;
   if (!core || exe !== coreExe) {
     core?.dispose();
@@ -33,12 +33,12 @@ function getCore(): CoreClient | undefined {
   return core;
 }
 
-async function requireUmr(): Promise<string | undefined> {
-  const exe = umrExe();
+async function requireTumr(): Promise<string | undefined> {
+  const exe = tumrExe();
   if (exe) return exe;
   const pick = await vscode.window.showErrorMessage(
-    "AI Mobile Runtime: umr.exe was not found (not on PATH, not in the default install folder).",
-    "Locate umr.exe",
+    "Toolchain Universal Mobile Runtime: tumr.exe was not found (not on PATH, not in the default install folder).",
+    "Locate tumr.exe",
   );
   if (pick) return locate();
   return undefined;
@@ -47,11 +47,11 @@ async function requireUmr(): Promise<string | undefined> {
 async function locate(): Promise<string | undefined> {
   const r = await vscode.window.showOpenDialog({
     canSelectMany: false,
-    openLabel: "Use this umr.exe",
+    openLabel: "Use this tumr.exe",
     filters: { Programs: ["exe"] },
   });
   if (!r?.length) return undefined;
-  await vscode.workspace.getConfiguration("umr").update("path", r[0].fsPath, vscode.ConfigurationTarget.Global);
+  await vscode.workspace.getConfiguration("tumr").update("path", r[0].fsPath, vscode.ConfigurationTarget.Global);
   return r[0].fsPath;
 }
 
@@ -66,15 +66,15 @@ async function pickFolder(): Promise<string | undefined> {
   return f?.uri.fsPath;
 }
 
-/** Runs `umr <args>` as a task in VS Code's terminal (interactive: trust and agent questions). */
-async function umrTask(name: string, args: string[], folder: string): Promise<void> {
-  const exe = await requireUmr();
+/** Runs `tumr <args>` as a task in VS Code's terminal (interactive: trust and agent questions). */
+async function tumrTask(name: string, args: string[], folder: string): Promise<void> {
+  const exe = await requireTumr();
   if (!exe) return;
   const task = new vscode.Task(
-    { type: "umr", task: name },
+    { type: "tumr", task: name },
     vscode.TaskScope.Workspace,
     name,
-    "AI Mobile Runtime",
+    "Toolchain Universal Mobile Runtime",
     new vscode.ProcessExecution(exe, args, { cwd: folder }),
   );
   task.presentationOptions = { reveal: vscode.TaskRevealKind.Always, panel: vscode.TaskPanelKind.Dedicated, clear: true };
@@ -84,16 +84,16 @@ async function umrTask(name: string, args: string[], folder: string): Promise<vo
 async function coreCall(label: string, method: string, params: unknown): Promise<any> {
   const c = getCore();
   if (!c) {
-    await requireUmr();
+    await requireTumr();
     return undefined;
   }
   try {
     return await vscode.window.withProgress(
-      { location: vscode.ProgressLocation.Window, title: `AI Mobile Runtime: ${label}…` },
+      { location: vscode.ProgressLocation.Window, title: `Toolchain Universal Mobile Runtime: ${label}…` },
       () => c.call(method, params),
     );
   } catch (e) {
-    vscode.window.showErrorMessage(`AI Mobile Runtime: ${label} failed: ${(e as Error).message}`);
+    vscode.window.showErrorMessage(`Toolchain Universal Mobile Runtime: ${label} failed: ${(e as Error).message}`);
     return undefined;
   }
 }
@@ -102,59 +102,59 @@ async function reload(kind: "hot" | "restart" | "full", label: string): Promise<
   const r = await coreCall(label, "project.reload", { kind });
   if (!r) return;
   if (r.status === "unsupported") {
-    vscode.window.showInformationMessage(`AI Mobile Runtime: ${r.message ?? "this app does not support that reload"}`);
+    vscode.window.showInformationMessage(`Toolchain Universal Mobile Runtime: ${r.message ?? "this app does not support that reload"}`);
   } else if (r.status !== "reloaded") {
-    vscode.window.showWarningMessage(`AI Mobile Runtime: ${label}: ${r.error ?? r.status} — see the Problems panel.`);
+    vscode.window.showWarningMessage(`Toolchain Universal Mobile Runtime: ${label}: ${r.error ?? r.status} — see the Problems panel.`);
   } else {
     vscode.window.setStatusBarMessage(`$(check) ${label} in ${r.ms} ms`, 4000);
   }
 }
 
 export function activate(context: vscode.ExtensionContext): void {
-  vscode.commands.executeCommand("setContext", "umr.active", true);
-  const diagnostics = vscode.languages.createDiagnosticCollection("umr");
+  vscode.commands.executeCommand("setContext", "tumr.active", true);
+  const diagnostics = vscode.languages.createDiagnosticCollection("tumr");
   const status = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 50);
-  status.command = "umr.menu";
+  status.command = "tumr.menu";
   status.text = "$(device-mobile) Mobile";
-  status.tooltip = "AI Mobile Runtime";
+  status.tooltip = "Toolchain Universal Mobile Runtime";
   status.show();
   context.subscriptions.push(diagnostics, status, { dispose: () => core?.dispose() });
 
   const cmd = (id: string, f: () => unknown) => context.subscriptions.push(vscode.commands.registerCommand(id, f));
 
-  cmd("umr.run", async () => {
+  cmd("tumr.run", async () => {
     const folder = await pickFolder();
     if (!folder) return;
-    await umrTask("Run on Emulator", ["run", "--no-preview", folder], folder);
-    if (vscode.workspace.getConfiguration("umr").get<boolean>("openPreviewOnRun", true)) {
+    await tumrTask("Run on Emulator", ["run", "--no-preview", folder], folder);
+    if (vscode.workspace.getConfiguration("tumr").get<boolean>("openPreviewOnRun", true)) {
       PreviewPanel.show(context, getCore);
     }
   });
-  cmd("umr.reload", () => reload("hot", "Reload"));
-  cmd("umr.restart", () => reload("restart", "Restart"));
-  cmd("umr.rebuild", () => reload("full", "Rebuild"));
-  cmd("umr.stop", async () => {
+  cmd("tumr.reload", () => reload("hot", "Reload"));
+  cmd("tumr.restart", () => reload("restart", "Restart"));
+  cmd("tumr.rebuild", () => reload("full", "Rebuild"));
+  cmd("tumr.stop", async () => {
     if (await coreCall("Stop", "project.stop", {})) vscode.window.setStatusBarMessage("$(debug-stop) App stopped", 3000);
   });
-  cmd("umr.openPreview", async () => {
-    if (await requireUmr()) PreviewPanel.show(context, getCore);
+  cmd("tumr.openPreview", async () => {
+    if (await requireTumr()) PreviewPanel.show(context, getCore);
   });
-  cmd("umr.connectCopilot", async () => {
+  cmd("tumr.connectCopilot", async () => {
     const folder = await pickFolder();
-    if (folder) await umrTask("Connect Copilot", ["agent", "setup", "vscode", "--project", folder], folder);
+    if (folder) await tumrTask("Connect Copilot", ["agent", "setup", "vscode", "--project", folder], folder);
   });
-  cmd("umr.locate", locate);
-  cmd("umr.menu", async () => {
+  cmd("tumr.locate", locate);
+  cmd("tumr.menu", async () => {
     const items: (vscode.QuickPickItem & { id: string })[] = [
-      { id: "umr.run", label: "$(play) Run on Emulator" },
-      { id: "umr.openPreview", label: "$(device-mobile) Open Mobile Preview" },
-      { id: "umr.reload", label: "$(refresh) Reload (hot)" },
-      { id: "umr.restart", label: "$(debug-restart) Restart the App" },
-      { id: "umr.rebuild", label: "$(tools) Rebuild and Reinstall" },
-      { id: "umr.stop", label: "$(debug-stop) Stop the App" },
-      { id: "umr.connectCopilot", label: "$(copilot) Connect Copilot (agent mode)" },
+      { id: "tumr.run", label: "$(play) Run on Emulator" },
+      { id: "tumr.openPreview", label: "$(device-mobile) Open Mobile Preview" },
+      { id: "tumr.reload", label: "$(refresh) Reload (hot)" },
+      { id: "tumr.restart", label: "$(debug-restart) Restart the App" },
+      { id: "tumr.rebuild", label: "$(tools) Rebuild and Reinstall" },
+      { id: "tumr.stop", label: "$(debug-stop) Stop the App" },
+      { id: "tumr.connectCopilot", label: "$(copilot) Connect Copilot (agent mode)" },
     ];
-    const pick = await vscode.window.showQuickPick(items, { placeHolder: "AI Mobile Runtime" });
+    const pick = await vscode.window.showQuickPick(items, { placeHolder: "Toolchain Universal Mobile Runtime" });
     if (pick) vscode.commands.executeCommand(pick.id);
   });
 
@@ -164,7 +164,7 @@ export function activate(context: vscode.ExtensionContext): void {
     if (busy || !vscode.window.state.focused) return;
     const c = getCore();
     if (!c) {
-      status.text = "$(device-mobile) Mobile: umr.exe not found";
+      status.text = "$(device-mobile) Mobile: tumr.exe not found";
       return;
     }
     busy = true;
@@ -172,16 +172,16 @@ export function activate(context: vscode.ExtensionContext): void {
       const s = await c.call("project.status", {}, 15_000);
       const run = s?.run;
       const mine = run && (vscode.workspace.workspaceFolders ?? []).some((f) => samePath(f.uri.fsPath, run.project));
-      vscode.commands.executeCommand("setContext", "umr.running", !!mine);
+      vscode.commands.executeCommand("setContext", "tumr.running", !!mine);
       if (!run) {
         status.text = "$(device-mobile) Mobile: not running";
-        status.tooltip = "AI Mobile Runtime — nothing runs. Click for actions.";
+        status.tooltip = "Toolchain Universal Mobile Runtime — nothing runs. Click for actions.";
       } else {
         const alive = s.alive === false ? " (stopped)" : "";
         status.text = `$(device-mobile) ${run.package}${alive}`;
-        status.tooltip = `AI Mobile Runtime — ${run.adapter} app on ${run.serial}. Click for actions.`;
+        status.tooltip = `Toolchain Universal Mobile Runtime — ${run.adapter} app on ${run.serial}. Click for actions.`;
       }
-      if (vscode.workspace.getConfiguration("umr").get<boolean>("problems", true) && mine) {
+      if (vscode.workspace.getConfiguration("tumr").get<boolean>("problems", true) && mine) {
         const d = await c.call("diagnostics.list", { limit: 200 }, 15_000);
         publish(diagnostics, (d?.entries ?? []) as RuntimeProblem[], run.project);
       } else {

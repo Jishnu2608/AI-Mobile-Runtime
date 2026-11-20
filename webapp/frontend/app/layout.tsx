@@ -1,3 +1,4 @@
+import { CursorGlow } from "@/components/motion/CursorGlow";
 import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
 import "./globals.css";
@@ -56,6 +57,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           {children}
         </main>
         <SiteFooter />
+        <CursorGlow />
       </body>
     </html>
   );

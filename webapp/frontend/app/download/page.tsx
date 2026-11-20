@@ -41,7 +41,7 @@ export default function DownloadPage() {
       <VsCodeExtension />
 
       <section aria-labelledby="verify-title" className="mt-20 grid gap-8 border-t border-line pt-14 lg:grid-cols-12">
-        <div className="lg:col-span-4">
+        <div className="min-w-0 lg:col-span-4">
           <h2 id="verify-title" className="t-sub">
             Check the file before you run it
           </h2>
@@ -49,7 +49,7 @@ export default function DownloadPage() {
             Compare the SHA-256 checksum PowerShell prints with the one on this page. If they differ, delete the file and do not run it.
           </p>
         </div>
-        <div className="lg:col-span-8">
+        <div className="min-w-0 lg:col-span-8">
           <CodeBlock data-language="powershell">
             <code>{`Get-FileHash .\\${latest?.files.find((f) => f.kind === "installer")?.name ?? "<downloaded file>"} -Algorithm SHA256`}</code>
           </CodeBlock>
@@ -199,7 +199,7 @@ function VsCodeExtension() {
   const ovsx = site.vscode.openVsx;
   return (
     <section id="vscode" aria-labelledby="vscode-dl-title" className="mt-20 grid gap-8 border-t border-line pt-14 lg:grid-cols-12">
-      <div className="lg:col-span-4">
+      <div className="min-w-0 lg:col-span-4">
         <Puzzle aria-hidden className="size-5 text-icon" strokeWidth={1.75} />
         <h2 id="vscode-dl-title" className="t-sub mt-4">
           VS Code extension
@@ -212,7 +212,7 @@ function VsCodeExtension() {
           <Link className="link" href="/docs/guides/vscode/">VS Code guide</Link>
         </p>
       </div>
-      <div className="lg:col-span-8">
+      <div className="min-w-0 lg:col-span-8">
         <div className="flex flex-wrap items-center gap-3">
           <MarketplaceButton />
           {ovsx.published ? (

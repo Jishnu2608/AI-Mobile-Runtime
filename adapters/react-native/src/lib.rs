@@ -18,12 +18,12 @@
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
-use umr_adapter::problems::{parse_line, LogFollower};
-use umr_adapter::{
+use tumr_adapter::problems::{parse_line, LogFollower};
+use tumr_adapter::{
     Adapter, AdapterContext, AdapterError, Capabilities, Event, Framework, Issue, Phase, Problem,
     ReloadKind, RunningApp, Severity, Sink,
 };
-use umr_supervisor::{ProcessSpec, RunState};
+use tumr_supervisor::{ProcessSpec, RunState};
 
 /// Longest project path for native React Native builds: `CMake` keeps object paths under 250
 /// characters, and React Native's codegen nests ~170 characters below the project.
@@ -140,10 +140,55 @@ fn port_open(port: u16) -> bool {
     .is_ok()
 }
 
+/// Metro answers `packager-status:running` on `/status`: the check the app itself makes before
+/// it asks for the bundle.
+fn metro_ready(port: u16) -> bool {
+    use std::io::{Read as _, Write as _};
+    let Ok(mut s) = std::net::TcpStream::connect_timeout(
+        &std::net::SocketAddr::from(([127, 0, 0, 1], port)),
+        Duration::from_millis(300),
+    ) else {
+        return false;
+    };
+    let _ = s.set_read_timeout(Some(Duration::from_secs(2)));
+    if s.write_all(b"GET /status HTTP/1.0\r\nHost: localhost\r\n\r\n")
+        .is_err()
+    {
+        return false;
+    }
+    let mut body = String::new();
+    let _ = s.read_to_string(&mut body);
+    body.contains("packager-status:running")
+}
+
+/// Longest wait for Metro before the app is launched anyway.
+const METRO_START: Duration = Duration::from_secs(180);
+
+/// Waits until Metro is ready (or stopped, or [`METRO_START`] passed). Without it a reused APK
+/// was launched about 2 s after Metro started, before it listened, and the app showed "Unable to
+/// load script" and never asked for the bundle (live test 2026-11-19).
+fn wait_for_metro(ctx: &AdapterContext, port: u16, sink: &Sink) {
+    if metro_ready(port) {
+        return;
+    }
+    sink(Event::Phase {
+        phase: Phase::Building,
+        message: format!("waiting for Metro on localhost:{port}"),
+    });
+    let name = format!("metro:{}", ctx.group);
+    let start = Instant::now();
+    while !metro_ready(port) {
+        if !ctx.supervisor.is_running(&name) || start.elapsed() > METRO_START {
+            return; // wait_ready reports why
+        }
+        std::thread::sleep(Duration::from_millis(300));
+    }
+}
+
 /// First free port from 8081 (React Native's default, which native builds expect).
 fn metro_port() -> Result<u16, AdapterError> {
     (8081..=8180)
-        .find(|&p| umr_supervisor::ports::bindable(p))
+        .find(|&p| tumr_supervisor::ports::bindable(p))
         .ok_or_else(|| AdapterError::Failed("no free port for Metro in 8081..8180".into()))
 }
 
@@ -270,7 +315,7 @@ fn start_metro(ctx: &AdapterContext, mode: Mode, sink: &Sink) -> Result<Metro, A
     let _ = std::fs::write(&log, b"");
     let follower = LogFollower::from_end(&log);
     let (aport, serial) = (ctx.device.adb.port, ctx.device.serial.clone());
-    let have_go = mode == Mode::ExpoGo && umr_device::app::is_installed(aport, &serial, EXPO_GO);
+    let have_go = mode == Mode::ExpoGo && tumr_device::app::is_installed(aport, &serial, EXPO_GO);
     let mut spec = ProcessSpec::new(&name, "cmd.exe", &log).args(metro_args(
         &ctx.project,
         mode,
@@ -299,8 +344,8 @@ fn start_metro(ctx: &AdapterContext, mode: Mode, sink: &Sink) -> Result<Metro, A
             }
             std::thread::sleep(Duration::from_millis(250));
         }
-        let _ = umr_device::app::force_stop(aport, &serial, EXPO_GO);
-        umr_device::adb::shell(aport, &serial, &open_expo_go(port))
+        let _ = tumr_device::app::force_stop(aport, &serial, EXPO_GO);
+        tumr_device::adb::shell(aport, &serial, &open_expo_go(port))
             .map_err(|e| AdapterError::LaunchFailed(e.to_string()))?;
     }
     Ok(Metro {
@@ -375,7 +420,7 @@ fn wait_ready(
             )));
         }
         let running =
-            umr_device::app::pid(ctx.device.adb.port, &ctx.device.serial, package).is_some();
+            tumr_device::app::pid(ctx.device.adb.port, &ctx.device.serial, package).is_some();
         if bundled_ok && running {
             return Ok(());
         }
@@ -394,9 +439,9 @@ fn native_build(ctx: &AdapterContext, port: u16, sink: &Sink) -> Result<String, 
     g.project = ctx.project.join("android");
     g.env = env_for(ctx);
     g.env.insert("RCT_METRO_PORT".into(), port.to_string());
-    let module = umr_adapter_gradle::app_module(&g.project).unwrap_or_else(|| "app".into());
+    let module = tumr_adapter_gradle::app_module(&g.project).unwrap_or_else(|| "app".into());
     // only the device's ABI: React Native compiles C++ per ABI (4x the work for all of them)
-    let abi = umr_device::adb::shell(
+    let abi = tumr_device::adb::shell(
         ctx.device.adb.port,
         &ctx.device.serial,
         "getprop ro.product.cpu.abi",
@@ -419,7 +464,7 @@ fn native_build(ctx: &AdapterContext, port: u16, sink: &Sink) -> Result<String, 
     .iter()
     .map(|f| ctx.project.join(f))
     .collect();
-    let apk = match umr_adapter_gradle::up_to_date_apk(&g.project, &module, &extra) {
+    let apk = match tumr_adapter_gradle::up_to_date_apk(&g.project, &module, &extra) {
         Some(apk) => {
             sink(Event::Phase {
                 phase: Phase::Building,
@@ -430,15 +475,17 @@ fn native_build(ctx: &AdapterContext, port: u16, sink: &Sink) -> Result<String, 
             });
             apk
         }
-        None => umr_adapter_gradle::build_with(
+        None => tumr_adapter_gradle::build_with(
             &g,
             &module,
             &[format!("-PreactNativeArchitectures={abi}")],
             sink,
         )?,
     };
-    let package = umr_adapter_gradle::install(&g, &apk, sink)?;
-    umr_adapter_gradle::launch(&g, &package, sink)?;
+    let package = tumr_adapter_gradle::install(&g, &apk, sink)?;
+    // the app checks Metro once at start; launched before Metro listens, it never loads
+    wait_for_metro(ctx, port, sink);
+    tumr_adapter_gradle::launch(&g, &package, sink)?;
     Ok(package)
 }
 
@@ -482,7 +529,7 @@ impl Adapter for ReactNative {
         {
             v.push(Issue {
                 message: "Node.js is not available".into(),
-                fix: "run `umr install` for this project".into(),
+                fix: "run `tumr install` for this project".into(),
             });
         }
         if mode(root) == Mode::Native {
@@ -512,7 +559,7 @@ impl Adapter for ReactNative {
             {
                 v.push(Issue {
                     message: "no JDK selected for the native build".into(),
-                    fix: "run `umr install` for this project".into(),
+                    fix: "run `tumr install` for this project".into(),
                 });
             }
         }
@@ -561,7 +608,7 @@ impl Adapter for ReactNative {
         if mode == Mode::ExpoGo {
             sink(Event::AppStarted {
                 package: package.clone(),
-                pid: umr_device::app::pid(ctx.device.adb.port, &ctx.device.serial, &package),
+                pid: tumr_device::app::pid(ctx.device.adb.port, &ctx.device.serial, &package),
             });
         }
         Ok(Box::new(RnApp {
@@ -637,15 +684,15 @@ impl RunningApp for RnApp {
                 // restart the app: it loads a fresh bundle from Metro (`R R` key presses are
                 // not reliable: Expo Go ignores them)
                 let (port, serial) = (self.ctx.device.adb.port, self.ctx.device.serial.clone());
-                let _ = umr_device::app::force_stop(port, &serial, &self.package);
+                let _ = tumr_device::app::force_stop(port, &serial, &self.package);
                 let mport = self.metro.as_ref().map_or(8081, |m| m.port);
                 match self.mode {
                     Mode::ExpoGo => {
-                        umr_device::adb::shell(port, &serial, &open_expo_go(mport))
+                        tumr_device::adb::shell(port, &serial, &open_expo_go(mport))
                             .map_err(|e| AdapterError::Failed(e.to_string()))?;
                     }
                     Mode::Native => {
-                        umr_device::app::launch(port, &serial, &self.package, None)
+                        tumr_device::app::launch(port, &serial, &self.package, None)
                             .map_err(AdapterError::LaunchFailed)?;
                     }
                 }
@@ -663,7 +710,7 @@ impl RunningApp for RnApp {
                     phase: Phase::Reloading,
                     message: "restart Metro and the app".into(),
                 });
-                let _ = umr_device::app::force_stop(
+                let _ = tumr_device::app::force_stop(
                     self.ctx.device.adb.port,
                     &self.ctx.device.serial,
                     &self.package,
@@ -688,7 +735,7 @@ impl RunningApp for RnApp {
 
     fn is_alive(&mut self) -> bool {
         self.metro_running()
-            && umr_device::app::pid(
+            && tumr_device::app::pid(
                 self.ctx.device.adb.port,
                 &self.ctx.device.serial,
                 &self.package,
@@ -697,7 +744,7 @@ impl RunningApp for RnApp {
     }
 
     fn stop(mut self: Box<Self>) {
-        let _ = umr_device::app::force_stop(
+        let _ = tumr_device::app::force_stop(
             self.ctx.device.adb.port,
             &self.ctx.device.serial,
             &self.package,
@@ -723,8 +770,33 @@ pub fn runtime_problem(message: &str) -> Problem {
 mod tests {
     use super::*;
 
+    #[test]
+    fn metro_is_ready_only_when_it_says_so() {
+        use std::io::{Read as _, Write as _};
+        let serve = |reply: &'static str| {
+            let l = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+            let port = l.local_addr().unwrap().port();
+            std::thread::spawn(move || {
+                if let Ok((mut s, _)) = l.accept() {
+                    let mut buf = [0u8; 256];
+                    let _ = s.read(&mut buf);
+                    let _ = s.write_all(reply.as_bytes());
+                }
+            });
+            port
+        };
+        assert!(metro_ready(serve(
+            "HTTP/1.1 200 OK\r\nContent-Length: 23\r\n\r\npackager-status:running"
+        )));
+        assert!(!metro_ready(serve("HTTP/1.1 404 Not Found\r\n\r\nnope")));
+        let closed = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = closed.local_addr().unwrap().port();
+        drop(closed);
+        assert!(!metro_ready(port), "nothing listens");
+    }
+
     fn tmp(tag: &str) -> PathBuf {
-        let d = std::env::temp_dir().join(format!("umr-rn-{tag}-{}", std::process::id()));
+        let d = std::env::temp_dir().join(format!("tumr-rn-{tag}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&d);
         std::fs::create_dir_all(&d).unwrap();
         d
@@ -826,7 +898,7 @@ mod tests {
     #[test]
     fn static_contract() {
         assert_eq!(
-            umr_adapter::contract::check_static(&ReactNative),
+            tumr_adapter::contract::check_static(&ReactNative),
             Vec::<String>::new()
         );
         assert_eq!(runtime_problem("x").source, "react-native");

@@ -4828,6 +4828,250 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e421abadd41a4225275504ea4d6566923418b7f05506fbc9c0fe86ba7396114b"
 
 [[package]]
+name = "tumr-adapter"
+version = "0.1.32"
+dependencies = [
+ "serde",
+ "tumr-device",
+ "tumr-resolver",
+ "tumr-supervisor",
+]
+
+[[package]]
+name = "tumr-adapter-flutter"
+version = "0.1.32"
+dependencies = [
+ "serde_json",
+ "sha2",
+ "tumr-adapter",
+ "tumr-device",
+ "tumr-supervisor",
+]
+
+[[package]]
+name = "tumr-adapter-gradle"
+version = "0.1.32"
+dependencies = [
+ "tumr-adapter",
+ "tumr-device",
+ "tumr-supervisor",
+]
+
+[[package]]
+name = "tumr-adapter-react-native"
+version = "0.1.32"
+dependencies = [
+ "serde_json",
+ "tumr-adapter",
+ "tumr-adapter-gradle",
+ "tumr-device",
+ "tumr-supervisor",
+]
+
+[[package]]
+name = "tumr-api"
+version = "0.1.32"
+dependencies = [
+ "serde",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
+name = "tumr-cli"
+version = "0.1.32"
+dependencies = [
+ "clap",
+ "serde_json",
+ "tokio",
+ "tumr-api",
+ "tumr-core",
+ "tumr-elevate",
+ "tumr-env",
+ "tumr-installer",
+ "tumr-mcp",
+ "tumr-platform",
+ "tumr-resolver",
+ "tumr-storage",
+]
+
+[[package]]
+name = "tumr-core"
+version = "0.1.32"
+dependencies = [
+ "getrandom 0.3.4",
+ "notify",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tokio",
+ "tracing",
+ "tracing-appender",
+ "tracing-subscriber",
+ "tumr-adapter",
+ "tumr-adapter-flutter",
+ "tumr-adapter-gradle",
+ "tumr-adapter-react-native",
+ "tumr-api",
+ "tumr-device",
+ "tumr-diagnostics",
+ "tumr-elevate",
+ "tumr-env",
+ "tumr-installer",
+ "tumr-platform",
+ "tumr-resolver",
+ "tumr-session",
+ "tumr-storage",
+ "tumr-stream",
+ "tumr-supervisor",
+]
+
+[[package]]
+name = "tumr-desktop"
+version = "0.1.32"
+dependencies = [
+ "rfd",
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-build",
+ "tokio",
+ "tumr-api",
+ "tumr-core",
+ "tumr-platform",
+]
+
+[[package]]
+name = "tumr-device"
+version = "0.1.32"
+dependencies = [
+ "http",
+ "prost",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tokio",
+ "tokio-stream",
+ "tonic",
+ "tumr-platform",
+ "tumr-supervisor",
+]
+
+[[package]]
+name = "tumr-diagnostics"
+version = "0.1.32"
+dependencies = [
+ "regex",
+ "serde",
+ "serde_json",
+ "tumr-adapter",
+ "tumr-device",
+]
+
+[[package]]
+name = "tumr-elevate"
+version = "0.1.32"
+dependencies = [
+ "tumr-platform",
+]
+
+[[package]]
+name = "tumr-env"
+version = "0.1.32"
+dependencies = [
+ "serde",
+ "serde_json",
+ "tumr-platform",
+]
+
+[[package]]
+name = "tumr-installer"
+version = "0.1.32"
+dependencies = [
+ "getrandom 0.3.4",
+ "reqwest 0.12.28",
+ "roxmltree",
+ "serde",
+ "serde_json",
+ "sha1",
+ "sha2",
+ "tumr-env",
+ "tumr-platform",
+ "tumr-resolver",
+ "tumr-storage",
+ "zip",
+]
+
+[[package]]
+name = "tumr-mcp"
+version = "0.1.32"
+dependencies = [
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
+name = "tumr-platform"
+version = "0.1.32"
+dependencies = [
+ "tokio",
+ "windows-sys 0.59.0",
+]
+
+[[package]]
+name = "tumr-resolver"
+version = "0.1.32"
+dependencies = [
+ "base64 0.22.1",
+ "ed25519-dalek",
+ "getrandom 0.3.4",
+ "serde",
+ "serde_json",
+ "tumr-env",
+ "tumr-platform",
+]
+
+[[package]]
+name = "tumr-session"
+version = "0.1.32"
+dependencies = [
+ "serde",
+ "tumr-storage",
+]
+
+[[package]]
+name = "tumr-storage"
+version = "0.1.32"
+dependencies = [
+ "rusqlite",
+ "serde",
+ "toml 0.8.23",
+ "tracing",
+ "tumr-platform",
+]
+
+[[package]]
+name = "tumr-stream"
+version = "0.1.32"
+dependencies = [
+ "futures-util",
+ "getrandom 0.3.4",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tokio-tungstenite",
+ "tumr-device",
+]
+
+[[package]]
+name = "tumr-supervisor"
+version = "0.1.32"
+dependencies = [
+ "serde",
+ "tumr-platform",
+]
+
+[[package]]
 name = "tungstenite"
 version = "0.24.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4862,250 +5106,6 @@ name = "typenum"
 version = "1.20.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b6f5e870be6c3b371b77fe0ee0bafb859fa4964b4404c27de1d380043c4dda20"
-
-[[package]]
-name = "umr-adapter"
-version = "0.1.28"
-dependencies = [
- "serde",
- "umr-device",
- "umr-resolver",
- "umr-supervisor",
-]
-
-[[package]]
-name = "umr-adapter-flutter"
-version = "0.1.28"
-dependencies = [
- "serde_json",
- "sha2",
- "umr-adapter",
- "umr-device",
- "umr-supervisor",
-]
-
-[[package]]
-name = "umr-adapter-gradle"
-version = "0.1.28"
-dependencies = [
- "umr-adapter",
- "umr-device",
- "umr-supervisor",
-]
-
-[[package]]
-name = "umr-adapter-react-native"
-version = "0.1.28"
-dependencies = [
- "serde_json",
- "umr-adapter",
- "umr-adapter-gradle",
- "umr-device",
- "umr-supervisor",
-]
-
-[[package]]
-name = "umr-api"
-version = "0.1.28"
-dependencies = [
- "serde",
- "serde_json",
- "tokio",
-]
-
-[[package]]
-name = "umr-cli"
-version = "0.1.28"
-dependencies = [
- "clap",
- "serde_json",
- "tokio",
- "umr-api",
- "umr-core",
- "umr-elevate",
- "umr-env",
- "umr-installer",
- "umr-mcp",
- "umr-platform",
- "umr-resolver",
- "umr-storage",
-]
-
-[[package]]
-name = "umr-core"
-version = "0.1.28"
-dependencies = [
- "getrandom 0.3.4",
- "notify",
- "serde",
- "serde_json",
- "sha2",
- "tokio",
- "tracing",
- "tracing-appender",
- "tracing-subscriber",
- "umr-adapter",
- "umr-adapter-flutter",
- "umr-adapter-gradle",
- "umr-adapter-react-native",
- "umr-api",
- "umr-device",
- "umr-diagnostics",
- "umr-elevate",
- "umr-env",
- "umr-installer",
- "umr-platform",
- "umr-resolver",
- "umr-session",
- "umr-storage",
- "umr-stream",
- "umr-supervisor",
-]
-
-[[package]]
-name = "umr-desktop"
-version = "0.1.28"
-dependencies = [
- "rfd",
- "serde",
- "serde_json",
- "tauri",
- "tauri-build",
- "tokio",
- "umr-api",
- "umr-core",
- "umr-platform",
-]
-
-[[package]]
-name = "umr-device"
-version = "0.1.28"
-dependencies = [
- "http",
- "prost",
- "serde",
- "serde_json",
- "sha2",
- "tokio",
- "tokio-stream",
- "tonic",
- "umr-platform",
- "umr-supervisor",
-]
-
-[[package]]
-name = "umr-diagnostics"
-version = "0.1.28"
-dependencies = [
- "regex",
- "serde",
- "serde_json",
- "umr-adapter",
- "umr-device",
-]
-
-[[package]]
-name = "umr-elevate"
-version = "0.1.28"
-dependencies = [
- "umr-platform",
-]
-
-[[package]]
-name = "umr-env"
-version = "0.1.28"
-dependencies = [
- "serde",
- "serde_json",
- "umr-platform",
-]
-
-[[package]]
-name = "umr-installer"
-version = "0.1.28"
-dependencies = [
- "getrandom 0.3.4",
- "reqwest 0.12.28",
- "roxmltree",
- "serde",
- "serde_json",
- "sha1",
- "sha2",
- "umr-env",
- "umr-platform",
- "umr-resolver",
- "umr-storage",
- "zip",
-]
-
-[[package]]
-name = "umr-mcp"
-version = "0.1.28"
-dependencies = [
- "serde_json",
- "tokio",
-]
-
-[[package]]
-name = "umr-platform"
-version = "0.1.28"
-dependencies = [
- "tokio",
- "windows-sys 0.59.0",
-]
-
-[[package]]
-name = "umr-resolver"
-version = "0.1.28"
-dependencies = [
- "base64 0.22.1",
- "ed25519-dalek",
- "getrandom 0.3.4",
- "serde",
- "serde_json",
- "umr-env",
- "umr-platform",
-]
-
-[[package]]
-name = "umr-session"
-version = "0.1.28"
-dependencies = [
- "serde",
- "umr-storage",
-]
-
-[[package]]
-name = "umr-storage"
-version = "0.1.28"
-dependencies = [
- "rusqlite",
- "serde",
- "toml 0.8.23",
- "tracing",
- "umr-platform",
-]
-
-[[package]]
-name = "umr-stream"
-version = "0.1.28"
-dependencies = [
- "futures-util",
- "getrandom 0.3.4",
- "serde",
- "serde_json",
- "tokio",
- "tokio-tungstenite",
- "umr-device",
-]
-
-[[package]]
-name = "umr-supervisor"
-version = "0.1.28"
-dependencies = [
- "serde",
- "umr-platform",
-]
 
 [[package]]
 name = "unicode-ident"

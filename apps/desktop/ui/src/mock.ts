@@ -15,7 +15,7 @@ function mockFold(): string | null {
 const plan = {
   profile: "android-native",
   items: [
-    { component: "jdk", title: "Eclipse Temurin JDK", version: "17.0.21", action: { kind: "reuse", path: "D:\\UMR\\jdks\\temurin-17.0.21_9" }, approx_download_bytes: 0, reason: "AGP 9.0.1 needs JDK 17+" },
+    { component: "jdk", title: "Eclipse Temurin JDK", version: "17.0.21", action: { kind: "reuse", path: "D:\\TUMR\\jdks\\temurin-17.0.21_9" }, approx_download_bytes: 0, reason: "AGP 9.0.1 needs JDK 17+" },
     { component: "android-platform", title: "Android SDK Platform", package: "platforms/android-36", version: "36", action: { kind: "install" }, approx_download_bytes: 124780544, reason: "compileSdk = 36" },
     { component: "android-system-image", title: "Android system image (Google APIs, x86_64)", package: "system-images/android-36/google_apis/x86_64", version: "36", action: { kind: "install" }, approx_download_bytes: 4585422848, reason: "emulator image for API 36" },
   ],
@@ -41,8 +41,8 @@ export async function mockCall(method: string, _params: unknown): Promise<any> {
     case "env.scan":
       return {
         host: { windows_build: 26300, windows_11: true, ram_total_bytes: 17179869184, disk_free_bytes: 290000000000, long_paths_enabled: true, virtualization: { whpx: "usable", acceleration_available: true } },
-        jdks: [{ home: "D:\\UMR\\jdks\\temurin-17.0.21_9", major: 17, is_jdk: true, health: { state: "ok" } }],
-        android_sdks: [{ root: "D:\\UMR\\android-sdk", packages: [1, 2, 3, 4, 5, 6] }],
+        jdks: [{ home: "D:\\TUMR\\jdks\\temurin-17.0.21_9", major: 17, is_jdk: true, health: { state: "ok" } }],
+        android_sdks: [{ root: "D:\\TUMR\\android-sdk", packages: [1, 2, 3, 4, 5, 6] }],
         tools: [{ name: "node", version: "24.15.0" }, { name: "git", version: "2.52.0" }],
         conflicts: [],
         readiness: [
@@ -75,7 +75,7 @@ export async function mockCall(method: string, _params: unknown): Promise<any> {
         prepared: {
           steps: plan.items.filter((i) => i.action.kind === "install").map((i) => ({ ...i, licences: ["android-sdk-license"], kind: { type: "sdk-package", package: i.package } })),
           licences: [{ id: "android-sdk-license", title: "Android Software Development Kit License Agreement", url: "https://developer.android.com/studio/terms", text: licenceText, sha256: "ab", accepted }],
-          android_sdk: "D:\\UMR\\android-sdk",
+          android_sdk: "D:\\TUMR\\android-sdk",
         },
       };
     case "install.licence.accept":
@@ -95,7 +95,7 @@ export async function mockCall(method: string, _params: unknown): Promise<any> {
         id: "mockjob",
         state: failed ? "failed" : done ? "done" : "running",
         message: failed ? "Android system image: download stopped (connection reset)" : undefined,
-        log: "D:\\UMR\\logs\\install-mockjob.log",
+        log: "D:\\TUMR\\logs\\install-mockjob.log",
         items: [
           { component: "android-platform", title: "Android SDK Platform", state: polls > 3 ? "done" : "installing", bytes_done: 0 },
           {
@@ -172,7 +172,7 @@ export async function mockCall(method: string, _params: unknown): Promise<any> {
         code: { first: 92, line: 94, lines: ["  val total = remember { mutableStateOf(0) }", "  Column {", '    Text(text = Calc.parse(input).toString())', "  }", "}"] },
       };
     case "session.status":
-      return { session: { avd: `umr_${mockFold() ?? "standard"}_api36`, profile: mockFold() ?? "standard", serial: "emulator-5554", state: "crashed" } };
+      return { session: { avd: `tumr_${mockFold() ?? "standard"}_api36`, profile: mockFold() ?? "standard", serial: "emulator-5554", state: "crashed" } };
     case "diagnostics.flag":
       return { flagged: (_params as any)?.fingerprint };
     case "home.summary": {
@@ -198,7 +198,7 @@ export async function mockCall(method: string, _params: unknown): Promise<any> {
       if ((_params as any)?.since) return { lines: [], cursor: 4 };
       return {
         lines: [
-          { seq: 1, source: "umr", level: "I", tag: "building", text: "lib/main.dart" },
+          { seq: 1, source: "tumr", level: "I", tag: "building", text: "lib/main.dart" },
           { seq: 2, source: "tool", level: "I", text: "Launching lib/main.dart on sdk gphone64 x86 64 in debug mode..." },
           { seq: 3, source: "logcat", level: "W", tag: "flutter", pid: 4321, text: "A RenderFlex overflowed by 42 pixels on the bottom." },
           { seq: 4, source: "logcat", level: "E", tag: "AndroidRuntime", pid: 4321, text: "FATAL EXCEPTION: main" },

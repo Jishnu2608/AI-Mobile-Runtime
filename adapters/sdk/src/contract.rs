@@ -218,7 +218,7 @@ mod tests {
 
     impl RunningApp for FakeApp {
         fn package(&self) -> &'static str {
-            "com.umr.fake"
+            "com.tumr.fake"
         }
         fn reload(&mut self, kind: ReloadKind, sink: &Sink) -> Result<Duration, AdapterError> {
             let ok = match kind {
@@ -266,7 +266,7 @@ mod tests {
         ) -> Result<Box<dyn RunningApp>, AdapterError> {
             self.running.store(true, Ordering::SeqCst);
             sink(Event::AppStarted {
-                package: "com.umr.fake".into(),
+                package: "com.tumr.fake".into(),
                 pid: Some(1),
             });
             Ok(Box::new(FakeApp {
@@ -286,13 +286,13 @@ mod tests {
             flutter_root: None,
             device: crate::DeviceTarget {
                 serial: "emulator-5554".into(),
-                adb: umr_device::server::AdbServer::new(
+                adb: tumr_device::server::AdbServer::new(
                     Path::new("adb.exe"),
                     5137,
                     std::collections::HashMap::new(),
                 ),
             },
-            supervisor: umr_supervisor::Supervisor::new(),
+            supervisor: tumr_supervisor::Supervisor::new(),
             group: "run:test".into(),
             log_dir: std::env::temp_dir(),
         }

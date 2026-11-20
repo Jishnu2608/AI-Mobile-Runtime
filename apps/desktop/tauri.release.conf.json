@@ -2,9 +2,9 @@
   "$schema": "https://schema.tauri.app/config/2",
   "bundle": {
     "resources": {
-      "../../target/release/umr.exe": "umr.exe",
-      "../../target/release/umr-core.exe": "umr-core.exe",
-      "../../target/release/umr-elevate.exe": "umr-elevate.exe",
+      "../../target/release/tumr.exe": "tumr.exe",
+      "../../target/release/tumr-core.exe": "tumr-core.exe",
+      "../../target/release/tumr-elevate.exe": "tumr-elevate.exe",
       "../../THIRD_PARTY_NOTICES.md": "THIRD_PARTY_NOTICES.md"
     }
   }

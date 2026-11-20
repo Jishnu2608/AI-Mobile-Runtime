@@ -5,11 +5,11 @@
 |---|---|---|
 | Windows | Windows 11, x64 | Windows 10 and Arm PCs are not supported yet |
 | CPU virtualization | VT-x / AMD-V **enabled in the firmware (BIOS/UEFI)** | Task Manager → Performance → CPU shows "Virtualization: Enabled". If disabled, turn it on in the firmware settings — software cannot |
-| Windows Hypervisor Platform | On | The app can turn it on for you (administrator prompt + restart): `umr admin enable-whpx` |
+| Windows Hypervisor Platform | On | The app can turn it on for you (administrator prompt + restart): `tumr admin enable-whpx` |
 | RAM | 16 GB recommended, 8 GB minimum | With 8 GB use the `compact` profile and close other heavy apps |
 | Disk | ~25 MB for the app; 8–15 GB for toolchains and one emulator image | You choose the folder (`[storage] toolchains_dir`); each extra emulator image is 2–4 GB |
 | Network | Internet for the first setup and for dependency downloads (Gradle, pub, npm) | Proxies set in Windows are used; corporate TLS inspection works when its root certificate is in the Windows store |
-| Long paths | Recommended | `umr admin enable-long-paths` (administrator prompt) |
+| Long paths | Recommended | `tumr admin enable-long-paths` (administrator prompt) |
 
 ## What the runtime installs for you (only what a project needs)
 | Component | From | Used for |

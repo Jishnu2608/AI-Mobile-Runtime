@@ -86,11 +86,11 @@ origin: app
 at: Calc.kt:8
 ---
 11-13 20:30:00.000   900   900 E AndroidRuntime: FATAL EXCEPTION: main
-11-13 20:30:00.000   900   900 E AndroidRuntime: Process: com.umr.kotlindemo, PID: 900
+11-13 20:30:00.000   900   900 E AndroidRuntime: Process: com.tumr.kotlindemo, PID: 900
 11-13 20:30:00.000   900   900 E AndroidRuntime: java.lang.NumberFormatException: For input string: "abc"
 11-13 20:30:00.000   900   900 E AndroidRuntime: 	at java.lang.Integer.parseInt(Integer.java:615)
 11-13 20:30:00.000   900   900 E AndroidRuntime: 	at kotlin.text.StringsKt.toInt(Strings.kt:20)
-11-13 20:30:00.000   900   900 E AndroidRuntime: 	at com.example.umrkotlindemo.Calc.parse(Calc.kt:8)
+11-13 20:30:00.000   900   900 E AndroidRuntime: 	at com.example.tumrkotlindemo.Calc.parse(Calc.kt:8)
 === react native js exception
 kind: crash
 expect: crash

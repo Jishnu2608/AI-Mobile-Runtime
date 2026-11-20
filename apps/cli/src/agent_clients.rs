@@ -3,7 +3,7 @@
 //! One entry per client: where it reads its MCP server list (project and user scope), the file
 //! format, where agent instructions go, and how to tell it is installed. Formats were checked
 //! against each client's own documentation on the date in `verified` (details and sources in
-//! `docs/agents/clients.md`). `umr agent setup` (`agent_setup.rs`) writes every client whose
+//! `docs/agents/clients.md`). `tumr agent setup` (`agent_setup.rs`) writes every client whose
 //! `setup` is true.
 
 use std::path::{Path, PathBuf};
@@ -60,7 +60,7 @@ pub struct Client {
     pub detect_commands: &'static [&'static str],
     /// Folders that show the client is installed.
     pub detect_places: &'static [Place],
-    /// `umr agent setup <id>` can write it today.
+    /// `tumr agent setup <id>` can write it today.
     pub setup: bool,
     /// Date the format was checked against the client's documentation.
     pub verified: &'static str,
@@ -75,7 +75,7 @@ pub const CLIENTS: [Client; 6] = [
         format: Format::Json { key: "mcpServers", typed: true },
         project_config: Some(Place::Project(".mcp.json")),
         user_config: Some(Place::Home(".claude.json")),
-        instructions: Instructions::File(".claude/skills/umr-runtime/SKILL.md"),
+        instructions: Instructions::File(".claude/skills/tumr-runtime/SKILL.md"),
         detect_commands: &["claude"],
         detect_places: &[Place::Home(".claude")],
         setup: true,
@@ -101,7 +101,7 @@ pub const CLIENTS: [Client; 6] = [
         format: Format::Json { key: "mcpServers", typed: true },
         project_config: Some(Place::Project(".cursor/mcp.json")),
         user_config: Some(Place::Home(".cursor/mcp.json")),
-        instructions: Instructions::File(".cursor/rules/umr-runtime.mdc"),
+        instructions: Instructions::File(".cursor/rules/tumr-runtime.mdc"),
         detect_commands: &["cursor"],
         detect_places: &[Place::Home(".cursor")],
         setup: true,
@@ -127,7 +127,7 @@ pub const CLIENTS: [Client; 6] = [
         format: Format::Json { key: "servers", typed: true },
         project_config: Some(Place::Project(".vscode/mcp.json")),
         user_config: Some(Place::AppData("Code/User/mcp.json")),
-        instructions: Instructions::File(".github/instructions/umr-runtime.instructions.md"),
+        instructions: Instructions::File(".github/instructions/tumr-runtime.instructions.md"),
         detect_commands: &["code"],
         detect_places: &[Place::AppData("Code/User")],
         setup: true,
@@ -140,7 +140,7 @@ pub const CLIENTS: [Client; 6] = [
         format: Format::Json { key: "mcpServers", typed: false },
         project_config: Some(Place::Project(".agents/mcp_config.json")),
         user_config: Some(Place::Home(".gemini/config/mcp_config.json")),
-        instructions: Instructions::File(".agents/rules/umr-runtime.md"),
+        instructions: Instructions::File(".agents/rules/tumr-runtime.md"),
         detect_commands: &[],
         detect_places: &[Place::Home(".gemini/antigravity")],
         setup: true,
@@ -289,7 +289,7 @@ impl Client {
         v
     }
 
-    /// Whether the given config file already has a `umr` server.
+    /// Whether the given config file already has a `tumr` server.
     #[must_use]
     pub fn configured_in(&self, path: &Path) -> bool {
         let Ok(text) = std::fs::read_to_string(path) else {
@@ -297,16 +297,16 @@ impl Client {
         };
         match self.format {
             Format::Json { key, .. } => serde_json::from_str::<Value>(&text)
-                .is_ok_and(|v| v.get(key).and_then(|s| s.get("umr")).is_some()),
-            Format::CodexToml => text.lines().any(|l| l.trim() == "[mcp_servers.umr]"),
+                .is_ok_and(|v| v.get(key).and_then(|s| s.get("tumr")).is_some()),
+            Format::CodexToml => text.lines().any(|l| l.trim() == "[mcp_servers.tumr]"),
         }
     }
 }
 
-/// `umr agent clients [--project <folder>] [--json]`.
+/// `tumr agent clients [--project <folder>] [--json]`.
 pub fn list(project: &Path, json_out: bool) -> std::process::ExitCode {
     let exe =
-        std::env::current_exe().map_or_else(|_| "umr.exe".into(), |p| p.display().to_string());
+        std::env::current_exe().map_or_else(|_| "tumr.exe".into(), |p| p.display().to_string());
     let rows: Vec<Value> = CLIENTS
         .iter()
         .map(|c| {
@@ -316,15 +316,15 @@ pub fn list(project: &Path, json_out: bool) -> std::process::ExitCode {
                 "id": c.id,
                 "name": c.name,
                 "installed": c.installed(),
-                "setup": if c.setup { format!("umr agent setup {}", c.id) } else { "manual".to_string() },
+                "setup": if c.setup { format!("tumr agent setup {}", c.id) } else { "manual".to_string() },
                 "user_config": user.as_ref().map(|p| p.display().to_string()),
                 "user_connected": user.as_deref().is_some_and(|p| c.configured_in(p)),
                 "project_config": proj.as_ref().map(|p| p.display().to_string()),
                 "project_connected": proj.as_deref().is_some_and(|p| c.configured_in(p)),
                 "server_entry": match c.format {
-                    Format::Json { key, .. } => json!({ key: { "umr": c.server_entry(&exe) } }),
+                    Format::Json { key, .. } => json!({ key: { "tumr": c.server_entry(&exe) } }),
                     Format::CodexToml => json!(format!(
-                        "[mcp_servers.umr]
+                        "[mcp_servers.tumr]
 command = '{exe}'
 args = [\"mcp\", \"--client\", \"{}\"]",
                         c.id
@@ -362,13 +362,13 @@ args = [\"mcp\", \"--client\", \"{}\"]",
             },
             if connected { "connected" } else { "-" },
             if c.setup {
-                format!("umr agent setup {}", c.id)
+                format!("tumr agent setup {}", c.id)
             } else {
                 "manual setup (see docs)".into()
             }
         );
     }
-    println!("\nConfig files: umr agent clients --json");
+    println!("\nConfig files: tumr agent clients --json");
     std::process::ExitCode::SUCCESS
 }
 
@@ -388,7 +388,7 @@ mod tests {
 
     #[test]
     fn server_entry_follows_the_format() {
-        let exe = r"C:\Programs\umr.exe";
+        let exe = r"C:\Programs\tumr.exe";
         let cursor = find("cursor").unwrap().server_entry(exe);
         assert_eq!(cursor["type"], "stdio");
         assert_eq!(cursor["args"], json!(["mcp", "--client", "cursor"]));
@@ -399,12 +399,12 @@ mod tests {
 
     #[test]
     fn configured_in_reads_each_format() {
-        let dir = std::env::temp_dir().join(format!("umr-clients-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("tumr-clients-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let json_file = dir.join("mcp.json");
         std::fs::write(
             &json_file,
-            r#"{"servers":{"umr":{"type":"stdio","command":"x"}}}"#,
+            r#"{"servers":{"tumr":{"type":"stdio","command":"x"}}}"#,
         )
         .unwrap();
         assert!(find("vscode").unwrap().configured_in(&json_file));
@@ -412,7 +412,7 @@ mod tests {
         let toml = dir.join("config.toml");
         std::fs::write(
             &toml,
-            "[other]\na = 1\n\n[mcp_servers.umr]\ncommand = 'x'\n",
+            "[other]\na = 1\n\n[mcp_servers.tumr]\ncommand = 'x'\n",
         )
         .unwrap();
         assert!(find("codex").unwrap().configured_in(&toml));

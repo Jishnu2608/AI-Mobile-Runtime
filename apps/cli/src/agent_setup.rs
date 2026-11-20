@@ -1,10 +1,10 @@
 //! Connecting coding agents to the runtime (Phase 6 MCP-004/005, Phase 10 CON-002…004).
 //!
-//! * `umr agent setup <client> [--scope project|user] [--remove] [--print]`: writes (or removes)
-//!   the client's `umr` MCP server entry and its agent instructions, after showing exactly what
+//! * `tumr agent setup <client> [--scope project|user] [--remove] [--print]`: writes (or removes)
+//!   the client's `tumr` MCP server entry and its agent instructions, after showing exactly what
 //!   changes and asking. Other servers and settings in those files are kept; a re-run changes
 //!   nothing; `--remove` takes out only what setup added and revokes the client's token.
-//! * `umr agent doctor [client] [--fix]`: checks every connection end to end, including a real
+//! * `tumr agent doctor [client] [--fix]`: checks every connection end to end, including a real
 //!   MCP handshake with the program the client would start.
 //!
 //! The clients and their file formats come from [`crate::agent_clients`].
@@ -15,7 +15,7 @@ use std::process::{ExitCode, Stdio};
 use std::time::Duration;
 
 use serde_json::{json, Map, Value};
-use umr_api::methods;
+use tumr_api::methods;
 
 use crate::agent_clients::{self, Client, Format, Place, CLIENTS};
 use crate::agent_cmd::{call, ensure_client, find_client, AGENT_SCOPES};
@@ -79,23 +79,23 @@ enum InstrTarget {
 fn instructions_target(c: &Client, scope: Scope) -> Option<InstrTarget> {
     match (c.id, scope) {
         ("claude-code", Scope::Project) => Some(InstrTarget::Own(Place::Project(
-            ".claude/skills/umr-runtime/SKILL.md",
+            ".claude/skills/tumr-runtime/SKILL.md",
         ))),
         ("claude-code", Scope::User) => Some(InstrTarget::Own(Place::Home(
-            ".claude/skills/umr-runtime/SKILL.md",
+            ".claude/skills/tumr-runtime/SKILL.md",
         ))),
         ("codex", _) => Some(InstrTarget::Section(Place::Project("AGENTS.md"))),
         ("cursor", Scope::Project) => Some(InstrTarget::Own(Place::Project(
-            ".cursor/rules/umr-runtime.mdc",
+            ".cursor/rules/tumr-runtime.mdc",
         ))),
         ("vscode", Scope::Project) => Some(InstrTarget::Own(Place::Project(
-            ".github/instructions/umr-runtime.instructions.md",
+            ".github/instructions/tumr-runtime.instructions.md",
         ))),
         ("antigravity", Scope::Project) => Some(InstrTarget::Own(Place::Project(
-            ".agents/rules/umr-runtime.md",
+            ".agents/rules/tumr-runtime.md",
         ))),
         ("antigravity", Scope::User) => Some(InstrTarget::Own(Place::Home(
-            ".gemini/config/rules/umr-runtime.md",
+            ".gemini/config/rules/tumr-runtime.md",
         ))),
         // Claude Desktop, and Cursor / VS Code at user scope, have no instructions file:
         // the agent gets the MCP `instructions` sent at start-up.
@@ -104,7 +104,7 @@ fn instructions_target(c: &Client, scope: Scope) -> Option<InstrTarget> {
 }
 
 /// Where the stop hook (HOOK-001) goes for this client and scope. Claude Code's project hook
-/// goes to `settings.local.json`: it holds this PC's `umr.exe` path, and Claude Code keeps that
+/// goes to `settings.local.json`: it holds this PC's `tumr.exe` path, and Claude Code keeps that
 /// file out of git.
 fn hook_place(c: &Client, scope: Scope) -> Option<Place> {
     match (c.id, scope) {
@@ -120,13 +120,13 @@ fn hook_place(c: &Client, scope: Scope) -> Option<Place> {
     }
 }
 
-const SKILL_DESCRIPTION: &str = "Run and check the user's Android app (Kotlin/Java, Flutter, React Native/Expo) on the AI Mobile Runtime emulator through the `umr` MCP tools: status after edits, problems with file:line, screenshots, taps, reloads.";
+const SKILL_DESCRIPTION: &str = "Run and check the user's Android app (Kotlin/Java, Flutter, React Native/Expo) on the Toolchain Universal Mobile Runtime emulator through the `tumr` MCP tools: status after edits, problems with file:line, screenshots, taps, reloads.";
 
 /// The instructions file content for a client (CON-003).
 fn instructions_text(c: &Client) -> String {
-    let body = umr_mcp::instructions::skill_markdown(false);
+    let body = tumr_mcp::instructions::skill_markdown(false);
     match c.id {
-        "claude-code" => umr_mcp::instructions::skill_markdown(true),
+        "claude-code" => tumr_mcp::instructions::skill_markdown(true),
         // Cursor project rule: .mdc with front matter; always loaded
         "cursor" => {
             format!("---\ndescription: {SKILL_DESCRIPTION}\nalwaysApply: true\n---\n\n{body}")
@@ -137,7 +137,7 @@ fn instructions_text(c: &Client) -> String {
         }
         // VS Code instructions file: applies to every file in the workspace
         "vscode" => format!(
-            "---\nname: umr-runtime\ndescription: {SKILL_DESCRIPTION}\napplyTo: '**'\n---\n\n{body}"
+            "---\nname: tumr-runtime\ndescription: {SKILL_DESCRIPTION}\napplyTo: '**'\n---\n\n{body}"
         ),
         _ => body,
     }
@@ -190,23 +190,23 @@ fn pretty(v: &Value) -> String {
     serde_json::to_string_pretty(v).unwrap_or_default() + "\n"
 }
 
-/// The JSON config with `<key>.umr` set to `entry`; everything else kept in its order.
+/// The JSON config with `<key>.tumr` set to `entry`; everything else kept in its order.
 pub fn json_set(old: Option<&str>, path: &str, key: &str, entry: &Value) -> Result<String, String> {
     let mut v = parse_json(old, path)?;
     if !v[key].is_object() {
         v[key] = json!({});
     }
-    v[key]["umr"] = entry.clone();
+    v[key]["tumr"] = entry.clone();
     Ok(pretty(&v))
 }
 
-/// The JSON config without `<key>.umr`; `None` when nothing else is left (the file was ours).
+/// The JSON config without `<key>.tumr`; `None` when nothing else is left (the file was ours).
 pub fn json_remove(old: &str, path: &str, key: &str) -> Result<Option<String>, String> {
     let mut v = parse_json(Some(old), path)?;
     let Some(servers) = v.get_mut(key).and_then(Value::as_object_mut) else {
         return Ok(Some(old.to_string()));
     };
-    servers.remove("umr");
+    servers.remove("tumr");
     if servers.is_empty() {
         if let Some(o) = v.as_object_mut() {
             o.remove(key);
@@ -219,11 +219,11 @@ pub fn json_remove(old: &str, path: &str, key: &str) -> Result<Option<String>, S
     })
 }
 
-/// Codex `config.toml` with the `[mcp_servers.umr]` table set (the rest kept as it is).
+/// Codex `config.toml` with the `[mcp_servers.tumr]` table set (the rest kept as it is).
 #[must_use]
 pub fn codex_toml(old: Option<&str>, exe: &str, client: &str) -> String {
     let table = format!(
-        "[mcp_servers.umr]\ncommand = '{exe}'\nargs = [\"mcp\", \"--client\", \"{client}\"]\nstartup_timeout_sec = 30\ntool_timeout_sec = 600\n"
+        "[mcp_servers.tumr]\ncommand = '{exe}'\nargs = [\"mcp\", \"--client\", \"{client}\"]\nstartup_timeout_sec = 30\ntool_timeout_sec = 600\n"
     );
     let old = old.unwrap_or("");
     match codex_table_range(old) {
@@ -241,7 +241,7 @@ pub fn codex_toml(old: Option<&str>, exe: &str, client: &str) -> String {
     }
 }
 
-/// Codex `config.toml` without the `[mcp_servers.umr]` table; `None` when nothing else is left.
+/// Codex `config.toml` without the `[mcp_servers.tumr]` table; `None` when nothing else is left.
 #[must_use]
 pub fn codex_toml_remove(old: &str) -> Option<String> {
     let Some((start, end, lines)) = codex_table_range(old) else {
@@ -264,10 +264,12 @@ pub fn codex_toml_remove(old: &str) -> Option<String> {
     }
 }
 
-/// Start and end line of the `[mcp_servers.umr]` table, and the lines.
+/// Start and end line of the `[mcp_servers.tumr]` table, and the lines.
 fn codex_table_range(text: &str) -> Option<(usize, usize, Vec<&str>)> {
     let lines: Vec<&str> = text.lines().collect();
-    let start = lines.iter().position(|l| l.trim() == "[mcp_servers.umr]")?;
+    let start = lines
+        .iter()
+        .position(|l| l.trim() == "[mcp_servers.tumr]")?;
     let end = lines[start + 1..]
         .iter()
         .position(|l| l.trim_start().starts_with('['))
@@ -275,15 +277,16 @@ fn codex_table_range(text: &str) -> Option<(usize, usize, Vec<&str>)> {
     Some((start, end, lines))
 }
 
-const BEGIN: &str = "<!-- umr:begin (written by `umr agent setup`; replaced on the next setup) -->";
-const END: &str = "<!-- umr:end -->";
+const BEGIN: &str =
+    "<!-- tumr:begin (written by `tumr agent setup`; replaced on the next setup) -->";
+const END: &str = "<!-- tumr:end -->";
 
 /// `AGENTS.md` with the runtime section set (marked; the rest kept).
 #[must_use]
 pub fn agents_md(old: Option<&str>) -> String {
     let section = format!(
         "{BEGIN}\n{}{END}\n",
-        umr_mcp::instructions::skill_markdown(false)
+        tumr_mcp::instructions::skill_markdown(false)
     );
     let old = old.unwrap_or("");
     match (old.find(BEGIN), old.find(END)) {
@@ -343,6 +346,11 @@ pub fn plan(
             Some(json_set(old.as_deref(), &shown, key, &c.server_entry(exe))?)
         }
         (Format::Json { key, .. }, true) => match &old {
+            // #55: Antigravity creates its user file (empty) when it is installed; leave it
+            // there, empty, instead of deleting it when only our entry was in it
+            Some(o) if c.id == "antigravity" && scope == Scope::User => {
+                Some(json_remove(o, &shown, key)?.unwrap_or_default())
+            }
             Some(o) => json_remove(o, &shown, key)?,
             None => None,
         },
@@ -397,7 +405,7 @@ pub fn plan(
 
 /// Writes the changes. Deleting a file inside `project` also removes the folders that are left
 /// empty, up to the project folder (setup created them); outside the project only our own
-/// `umr-runtime` folder is removed.
+/// `tumr-runtime` folder is removed.
 fn apply(changes: &[Change], project: &Path) -> Result<(), String> {
     for c in changes {
         if let Some(text) = &c.new {
@@ -410,7 +418,7 @@ fn apply(changes: &[Change], project: &Path) -> Result<(), String> {
             let mut dir = c.path.parent();
             while let Some(d) = dir {
                 let ours = (d.starts_with(project) && d != project)
-                    || d.file_name().is_some_and(|n| n == "umr-runtime");
+                    || d.file_name().is_some_and(|n| n == "tumr-runtime");
                 let empty = std::fs::read_dir(d).is_ok_and(|mut rd| rd.next().is_none());
                 if !ours || !empty || std::fs::remove_dir(d).is_err() {
                     break;
@@ -451,7 +459,7 @@ fn ask(question: &str) -> bool {
 fn current_exe() -> Result<String, String> {
     std::env::current_exe()
         .map(|p| p.display().to_string())
-        .map_err(|e| format!("cannot locate umr.exe: {e}"))
+        .map_err(|e| format!("cannot locate tumr.exe: {e}"))
 }
 
 fn project_dir(project: Option<PathBuf>) -> Result<PathBuf, String> {
@@ -465,7 +473,7 @@ fn project_dir(project: Option<PathBuf>) -> Result<PathBuf, String> {
     }
 }
 
-/// The options of `umr agent setup` (one field per command-line flag).
+/// The options of `tumr agent setup` (one field per command-line flag).
 #[derive(Debug, Default)]
 #[allow(clippy::struct_excessive_bools)]
 pub struct SetupOptions {
@@ -479,11 +487,11 @@ pub struct SetupOptions {
     pub json: bool,
 }
 
-/// `umr agent setup <client> …`
+/// `tumr agent setup <client> …`
 pub async fn setup(target: &CoreTarget, agent: &str, o: SetupOptions) -> ExitCode {
     let Some(c) = agent_clients::find(agent) else {
         return fail(&format!(
-            "unknown agent '{agent}'; known: {}. Any other MCP client: `umr agent add <name>`, then a stdio server `umr.exe mcp --client <name>`",
+            "unknown agent '{agent}'; known: {}. Any other MCP client: `tumr agent add <name>`, then a stdio server `tumr.exe mcp --client <name>`",
             agent_clients::ids(false)
         ));
     };
@@ -536,7 +544,7 @@ pub async fn setup(target: &CoreTarget, agent: &str, o: SetupOptions) -> ExitCod
 
     let has_client = token_path(target, c.id).is_file();
     println!(
-        "Connecting {} to AI Mobile Runtime ({} scope):",
+        "Connecting {} to Toolchain Universal Mobile Runtime ({} scope):",
         c.name,
         scope.word()
     );
@@ -568,8 +576,19 @@ pub async fn setup(target: &CoreTarget, agent: &str, o: SetupOptions) -> ExitCod
         }
     }
     println!("\nDone. {}", next_step(c, scope, &project));
-    println!("Check the connection any time: umr agent doctor {}", c.id);
+    println!("Check the connection any time: tumr agent doctor {}", c.id);
     ExitCode::SUCCESS
+}
+
+/// Live test 2026-11-19: disconnecting Codex from one project revoked its token and broke its
+/// connection for all projects. The token stays while the other scope (the user file, or this
+/// project's file) still starts the runtime as this client. Returns that file.
+fn still_connected(c: &Client, scope: Scope, project: &Path) -> Option<PathBuf> {
+    let other = match scope {
+        Scope::Project => c.user_config,
+        Scope::User => c.project_config,
+    }?;
+    other.resolve(Some(project)).filter(|p| c.configured_in(p))
 }
 
 /// `--json`: the plan (and, with `apply`, the result) for the desktop app's agent page.
@@ -601,7 +620,10 @@ async fn setup_json(
     if apply_now {
         if remove {
             apply(changes, project)?;
-            if let Ok(Some(client)) = find_client(target, c.id).await {
+            let keep = still_connected(c, scope, project).is_some();
+            if keep {
+                // the other scope still uses this client's token
+            } else if let Ok(Some(client)) = find_client(target, c.id).await {
                 call(
                     target,
                     methods::AUTH_CLIENT_REVOKE,
@@ -609,7 +631,9 @@ async fn setup_json(
                 )
                 .await?;
             }
-            let _ = std::fs::remove_file(token_path(target, c.id));
+            if !keep {
+                let _ = std::fs::remove_file(token_path(target, c.id));
+            }
         } else {
             ensure_client(target, c.id, &AGENT_SCOPES.map(String::from)).await?;
             apply(changes, project)?;
@@ -667,28 +691,28 @@ fn url_encode(s: &str) -> String {
         .collect()
 }
 
-/// A one-click install link for clients that have one. It carries this PC's `umr.exe` path, so
+/// A one-click install link for clients that have one. It carries this PC's `tumr.exe` path, so
 /// it is made on the PC (CLI or desktop app), never on the website (DEC-055).
 pub fn install_link(c: &Client, exe: &str) -> Option<String> {
     let entry = c.server_entry(exe);
     match c.id {
         // https://cursor.com/docs/mcp/install-links: base64 of the server config, then URL-encoded
         "cursor" => Some(format!(
-            "cursor://anysphere.cursor-deeplink/mcp/install?name=umr&config={}",
+            "cursor://anysphere.cursor-deeplink/mcp/install?name=tumr&config={}",
             url_encode(&base64(entry.to_string().as_bytes()))
         )),
         // https://code.visualstudio.com/api/extension-guides/ai/mcp: URL-encoded JSON with a name
         "vscode" => {
             let mut v = entry;
-            v["name"] = json!("umr");
+            v["name"] = json!("tumr");
             Some(format!("vscode:mcp/install?{}", url_encode(&v.to_string())))
         }
         _ => None,
     }
 }
 
-/// `umr agent link <cursor|vscode> [--json]`: creates the agent client if needed and prints the
-/// install link; opening it lets the client add the `umr` server itself (it asks first).
+/// `tumr agent link <cursor|vscode> [--json]`: creates the agent client if needed and prints the
+/// install link; opening it lets the client add the `tumr` server itself (it asks first).
 pub async fn link(target: &CoreTarget, agent: &str, json_out: bool) -> ExitCode {
     let Some(c) = agent_clients::find(agent) else {
         return fail(&format!(
@@ -702,7 +726,7 @@ pub async fn link(target: &CoreTarget, agent: &str, json_out: bool) -> ExitCode 
     };
     let Some(url) = install_link(c, &exe) else {
         return fail(&format!(
-            "{} has no install link; use `umr agent setup {}`",
+            "{} has no install link; use `tumr agent setup {}`",
             c.name, c.id
         ));
     };
@@ -713,7 +737,7 @@ pub async fn link(target: &CoreTarget, agent: &str, json_out: bool) -> ExitCode 
         println!("{}", json!({ "client": c.id, "link": url }));
     } else {
         println!("Install link for {} (open it on this PC; {} shows the server and asks before adding it):\n\n{url}\n", c.name, c.name);
-        println!("The link only adds the MCP server. For the agent instructions as well, use: umr agent setup {}", c.id);
+        println!("The link only adds the MCP server. For the agent instructions as well, use: tumr agent setup {}", c.id);
     }
     ExitCode::SUCCESS
 }
@@ -721,13 +745,14 @@ pub async fn link(target: &CoreTarget, agent: &str, json_out: bool) -> ExitCode 
 fn next_step(c: &Client, scope: Scope, project: &Path) -> String {
     let p = project.display();
     match (c.id, scope) {
-        ("claude-code", Scope::Project) => format!("Start Claude Code in {p} and approve the project MCP server `umr` when it asks (`/mcp` shows it)."),
-        ("claude-code", Scope::User) => "Start Claude Code in any project; `/mcp` lists the `umr` server.".into(),
-        ("codex", _) => format!("Start Codex in {p}; `/mcp` lists the `umr` server."),
-        ("cursor", _) => "Open Cursor Settings → MCP and make sure `umr` is switched on (Cursor may ask to enable a new server).".into(),
-        ("claude-desktop", _) => "Quit Claude Desktop completely (also from the tray) and start it again; the `umr` tools appear under the tools menu.".into(),
-        ("vscode", _) => "In VS Code, open the Chat view in agent mode; start the `umr` server when VS Code offers it (MCP: List Servers).".into(),
-        ("antigravity", _) => "In Antigravity, open Customizations → MCP Servers (App) or … → MCP Servers → Manage MCP Servers (IDE) and refresh or restart `umr`; a new conversation picks up the rule and the stop hook.".into(),
+        ("claude-code", Scope::Project) => format!("Start Claude Code in {p} and approve the project MCP server `tumr` when it asks (`/mcp` shows it)."),
+        ("claude-code", Scope::User) => "Start Claude Code in any project; `/mcp` lists the `tumr` server.".into(),
+        ("codex", _) => format!("Start Codex in {p}; `/mcp` lists the `tumr` server."),
+        ("cursor", _) => "Open Cursor Settings → MCP and make sure `tumr` is switched on (Cursor may ask to enable a new server).".into(),
+        // live test 2026-11-19: a running Claude Desktop rewrote this file minutes later and dropped `tumr`
+        ("claude-desktop", _) => "Quit Claude Desktop completely now (also from the tray) and start it again; the `tumr` tools appear under the tools menu. If it was running while you connected, it may have written its settings back without `tumr`: check with `tumr agent doctor claude-desktop` after the restart and connect again while it is closed.".into(),
+        ("vscode", _) => "In VS Code, open the Chat view in agent mode; start the `tumr` server when VS Code offers it (MCP: List Servers).".into(),
+        ("antigravity", _) => "In Antigravity, open Customizations → MCP Servers (App) or … → MCP Servers → Manage MCP Servers (IDE) and refresh or restart `tumr`; a new conversation picks up the rule and the stop hook.".into(),
         _ => String::new(),
     }
 }
@@ -741,10 +766,12 @@ async fn remove(
     yes: bool,
     dry_run: bool,
 ) -> ExitCode {
-    let has_client = matches!(find_client(target, c.id).await, Ok(Some(_)))
-        || token_path(target, c.id).is_file();
+    let keep = still_connected(c, scope, project);
+    let has_client = keep.is_none()
+        && (matches!(find_client(target, c.id).await, Ok(Some(_)))
+            || token_path(target, c.id).is_file());
     println!(
-        "Disconnecting {} from AI Mobile Runtime ({} scope):",
+        "Disconnecting {} from Toolchain Universal Mobile Runtime ({} scope):",
         c.name,
         scope.word()
     );
@@ -755,6 +782,12 @@ async fn remove(
         println!(
             "  • remove agent client '{}' (its token stops working)",
             c.id
+        );
+    } else if let Some(p) = &keep {
+        println!(
+            "  • keep agent client '{}': {} still uses it",
+            c.id,
+            p.display()
         );
     }
     show(changes);
@@ -772,22 +805,34 @@ async fn remove(
     if let Err(e) = apply(changes, project) {
         return fail(&e);
     }
-    if let Ok(Some(client)) = find_client(target, c.id).await {
-        if let Err(e) = call(
-            target,
-            methods::AUTH_CLIENT_REVOKE,
-            json!({ "id": client["id"] }),
-        )
-        .await
-        {
-            return fail(&e);
+    if has_client {
+        if let Ok(Some(client)) = find_client(target, c.id).await {
+            if let Err(e) = call(
+                target,
+                methods::AUTH_CLIENT_REVOKE,
+                json!({ "id": client["id"] }),
+            )
+            .await
+            {
+                return fail(&e);
+            }
         }
+        let _ = std::fs::remove_file(token_path(target, c.id));
     }
-    let _ = std::fs::remove_file(token_path(target, c.id));
-    println!(
-        "\nDone. {} is disconnected; restart it if it is open.",
-        c.name
-    );
+    let what = if keep.is_some() {
+        format!(
+            "{} is disconnected here; its {} connection stays",
+            c.name,
+            if scope == Scope::Project {
+                "all-projects"
+            } else {
+                "project"
+            }
+        )
+    } else {
+        format!("{} is disconnected", c.name)
+    };
+    println!("\nDone. {what}; restart it if it is open.");
     ExitCode::SUCCESS
 }
 
@@ -800,13 +845,13 @@ fn print_entry(c: &Client, exe: &str) {
     match c.format {
         Format::Json { key, .. } => println!(
             "{}",
-            serde_json::to_string_pretty(&json!({ key: { "umr": c.server_entry(exe) } }))
+            serde_json::to_string_pretty(&json!({ key: { "tumr": c.server_entry(exe) } }))
                 .unwrap_or_default()
         ),
         Format::CodexToml => print!("{}", codex_toml(None, exe, c.id)),
     }
     println!(
-        "\nThe client '{}' needs its token first: umr agent add {}",
+        "\nThe client '{}' needs its token first: tumr agent add {}",
         c.id, c.id
     );
 }
@@ -845,13 +890,13 @@ fn check(mark: Mark, what: impl Into<String>, fix: Option<String>) -> Check {
     }
 }
 
-/// The `umr` server entry in a config file: (command, args).
+/// The `tumr` server entry in a config file: (command, args).
 fn entry_in(c: &Client, path: &Path) -> Option<(String, Vec<String>)> {
     let text = read(path)?;
     match c.format {
         Format::Json { key, .. } => {
             let v: Value = serde_json::from_str(text.trim_start_matches('\u{feff}')).ok()?;
-            let e = v.get(key)?.get("umr")?;
+            let e = v.get(key)?.get("tumr")?;
             let args = e["args"]
                 .as_array()
                 .into_iter()
@@ -882,6 +927,157 @@ fn entry_in(c: &Client, path: &Path) -> Option<(String, Vec<String>)> {
             Some((command?, args))
         }
     }
+}
+
+/// RENAME-001 (2026-11-20): what an agent got from the runtime before the rename. Names of that
+/// time: the `umr` server entry, the `umr-runtime` instruction files, the `umr:begin` section in
+/// `AGENTS.md`. (The stop hook needs nothing here: setup replaces any `agent hook` entry.)
+const LEGACY_SERVER: &str = "umr";
+const LEGACY_INSTR: &str = "umr-runtime";
+const LEGACY_BEGIN: &str = "<!-- umr:begin";
+const LEGACY_END: &str = "<!-- umr:end -->";
+
+/// RENAME-001: takes the pre-rename pieces out of this client's files for `scope`. Returns whether
+/// there were any (the caller then connects it again under the new name).
+fn strip_legacy(c: &Client, scope: Scope, project: &Path) -> Result<bool, String> {
+    let mut found = false;
+    let Ok(place) = config_place(c, scope) else {
+        return Ok(false);
+    };
+    let Some(path) = place.resolve(Some(project)) else {
+        return Ok(false);
+    };
+    if let Some(text) = read(&path) {
+        let new = match c.format {
+            Format::Json { key, .. } => {
+                let mut v = parse_json(Some(&text), &path.display().to_string())?;
+                let had = v
+                    .get_mut(key)
+                    .and_then(Value::as_object_mut)
+                    .is_some_and(|o| o.remove(LEGACY_SERVER).is_some());
+                had.then(|| pretty(&v))
+            }
+            Format::CodexToml => {
+                let lines: Vec<&str> = text.lines().collect();
+                let header = format!("[mcp_servers.{LEGACY_SERVER}]");
+                lines.iter().position(|l| l.trim() == header).map(|start| {
+                    let end = lines[start + 1..]
+                        .iter()
+                        .position(|l| l.trim_start().starts_with('['))
+                        .map_or(lines.len(), |j| start + 1 + j);
+                    let mut kept: Vec<&str> = lines[..start].to_vec();
+                    kept.extend_from_slice(&lines[end..]);
+                    kept.join("\n").trim_end().to_string() + "\n"
+                })
+            }
+        };
+        if let Some(n) = new {
+            std::fs::write(&path, n).map_err(|e| format!("{}: {e}", path.display()))?;
+            found = true;
+        }
+    }
+    match instructions_target(c, scope) {
+        Some(InstrTarget::Own(place)) => {
+            if let Some(now) = place.resolve(Some(project)) {
+                let old = PathBuf::from(
+                    now.display()
+                        .to_string()
+                        .replace("tumr-runtime", LEGACY_INSTR),
+                );
+                if old != now && old.is_file() {
+                    let _ = std::fs::remove_file(&old);
+                    if let Some(dir) = old.parent() {
+                        if dir.file_name().is_some_and(|n| n == LEGACY_INSTR) {
+                            let _ = std::fs::remove_dir(dir);
+                        }
+                    }
+                    found = true;
+                }
+            }
+        }
+        Some(InstrTarget::Section(place)) => {
+            if let Some(md) = place.resolve(Some(project)) {
+                if let Some(text) = read(&md) {
+                    if let (Some(a), Some(b)) = (text.find(LEGACY_BEGIN), text.find(LEGACY_END)) {
+                        if b > a {
+                            let rest = format!(
+                                "{}{}",
+                                &text[..a],
+                                text[b + LEGACY_END.len()..].trim_start_matches('\n')
+                            );
+                            if rest.trim().is_empty() {
+                                let _ = std::fs::remove_file(&md);
+                            } else {
+                                let _ = std::fs::write(&md, rest.trim_end().to_string() + "\n");
+                            }
+                            found = true;
+                        }
+                    }
+                }
+            }
+        }
+        None => {}
+    }
+    Ok(found)
+}
+
+/// DEC-055 (owner, 2026-11-19): agent configs hold the absolute path of `tumr.exe`. After an
+/// install (the installer runs `tumr agent repoint`), every all-projects entry that starts another
+/// `tumr.exe` is rewritten for this one: config, instructions and stop hook, as setup writes them.
+/// RENAME-001: an agent still set up under the old name (`umr`) is set up again as `tumr`, for
+/// all projects and for the current folder. Clients that are not connected are left alone.
+#[must_use]
+pub fn repoint() -> ExitCode {
+    let exe = match current_exe() {
+        Ok(e) => e,
+        Err(e) => return fail(&e),
+    };
+    let project = std::env::current_dir().unwrap_or_default();
+    let mut changed = 0;
+    for c in agent_clients::CLIENTS.iter().filter(|c| c.setup) {
+        for scope in [Scope::User, Scope::Project] {
+            match strip_legacy(c, scope, &project) {
+                Ok(true) => match plan(c, scope, &project, &exe, false)
+                    .and_then(|ch| apply(&ch, &project))
+                {
+                    Ok(()) => {
+                        changed += 1;
+                        println!(
+                            "{} ({} scope): moved from umr to tumr",
+                            c.name,
+                            scope.word()
+                        );
+                    }
+                    Err(e) => eprintln!("{}: {e}", c.name),
+                },
+                Ok(false) => {}
+                Err(e) => eprintln!("{}: {e}", c.name),
+            }
+        }
+        let Ok(place) = config_place(c, Scope::User) else {
+            continue;
+        };
+        let Some(path) = place.resolve(Some(&project)) else {
+            continue;
+        };
+        let Some((command, _)) = entry_in(c, &path) else {
+            continue; // not connected for all projects
+        };
+        if command.eq_ignore_ascii_case(&exe) {
+            continue;
+        }
+        match plan(c, Scope::User, &project, &exe, false).and_then(|ch| apply(&ch, &project)) {
+            Ok(()) => {
+                changed += 1;
+                println!("{}: now runs {exe} (was {command})", c.name);
+            }
+            Err(e) => eprintln!("{}: {e}", c.name),
+        }
+    }
+    if changed == 0 {
+        println!("Every connected agent already runs {exe}.");
+    }
+    ExitCode::SUCCESS
 }
 
 /// Why a config file that exists cannot be used, if it cannot.
@@ -956,7 +1152,7 @@ fn handshake(command: &str, args: &[String], timeout: Duration) -> Result<usize,
             &mut stdin,
             &json!({ "jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {
             "protocolVersion": "2025-06-18", "capabilities": {},
-            "clientInfo": { "name": "umr-agent-doctor", "version": env!("CARGO_PKG_VERSION") } } }),
+            "clientInfo": { "name": "tumr-agent-doctor", "version": env!("CARGO_PKG_VERSION") } } }),
         )?;
         let deadline = std::time::Instant::now() + timeout;
         let wait = |id: i64| -> Result<Value, String> {
@@ -1011,7 +1207,7 @@ fn after_edit_check(c: &Client, stop_hook: bool, hook: &Path) -> Option<Check> {
         check(
             Mark::Warn,
             "no after-edit hook: Claude Code hears about problems only at the end of its turn",
-            Some(format!("umr agent setup {}", c.id)),
+            Some(format!("tumr agent setup {}", c.id)),
         )
     })
 }
@@ -1060,14 +1256,14 @@ async fn doctor_client(
         checks.push(check(
             Mark::Fail,
             format!(
-                "no `umr` server in its config ({})",
+                "no `tumr` server in its config ({})",
                 if c.installed() {
                     "installed"
                 } else {
                     "not found on this PC"
                 }
             ),
-            Some(format!("umr agent setup {}", c.id)),
+            Some(format!("tumr agent setup {}", c.id)),
         ));
         return Some((checks, Vec::new()));
     }
@@ -1092,7 +1288,7 @@ async fn doctor_client(
                         "no stop hook in {} (problems are not reported back by themselves)",
                         hook.display()
                     ),
-                    Some(format!("umr agent setup {}", c.id)),
+                    Some(format!("tumr agent setup {}", c.id)),
                 )
             });
             // AUD-P1-14: a real round trip, as the hook makes it at the end of a task
@@ -1107,7 +1303,7 @@ async fn doctor_client(
                         Err(e) => check(
                             Mark::Fail,
                             format!("stop hook cannot reach the runtime: {e}"),
-                            Some("umr status; umr start".into()),
+                            Some("tumr status; tumr start".into()),
                         ),
                     });
                 }
@@ -1117,7 +1313,7 @@ async fn doctor_client(
     Some((checks, stale))
 }
 
-/// Checks for one `umr` entry: program path, token, last call, MCP handshake.
+/// Checks for one `tumr` entry: program path, token, last call, MCP handshake.
 /// The flag says whether the entry's program path should be rewritten (`--fix`).
 #[allow(clippy::too_many_arguments)]
 async fn check_entry(
@@ -1139,7 +1335,7 @@ async fn check_entry(
         checks.push(check(
             Mark::Fail,
             format!("program not found: {command}"),
-            Some(format!("umr agent doctor {} --fix", c.id)),
+            Some(format!("tumr agent doctor {} --fix", c.id)),
         ));
         return (checks, true);
     }
@@ -1151,15 +1347,19 @@ async fn check_entry(
     if !same {
         checks.push(check(
             Mark::Warn,
-            format!("points at another umr.exe: {command}"),
-            Some(format!("umr agent doctor {} --fix", c.id)),
+            format!("points at another tumr.exe: {command}"),
+            Some(format!("tumr agent doctor {} --fix", c.id)),
         ));
     }
     let Some(name) = client_name_in(args) else {
         checks.push(check(
             Mark::Fail,
             "entry has no `--client <name>` argument",
-            Some(format!("umr agent setup {} --scope {}", c.id, scope.word())),
+            Some(format!(
+                "tumr agent setup {} --scope {}",
+                c.id,
+                scope.word()
+            )),
         ));
         return (checks, !same);
     };
@@ -1169,7 +1369,7 @@ async fn check_entry(
         checks.push(check(
             Mark::Fail,
             format!("no token for client '{name}'"),
-            Some(format!("umr agent add {name}")),
+            Some(format!("tumr agent add {name}")),
         ));
         return (checks, !same);
     }
@@ -1185,7 +1385,7 @@ async fn check_entry(
         Err(e) => checks.push(check(
             Mark::Fail,
             format!("MCP handshake failed: {e}"),
-            Some("umr status; umr start".into()),
+            Some("tumr status; tumr start".into()),
         )),
     }
     (checks, !same)
@@ -1204,7 +1404,7 @@ async fn hook_round_trip(
     };
     let r = core
         .call_raw(
-            umr_api::methods::AGENT_CHECK,
+            tumr_api::methods::AGENT_CHECK,
             serde_json::json!({ "project": project.display().to_string(), "timeout_ms": 3000, "probe": true }),
         )
         .await
@@ -1257,7 +1457,7 @@ async fn last_call(target: &CoreTarget, name: &str) -> Option<String> {
     })
 }
 
-/// `umr agent doctor [client] [--project] [--fix] [--json]`.
+/// `tumr agent doctor [client] [--project] [--fix] [--json]`.
 pub async fn doctor(
     target: &CoreTarget,
     agent: Option<String>,
@@ -1349,7 +1549,7 @@ pub async fn doctor(
             })
         })
     {
-        println!("\nNo agent is connected yet. See the agents on this PC: umr agent clients");
+        println!("\nNo agent is connected yet. See the agents on this PC: tumr agent clients");
     }
     if failed {
         ExitCode::FAILURE
@@ -1363,7 +1563,7 @@ mod tests {
     use super::*;
 
     fn temp(name: &str) -> PathBuf {
-        let d = std::env::temp_dir().join(format!("umr-setup-{name}-{}", std::process::id()));
+        let d = std::env::temp_dir().join(format!("tumr-setup-{name}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&d);
         std::fs::create_dir_all(&d).unwrap();
         d
@@ -1372,10 +1572,10 @@ mod tests {
     #[test]
     fn json_set_keeps_other_servers_and_key_order() {
         let old = r#"{"zeta": 1, "mcpServers": {"other": {"command": "x"}}, "alpha": 2}"#;
-        let new = json_set(Some(old), "f", "mcpServers", &json!({"command": "umr"})).unwrap();
+        let new = json_set(Some(old), "f", "mcpServers", &json!({"command": "tumr"})).unwrap();
         let v: Value = serde_json::from_str(&new).unwrap();
         assert_eq!(v["mcpServers"]["other"]["command"], "x");
-        assert_eq!(v["mcpServers"]["umr"]["command"], "umr");
+        assert_eq!(v["mcpServers"]["tumr"]["command"], "tumr");
         assert!(
             new.find("zeta").unwrap() < new.find("alpha").unwrap(),
             "order kept"
@@ -1387,18 +1587,18 @@ mod tests {
 
     #[test]
     fn json_remove_takes_out_only_ours() {
-        let set = json_set(None, "f", "servers", &json!({"command": "umr"})).unwrap();
+        let set = json_set(None, "f", "servers", &json!({"command": "tumr"})).unwrap();
         assert_eq!(
             json_remove(&set, "f", "servers").unwrap(),
             None,
             "file was ours"
         );
-        let shared = r#"{"servers": {"umr": {}, "other": {}}, "inputs": []}"#;
+        let shared = r#"{"servers": {"tumr": {}, "other": {}}, "inputs": []}"#;
         let left: Value =
             serde_json::from_str(&json_remove(shared, "f", "servers").unwrap().unwrap()).unwrap();
-        assert!(left["servers"].get("umr").is_none());
+        assert!(left["servers"].get("tumr").is_none());
         assert!(left["servers"].get("other").is_some());
-        let only_ours = r#"{"keep": true, "mcpServers": {"umr": {}}}"#;
+        let only_ours = r#"{"keep": true, "mcpServers": {"tumr": {}}}"#;
         let left: Value =
             serde_json::from_str(&json_remove(only_ours, "f", "mcpServers").unwrap().unwrap())
                 .unwrap();
@@ -1407,13 +1607,13 @@ mod tests {
 
     #[test]
     fn codex_table_is_added_replaced_and_removed() {
-        let fresh = codex_toml(None, r"C:\u\umr.exe", "codex");
-        assert!(fresh.starts_with("[mcp_servers.umr]\ncommand = 'C:\\u\\umr.exe'\n"));
-        let old = "model = \"o3\"\n\n[mcp_servers.umr]\ncommand = 'old'\nargs = []\n\n[mcp_servers.other]\ncommand = 'x'\n";
+        let fresh = codex_toml(None, r"C:\u\tumr.exe", "codex");
+        assert!(fresh.starts_with("[mcp_servers.tumr]\ncommand = 'C:\\u\\tumr.exe'\n"));
+        let old = "model = \"o3\"\n\n[mcp_servers.tumr]\ncommand = 'old'\nargs = []\n\n[mcp_servers.other]\ncommand = 'x'\n";
         let new = codex_toml(Some(old), "new", "codex");
-        assert!(new.starts_with("model = \"o3\"\n\n[mcp_servers.umr]\ncommand = 'new'\n"));
+        assert!(new.starts_with("model = \"o3\"\n\n[mcp_servers.tumr]\ncommand = 'new'\n"));
         assert!(new.contains("[mcp_servers.other]\ncommand = 'x'"));
-        assert_eq!(new.matches("[mcp_servers.umr]").count(), 1);
+        assert_eq!(new.matches("[mcp_servers.tumr]").count(), 1);
         assert_eq!(codex_toml(Some(&new), "new", "codex"), new, "idempotent");
         let removed = codex_toml_remove(&new).unwrap();
         assert_eq!(
@@ -1433,7 +1633,7 @@ mod tests {
     fn agents_section_round_trip() {
         let before = "# My project\nRules.\n";
         let once = agents_md(Some(before));
-        assert!(once.starts_with("# My project\nRules.\n\n<!-- umr:begin"));
+        assert!(once.starts_with("# My project\nRules.\n\n<!-- tumr:begin"));
         assert_eq!(agents_md(Some(&once)), once, "idempotent");
         assert_eq!(agents_md_remove(&once).unwrap(), before);
         assert_eq!(agents_md_remove(&agents_md(None)), None);
@@ -1450,7 +1650,7 @@ mod tests {
         for id in ["claude-code", "cursor", "vscode", "antigravity"] {
             let dir = temp(id);
             let c = agent_clients::find(id).unwrap();
-            let plan1 = plan(c, Scope::Project, &dir, r"C:\umr\umr.exe", false).unwrap();
+            let plan1 = plan(c, Scope::Project, &dir, r"C:\tumr\tumr.exe", false).unwrap();
             let hooked = crate::agent_hook::HOOK_CLIENTS.contains(&id);
             assert_eq!(
                 plan1.len(),
@@ -1469,12 +1669,12 @@ mod tests {
             let cfg = &plan1[0].path;
             assert_eq!(entry_in(c, cfg).unwrap().1, vec!["mcp", "--client", id]);
             assert!(
-                plan(c, Scope::Project, &dir, r"C:\umr\umr.exe", false)
+                plan(c, Scope::Project, &dir, r"C:\tumr\tumr.exe", false)
                     .unwrap()
                     .is_empty(),
                 "{id}: idempotent"
             );
-            let undo = plan(c, Scope::Project, &dir, r"C:\umr\umr.exe", true).unwrap();
+            let undo = plan(c, Scope::Project, &dir, r"C:\tumr\tumr.exe", true).unwrap();
             apply(&undo, &dir).unwrap();
             assert!(
                 plan1.iter().all(|ch| !ch.path.exists()),
@@ -1490,6 +1690,101 @@ mod tests {
     }
 
     #[test]
+    fn a_project_set_up_before_the_rename_moves_to_tumr() {
+        let dir = temp("legacy");
+        let old_exe = r"C:\old\umr.exe";
+        std::fs::create_dir_all(dir.join(".cursor").join("rules")).unwrap();
+        std::fs::write(
+            dir.join(".cursor").join("mcp.json"),
+            format!(
+                r#"{{"mcpServers":{{"other":{{"command":"x"}},"umr":{{"type":"stdio","command":{},"args":["mcp","--client","cursor"]}}}}}}"#,
+                serde_json::to_string(old_exe).unwrap()
+            ),
+        )
+        .unwrap();
+        std::fs::write(
+            dir.join(".cursor").join("rules").join("umr-runtime.mdc"),
+            "old",
+        )
+        .unwrap();
+        std::fs::write(
+            dir.join(".cursor").join("hooks.json"),
+            serde_json::json!({ "version": 1, "hooks": { "stop": [
+                { "command": format!("& '{old_exe}' agent hook cursor") } ] } })
+            .to_string(),
+        )
+        .unwrap();
+        std::fs::write(
+            dir.join("AGENTS.md"),
+            "# Mine\n\n<!-- umr:begin (written by `umr agent setup`) -->\nold\n<!-- umr:end -->\n",
+        )
+        .unwrap();
+        let c = agent_clients::find("cursor").unwrap();
+        assert!(strip_legacy(c, Scope::Project, &dir).unwrap());
+        apply(
+            &plan(c, Scope::Project, &dir, r"C:\new\tumr.exe", false).unwrap(),
+            &dir,
+        )
+        .unwrap();
+        let mcp = std::fs::read_to_string(dir.join(".cursor").join("mcp.json")).unwrap();
+        assert!(mcp.contains("\"tumr\"") && !mcp.contains("\"umr\"") && mcp.contains("\"other\""));
+        assert!(!dir
+            .join(".cursor")
+            .join("rules")
+            .join("umr-runtime.mdc")
+            .exists());
+        assert!(dir
+            .join(".cursor")
+            .join("rules")
+            .join("tumr-runtime.mdc")
+            .is_file());
+        let hooks = std::fs::read_to_string(dir.join(".cursor").join("hooks.json")).unwrap();
+        assert!(
+            hooks.contains("tumr.exe") && !hooks.contains(old_exe.replace('\\', "\\\\").as_str())
+        );
+        assert!(!strip_legacy(c, Scope::Project, &dir).unwrap(), "once");
+        // Codex's AGENTS.md section (project scope): the old one goes, the user's text stays
+        let codex = agent_clients::find("codex").unwrap();
+        assert!(strip_legacy(codex, Scope::Project, &dir).unwrap());
+        assert_eq!(
+            std::fs::read_to_string(dir.join("AGENTS.md")).unwrap(),
+            "# Mine\n"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_token_still_in_use_by_the_other_scope_is_kept() {
+        let dir = temp("keep");
+        let c = agent_clients::find("cursor").unwrap();
+        assert_eq!(
+            still_connected(c, Scope::User, &dir),
+            None,
+            "nothing in the project"
+        );
+        apply(
+            &plan(c, Scope::Project, &dir, r"C:\tumr\tumr.exe", false).unwrap(),
+            &dir,
+        )
+        .unwrap();
+        assert_eq!(
+            still_connected(c, Scope::User, &dir),
+            Some(dir.join(".cursor").join("mcp.json")),
+            "removing the user entry keeps the token this project still uses"
+        );
+        assert_eq!(
+            still_connected(
+                agent_clients::find("claude-desktop").unwrap(),
+                Scope::User,
+                &dir
+            ),
+            None,
+            "no project scope"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn remove_restores_a_shared_config() {
         let dir = temp("shared");
         let cfg = dir.join(".cursor").join("mcp.json");
@@ -1499,12 +1794,12 @@ mod tests {
         std::fs::write(&cfg, before).unwrap();
         let c = agent_clients::find("cursor").unwrap();
         apply(
-            &plan(c, Scope::Project, &dir, "umr.exe", false).unwrap(),
+            &plan(c, Scope::Project, &dir, "tumr.exe", false).unwrap(),
             &dir,
         )
         .unwrap();
         apply(
-            &plan(c, Scope::Project, &dir, "umr.exe", true).unwrap(),
+            &plan(c, Scope::Project, &dir, "tumr.exe", true).unwrap(),
             &dir,
         )
         .unwrap();
@@ -1563,11 +1858,11 @@ mod tests {
         let p = dir.join("config.toml");
         std::fs::write(
             &p,
-            codex_toml(Some("model = \"x\"\n"), r"C:\a b\umr.exe", "codex"),
+            codex_toml(Some("model = \"x\"\n"), r"C:\a b\tumr.exe", "codex"),
         )
         .unwrap();
         let (cmd, args) = entry_in(agent_clients::find("codex").unwrap(), &p).unwrap();
-        assert_eq!(cmd, r"C:\a b\umr.exe");
+        assert_eq!(cmd, r"C:\a b\tumr.exe");
         assert_eq!(client_name_in(&args).as_deref(), Some("codex"));
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -1595,20 +1890,20 @@ mod tests {
         assert_eq!(base64(b"Ma"), "TWE=");
         assert_eq!(base64(b"M"), "TQ==");
         assert_eq!(url_encode("a b/=+"), "a%20b%2F%3D%2B");
-        let exe = r"C:\Users\me\umr.exe";
+        let exe = r"C:\Users\me\tumr.exe";
         let cursor = install_link(agent_clients::find("cursor").unwrap(), exe).unwrap();
         assert!(
-            cursor.starts_with("cursor://anysphere.cursor-deeplink/mcp/install?name=umr&config=")
+            cursor.starts_with("cursor://anysphere.cursor-deeplink/mcp/install?name=tumr&config=")
         );
         let vscode = install_link(agent_clients::find("vscode").unwrap(), exe).unwrap();
         assert!(vscode.starts_with("vscode:mcp/install?%7B"));
-        assert!(vscode.contains("%22name%22%3A%22umr%22"));
+        assert!(vscode.contains("%22name%22%3A%22tumr%22"));
         assert!(install_link(agent_clients::find("codex").unwrap(), exe).is_none());
     }
 
     #[test]
     fn handshake_reports_a_program_that_cannot_start() {
-        let e = handshake(r"C:\nowhere\umr.exe", &[], Duration::from_secs(1)).unwrap_err();
+        let e = handshake(r"C:\nowhere\tumr.exe", &[], Duration::from_secs(1)).unwrap_err();
         assert!(e.starts_with("cannot start it"), "{e}");
     }
 }

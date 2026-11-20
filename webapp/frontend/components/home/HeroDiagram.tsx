@@ -1,6 +1,6 @@
 /**
  * The product's real relationships, drawn as a diagram (not a screenshot, not a fake UI):
- * coding agent ⇄ umr MCP / CLI ⇄ Runtime Core ⇄ Android emulator, the live preview window, and
+ * coding agent ⇄ tumr MCP / CLI ⇄ Runtime Core ⇄ Android emulator, the live preview window, and
  * problems flowing back to the agent with file and line. Labels are real tool and command names.
  * Animated by the Hero component (data-* hooks); complete and readable without script.
  */
@@ -15,7 +15,7 @@ export function HeroDiagram() {
     >
       <title id="hero-diagram-title">How the runtime connects your coding agent and the emulator</title>
       <desc id="hero-diagram-desc">
-        The coding agent calls the umr MCP tools. The Runtime Core builds and runs the app on the Android emulator, streams the
+        The coding agent calls the tumr MCP tools. The Runtime Core builds and runs the app on the Android emulator, streams the
         screen to the preview window, and returns problems with file and line to the agent.
       </desc>
       <defs>
@@ -64,7 +64,7 @@ export function HeroDiagram() {
         <rect x="262" y="96" width="178" height="170" rx="12" fill="var(--band-bg)" stroke="var(--band-line)" />
         <circle cx="422" cy="120" r="4" fill="var(--lime)" />
         <text x="280" y="124" fontSize="12" fontWeight="600" fill="var(--band-ink)">Runtime Core</text>
-        <text x="280" y="142" fontSize="10.5" fontFamily="var(--ff-mono)" fill="var(--band-ink-2)">umr mcp · umr</text>
+        <text x="280" y="142" fontSize="10.5" fontFamily="var(--ff-mono)" fill="var(--band-ink-2)">tumr mcp · tumr</text>
         {[
           ["toolchain", 168],
           ["device + session", 190],

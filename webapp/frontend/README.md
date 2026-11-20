@@ -19,7 +19,7 @@ npm run typecheck
 
 `predev` and `prebuild` run `scripts/sync-content.mjs`, which copies the user guides from
 `docs/user/`, the security and contribution documents, and the MCP tool list
-(`umr mcp --list-tools`, when a built `umr.exe` exists) into `content/generated/`. The docs pages
+(`tumr mcp --list-tools`, when a built `tumr.exe` exists) into `content/generated/`. The docs pages
 therefore always say what the repository says. Do not edit `content/generated/`.
 
 ## Releases on the download page

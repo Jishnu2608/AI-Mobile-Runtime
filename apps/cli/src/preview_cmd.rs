@@ -1,23 +1,23 @@
-//! `umr preview` (Phase 4): the docked preview window, its status and the latency self-test.
+//! `tumr preview` (Phase 4): the docked preview window, its status and the latency self-test.
 
 use std::path::PathBuf;
 use std::process::{Command, ExitCode, Stdio};
 
 use serde_json::Value;
-use umr_api::methods;
+use tumr_api::methods;
 
 use crate::core_process::CoreTarget;
 use crate::fail;
 
-/// `umr-desktop.exe` next to this `umr.exe`.
+/// `tumr-desktop.exe` next to this `tumr.exe`.
 fn desktop_exe() -> Result<PathBuf, String> {
     let me = std::env::current_exe().map_err(|e| e.to_string())?;
-    let p = me.with_file_name("umr-desktop.exe");
+    let p = me.with_file_name("tumr-desktop.exe");
     if p.is_file() {
         Ok(p)
     } else {
         Err(format!(
-            "the desktop app is not installed next to umr ({})",
+            "the desktop app is not installed next to tumr ({})",
             p.display()
         ))
     }
@@ -33,8 +33,8 @@ pub async fn open_window(target: &CoreTarget, dock: &str) -> Result<bool, String
     if st["windows"].as_u64().unwrap_or(0) > 0 {
         return Ok(false);
     }
-    // otherwise the window inherits our stdout/stderr pipes and callers capturing `umr` hang
-    umr_platform::process::disinherit_std_handles()
+    // otherwise the window inherits our stdout/stderr pipes and callers capturing `tumr` hang
+    tumr_platform::process::disinherit_std_handles()
         .map_err(|e| format!("cannot prepare the window start: {e}"))?;
     Command::new(desktop_exe()?)
         .args(["--preview", "--dock", dock])
@@ -77,7 +77,7 @@ pub async fn status(target: &CoreTarget, json: bool) -> ExitCode {
         return ExitCode::SUCCESS;
     }
     if v["running"] != true {
-        println!("No preview window has been opened yet (`umr preview`).");
+        println!("No preview window has been opened yet (`tumr preview`).");
         return ExitCode::SUCCESS;
     }
     let s = &v["stats"];

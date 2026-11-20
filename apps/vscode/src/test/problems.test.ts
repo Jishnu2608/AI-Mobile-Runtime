@@ -36,15 +36,15 @@ test("a problem becomes a 0-based, labelled entry", () => {
   assert.match(crash.source, /crash/);
 });
 
-test("umr.exe is looked for in the setting, PATH, then the install folder", () => {
-  const c = candidates("C:\\tools\\umr.exe", { PATH: "C:\\a;C:\\b", LOCALAPPDATA: "C:\\Users\\u\\AppData\\Local" });
-  assert.equal(c[0], "C:\\tools\\umr.exe");
-  assert.ok(c.some((p) => p.endsWith(path.join("C:\\a", "umr.exe")) || p.endsWith("umr.exe")));
-  assert.equal(c[c.length - 1], path.join("C:\\Users\\u\\AppData\\Local", "AI Mobile Runtime", "umr.exe"));
+test("tumr.exe is looked for in the setting, PATH, then the install folder", () => {
+  const c = candidates("C:\\tools\\tumr.exe", { PATH: "C:\\a;C:\\b", LOCALAPPDATA: "C:\\Users\\u\\AppData\\Local" });
+  assert.equal(c[0], "C:\\tools\\tumr.exe");
+  assert.ok(c.some((p) => p.endsWith(path.join("C:\\a", "tumr.exe")) || p.endsWith("tumr.exe")));
+  assert.equal(c[c.length - 1], path.join("C:\\Users\\u\\AppData\\Local", "Toolchain Universal Mobile Runtime", "tumr.exe"));
 });
 
 test("a sample inside the repository finds the repository's own build", () => {
   // this test runs from apps/vscode, two levels below the repository root
   const found = devBuild(process.cwd());
-  if (found) assert.match(found, /target[\\/](release|debug)[\\/]umr\.exe$/);
+  if (found) assert.match(found, /target[\\/](release|debug)[\\/]tumr\.exe$/);
 });

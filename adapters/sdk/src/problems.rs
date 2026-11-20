@@ -566,7 +566,7 @@ mod tests {
 
     #[test]
     fn follower_reads_only_new_complete_lines() {
-        let f = std::env::temp_dir().join(format!("umr-follow-{}.log", std::process::id()));
+        let f = std::env::temp_dir().join(format!("tumr-follow-{}.log", std::process::id()));
         std::fs::write(&f, "old line\n").unwrap();
         let mut fol = LogFollower::from_end(&f);
         assert_eq!(fol.new_lines(), Vec::<String>::new());

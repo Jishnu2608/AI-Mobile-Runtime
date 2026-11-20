@@ -10,7 +10,7 @@ type Tool = {
   annotations: { readOnlyHint: boolean };
 };
 
-/** The tool catalogue exactly as `umr mcp --list-tools` prints it (content/generated). */
+/** The tool catalogue exactly as `tumr mcp --list-tools` prints it (content/generated). */
 export function loadTools(): Tool[] {
   return JSON.parse(readFileSync(join(process.cwd(), "content", "generated", "mcp-tools.json"), "utf8"));
 }

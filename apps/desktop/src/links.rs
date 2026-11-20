@@ -3,12 +3,12 @@
 //! * docs pages, in the user's browser: a fixed list of pages and anchors, so the web view can
 //!   never open an arbitrary address. Until the website has a domain (W2) the pages are the
 //!   user guides in the public repository, which the website shows too.
-//! * the live preview window: this program again with `--preview`, as `umr run` does.
+//! * the live preview window: this program again with `--preview`, as `tumr run` does.
 
 use std::process::{Command, Stdio};
 
 /// Where the user guides are read today (the public repository; the website needs W2).
-const DOCS_BASE: &str = "https://github.com/Jishnu2608/AI-Mobile-Runtime/blob/main/docs/user/";
+const DOCS_BASE: &str = "https://github.com/Jishnu2608/TUMR/blob/main/docs/user/";
 
 /// The pages the app may open.
 const PAGES: &[&str] = &[

@@ -1,13 +1,13 @@
 # TEST-001 diagnosis: which environment-scan probe creates %USERPROFILE%\.android?
 #
 # Runs every tool the product's environment scan starts, one at a time, with the product's
-# isolated environment (like umr-env `child_env`). Before each probe an EMPTY .android folder is
+# isolated environment (like tumr-env `child_env`). Before each probe an EMPTY .android folder is
 # removed (only on a throwaway CI runner); after the probe the script reports whether it came back.
 # Each probe runs twice: (a) isolated environment as the product uses it today, and (b) the same
 # plus USERPROFILE / HOME / HOMEDRIVE / HOMEPATH and Java user.home pointed at a private folder,
 # to see whether redirecting the profile is a working fix.
 #
-# Usage (CI only): ./tests/env-matrix/leak-probe.ps1 -Toolchains D:\umr-toolchains
+# Usage (CI only): ./tests/env-matrix/leak-probe.ps1 -Toolchains D:\tumr-toolchains
 param([Parameter(Mandatory = $true)][string]$Toolchains)
 $ErrorActionPreference = 'Continue'
 $leak = Join-Path $env:USERPROFILE '.android'
@@ -25,7 +25,7 @@ $probes = @(
 )
 $java = Get-ChildItem (Join-Path $Toolchains 'jdks') -Directory -ErrorAction SilentlyContinue | Select-Object -First 1
 if ($java) { $probes += @{ Name = 'java -version'; Exe = "$($java.FullName)\bin\java.exe"; Args = '-version' } }
-# Tools the scan looks up on PATH (umr-env tools.rs).
+# Tools the scan looks up on PATH (tumr-env tools.rs).
 foreach ($t in 'node', 'npm', 'pnpm', 'yarn', 'bun', 'git', 'flutter', 'android') {
     $cmd = Get-Command $t -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
     if ($cmd) {

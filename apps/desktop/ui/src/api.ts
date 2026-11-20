@@ -5,7 +5,7 @@ import { mockCall } from "./mock";
 import { mockAgent } from "./mockAgents";
 
 // VSC-001: inside the VS Code extension's Mobile Preview panel the page talks to the extension,
-// which forwards to the Runtime Core (`umr rpc --stdio`).
+// which forwards to the Runtime Core (`tumr rpc --stdio`).
 interface VsCodeApi {
   postMessage(m: unknown): void;
 }
@@ -41,7 +41,7 @@ export async function call<T = any>(method: string, params: unknown = null): Pro
   return invoke<T>("core_call", { method, params });
 }
 
-/** `umr agent … --json` run by the desktop app (CON-005); a sample answer in a plain browser. */
+/** `tumr agent … --json` run by the desktop app (CON-005); a sample answer in a plain browser. */
 export async function agentCli<T = any>(request: { action: string; client?: string; project?: string; scope?: string; remove?: boolean }): Promise<T> {
   const req = { ...request, project: request.project || undefined };
   if (!inTauri) return mockAgent(req) as Promise<T>;
@@ -53,7 +53,7 @@ export type Step = "scan" | "project" | "plan" | "licences" | "install" | "ready
 export type DocsPage = "getting-started" | "agents" | "troubleshooting" | "uninstall-and-data" | "privacy-and-security" | "cli-reference";
 
 /** The user guides (GitHub until the website has a domain, W2); the app opens fixed pages only. */
-const DOCS_BASE = "https://github.com/Jishnu2608/AI-Mobile-Runtime/blob/main/docs/user/";
+const DOCS_BASE = "https://github.com/Jishnu2608/TUMR/blob/main/docs/user/";
 
 /** Opens a guide page in the browser. */
 export async function openDocs(page: DocsPage, anchor?: string): Promise<void> {
@@ -123,7 +123,7 @@ export async function setWindowTitle(title: string): Promise<void> {
  * the web view's storage, so the preview also hears this when it is already open. */
 export async function openProblems(): Promise<void> {
   try {
-    localStorage.setItem("umr.openProblems", String(Date.now()));
+    localStorage.setItem("tumr.openProblems", String(Date.now()));
   } catch {
     /* the preview opens without its panel */
   }
@@ -148,7 +148,7 @@ export interface WizardState {
   jobId?: string;
 }
 
-const KEY = "umr-wizard";
+const KEY = "tumr-wizard";
 
 export async function loadWizard(): Promise<WizardState | null> {
   if (!inTauri) {

@@ -1,11 +1,11 @@
-//! `umr project [path]` and `umr trust [path] [--revoke]` (PROJ-001).
+//! `tumr project [path]` and `tumr trust [path] [--revoke]` (PROJ-001).
 
 use std::io::IsTerminal;
 use std::process::ExitCode;
 
 use serde_json::{json, Value};
-use umr_api::methods::{self, TrustResult};
-use umr_resolver::detect::Detection;
+use tumr_api::methods::{self, TrustResult};
+use tumr_resolver::detect::Detection;
 
 use crate::core_process::CoreTarget;
 use crate::fail;
@@ -43,7 +43,7 @@ pub async fn show(target: &CoreTarget, dir: String, json_out: bool) -> ExitCode 
         for c in &d.candidates {
             println!("  {:<40} {:?} ({} %)", c.path, c.framework, c.confidence);
         }
-        println!("Run `umr project <folder>` on one of them.");
+        println!("Run `tumr project <folder>` on one of them.");
     }
     let trusted = v["trusted"].as_bool().unwrap_or(false);
     println!(
@@ -51,7 +51,7 @@ pub async fn show(target: &CoreTarget, dir: String, json_out: bool) -> ExitCode 
         if trusted {
             "yes"
         } else {
-            "no — builds will ask first (`umr trust` to trust this folder)"
+            "no — builds will ask first (`tumr trust` to trust this folder)"
         }
     );
     ExitCode::SUCCESS

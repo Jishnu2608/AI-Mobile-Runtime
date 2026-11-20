@@ -12,19 +12,19 @@ Devices come from a fixed catalogue of size classes. Each profile becomes an emu
 ## Switching
 
 ```powershell
-umr run --profile tablet
-umr device use fold
+tumr run --profile tablet
+tumr device use fold
 ```
 
 Or pick a profile in the preview window's device menu. Switching keeps the session: the running project follows to the new device.
 
 ## Foldables
 
-On `fold` and `flip` the preview toolbar shows a posture menu (open, half-open, closed); from the command line, `umr device posture`.
+On `fold` and `flip` the preview toolbar shows a posture menu (open, half-open, closed); from the command line, `tumr device posture`.
 
 ## A clean start
 
 ```powershell
-umr device use standard --cold
+tumr device use standard --cold
 ```
 boots without the saved snapshot.

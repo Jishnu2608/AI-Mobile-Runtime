@@ -1,9 +1,9 @@
-//! `umr device list` (DEV-001/007).
+//! `tumr device list` (DEV-001/007).
 
 use std::process::ExitCode;
 
 use serde_json::Value;
-use umr_api::methods;
+use tumr_api::methods;
 
 use crate::core_process::CoreTarget;
 use crate::fail;
@@ -39,7 +39,7 @@ pub async fn list(target: &CoreTarget, json_out: bool) -> ExitCode {
     }
     let devices = v["devices"].as_array().cloned().unwrap_or_default();
     if devices.is_empty() {
-        println!("\nNo devices. (Emulators started by the product appear here; Phase 2.3 adds `umr device use`.)");
+        println!("\nNo devices. (Emulators started by the product appear here; Phase 2.3 adds `tumr device use`.)");
     } else {
         println!();
         for d in &devices {

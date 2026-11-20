@@ -74,9 +74,9 @@ export function Preview() {
   useEffect(() => {
     const check = () => {
       try {
-        const t = Number(localStorage.getItem("umr.openProblems") ?? 0);
+        const t = Number(localStorage.getItem("tumr.openProblems") ?? 0);
         if (t && Date.now() - t < 30_000) {
-          localStorage.removeItem("umr.openProblems");
+          localStorage.removeItem("tumr.openProblems");
           setPanel(true);
         }
       } catch {
@@ -84,7 +84,7 @@ export function Preview() {
       }
     };
     check();
-    const onStorage = (e: StorageEvent) => e.key === "umr.openProblems" && check();
+    const onStorage = (e: StorageEvent) => e.key === "tumr.openProblems" && check();
     window.addEventListener("storage", onStorage);
     window.addEventListener("focus", check);
     return () => {
@@ -120,7 +120,7 @@ export function Preview() {
           const p = s.session?.profile;
           if (p && s.session?.state === "running") setProfile((cur) => (cur === p ? cur : p));
           const app = s.session?.app?.split(".").pop();
-          const t = app ? `Phone — ${app}` : "Phone — AI Mobile Runtime";
+          const t = app ? `Phone — ${app}` : "Phone — Toolchain Universal Mobile Runtime";
           if (t !== last) {
             last = t;
             setWindowTitle(t);
@@ -208,7 +208,7 @@ export function Preview() {
             setStatus("");
           } else if (m.type === "waiting") {
             setDevice(null);
-            setStatus("No device is running. Start one with `umr run` or pick a device above.");
+            setStatus("No device is running. Start one with `tumr run` or pick a device above.");
           } else if (m.type === "note") {
             setNote(m.message);
           } else if (m.type === "error") {
@@ -598,7 +598,7 @@ export function Preview() {
             onClick={() =>
               act("Stop", async () => {
                 const r = await call<{ stopped: { package?: string } | null }>("project.stop", {});
-                return r.stopped ? `Stopped ${r.stopped.package ?? "the app"}. Run it again with umr run.` : "Nothing was running.";
+                return r.stopped ? `Stopped ${r.stopped.package ?? "the app"}. Run it again with tumr run.` : "Nothing was running.";
               })
             }
           >

@@ -103,7 +103,7 @@ kind: missing
 expect: environment
 origin: environment
 ---
-Flutter SDK not found (expected D:\UMR\flutter\3.32.0\bin\flutter.bat); run `umr install` for this project
+Flutter SDK not found (expected D:\TUMR\flutter\3.32.0\bin\flutter.bat); run `tumr install` for this project
 === ndk without source.properties
 kind: gradle
 expect: environment
@@ -111,7 +111,7 @@ origin: environment
 ---
 * What went wrong:
 Execution failed for task ':app:configureCMakeDebug[arm64-v8a]'.
-> [CXX1101] NDK at C:\UMR\android-sdk\ndk\26.1.10909125 did not have a source.properties file
+> [CXX1101] NDK at C:\TUMR\android-sdk\ndk\26.1.10909125 did not have a source.properties file
 === cmake not found
 kind: gradle
 expect: environment
@@ -152,4 +152,4 @@ source: run
 expect: environment
 origin: environment
 ---
-'C:\p' is not trusted yet. Building runs the project's own scripts (Gradle, npm, Flutter); trust the folder first (`umr trust`).
+'C:\p' is not trusted yet. Building runs the project's own scripts (Gradle, npm, Flutter); trust the folder first (`tumr trust`).

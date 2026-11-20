@@ -1,18 +1,18 @@
 [workspace]
 resolver = "2"
-members = ["crates/umr-platform", "crates/umr-api", "crates/umr-storage", "crates/umr-env", "crates/umr-resolver", "crates/umr-installer", "crates/umr-supervisor", "adapters/sdk", "adapters/gradle-android", "adapters/flutter", "adapters/react-native", "crates/umr-device", "crates/umr-stream", "crates/umr-session", "crates/umr-diagnostics", "crates/umr-mcp", "crates/umr-core", "apps/cli", "apps/desktop", "helpers/elevated-helper"]
+members = ["crates/tumr-platform", "crates/tumr-api", "crates/tumr-storage", "crates/tumr-env", "crates/tumr-resolver", "crates/tumr-installer", "crates/tumr-supervisor", "adapters/sdk", "adapters/gradle-android", "adapters/flutter", "adapters/react-native", "crates/tumr-device", "crates/tumr-stream", "crates/tumr-session", "crates/tumr-diagnostics", "crates/tumr-mcp", "crates/tumr-core", "apps/cli", "apps/desktop", "helpers/elevated-helper"]
 # Phase 0 experiments are a separate workspace and are not part of the product.
 exclude = ["poc"]
 
 [workspace.package]
-version = "0.1.28"
+version = "0.1.32"
 edition = "2021"
 rust-version = "1.89"  # std::fs::File::try_lock
-repository = "https://github.com/Jishnu2608/AI-Mobile-Runtime"
+repository = "https://github.com/Jishnu2608/TUMR"
 publish = false
 
 [workspace.lints.rust]
-# `unsafe` is denied everywhere. Only crates/umr-platform (Windows API calls) opts out,
+# `unsafe` is denied everywhere. Only crates/tumr-platform (Windows API calls) opts out,
 # and every unsafe block there must carry a `// SAFETY:` comment.
 unsafe_code = "deny"
 missing_debug_implementations = "warn"

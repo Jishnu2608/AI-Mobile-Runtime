@@ -1,5 +1,5 @@
 // "Connect your agent" (Phase 10.5, CON-005): the wizard's last step. Every action runs
-// `umr agent … --json` through the desktop app (agents.rs), so the page shows exactly what the
+// `tumr agent … --json` through the desktop app (agents.rs), so the page shows exactly what the
 // CLI would do: the files it changes, as a diff, before anything is written.
 import { useEffect, useState } from "react";
 import { Why } from "./why";
@@ -48,12 +48,12 @@ function relative(path: string, root: string): string {
   return p.toLowerCase().startsWith(r.toLowerCase() + "/") ? p.slice(r.length + 1) : p;
 }
 
-/** AUD-P2-28: a file inside the project that would carry this PC's umr.exe path into git.
+/** AUD-P2-28: a file inside the project that would carry this PC's tumr.exe path into git.
  * Claude Code keeps settings.local.json out of git itself. */
 function sharedWithPath(c: { path: string; diff: string }, project: string): boolean {
   if (!project) return false;
   const inside = relative(c.path, project) !== c.path.replace(/\\/g, "/").replace(/\/+$/, "");
-  return inside && /umr\.exe/i.test(c.diff) && !/settings\.local\.json$/i.test(c.path);
+  return inside && /tumr\.exe/i.test(c.diff) && !/settings\.local\.json$/i.test(c.path);
 }
 
 export function AgentsStep({ project, onBack }: { project: string; onBack: () => void }) {
@@ -95,7 +95,7 @@ export function AgentsStep({ project, onBack }: { project: string; onBack: () =>
       {!rows && !error && <p className="busy">Looking for coding agents on this PC…</p>}
       {rows && rows.map((r) => <AgentCard key={r.id} row={r} project={project} onChanged={load} />)}
       <p className="muted small">
-        Other MCP clients: create a client with <code>umr agent add &lt;name&gt;</code> and start <code>umr.exe mcp --client &lt;name&gt;</code>. The
+        Other MCP clients: create a client with <code>tumr agent add &lt;name&gt;</code> and start <code>tumr.exe mcp --client &lt;name&gt;</code>. The
         claude.ai website and mobile app cannot reach a program on your PC.
       </p>
       <div className="nav">
@@ -189,6 +189,10 @@ function AgentCard({ row, project, onChanged }: { row: ClientRow; project: strin
         const l = loopLine(row, connected);
         return <p className={`small loop ${l.ok ? "on" : "off"}`}>{l.text}</p>;
       })()}
+      {row.id === "claude-desktop" && !connected && (
+        // live test 2026-11-19: a running Claude Desktop writes its settings back and drops the entry
+        <p className="muted small">Quit Claude Desktop completely first (also from the tray), then connect: while it runs it can write its settings back without this entry.</p>
+      )}
       {needsProject && <p className="muted small">Choose a project first, or connect for all projects.</p>}
       {busy && <p className="muted small">{busy}…</p>}
       {error && <div className="problem" role="alert">{error}</div>}
@@ -212,7 +216,7 @@ function AgentCard({ row, project, onChanged }: { row: ClientRow; project: strin
                   <pre className="diff" tabIndex={0}>{c.diff || "(no text change)"}</pre>
                   {sharedWithPath(c, project) && (
                     <p className="small warn agent-commit-warn">
-                      This file is inside your project and holds this PC's path to <code>umr.exe</code>. If the project is shared
+                      This file is inside your project and holds this PC's path to <code>tumr.exe</code>. If the project is shared
                       through git, add <code>{relative(c.path, project)}</code> to <code>.gitignore</code>: everyone connects their
                       own agent, with their own path.
                     </p>
@@ -255,7 +259,7 @@ function AgentCard({ row, project, onChanged }: { row: ClientRow; project: strin
                 </li>
               ))}
               {r.fixed.map((s) => (
-                <li key={s}><span className="ok">Fixed</span>{s} scope now points at this umr.exe</li>
+                <li key={s}><span className="ok">Fixed</span>{s} scope now points at this tumr.exe</li>
               ))}
             </ul>
           ))}

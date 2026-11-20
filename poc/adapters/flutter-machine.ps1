@@ -1,6 +1,6 @@
 # POC-006 (throwaway): drive `flutter run --machine` over its JSON protocol and time hot reload / hot restart.
 # Expects env from the POC recipe (JAVA_HOME, ANDROID_HOME, PUB_CACHE, GRADLE_USER_HOME, JAVA_TOOL_OPTIONS, PATH with flutter).
-# The app prints "UMR_RENDER <label>" from a build() method; machine mode reports prints as app.log events.
+# The app prints "TUMR_RENDER <label>" from a build() method; machine mode reports prints as app.log events.
 param(
   [Parameter(Mandatory)] [string]$Project,
   [Parameter(Mandatory)] [string]$MarkerFile,
@@ -40,7 +40,7 @@ $appId = ([regex]::Match($started, '"appId":"([^"]+)"')).Groups[1].Value
 $id = 100
 function Cycle([string]$from, [string]$to, [bool]$full) {
   $text = [IO.File]::ReadAllText($MarkerFile)
-  [IO.File]::WriteAllText($MarkerFile, $text.Replace("UMR_RENDER $from", "UMR_RENDER $to"))
+  [IO.File]::WriteAllText($MarkerFile, $text.Replace("TUMR_RENDER $from", "TUMR_RENDER $to"))
   $script:id++
   $req = '[{"id":' + $script:id + ',"method":"app.restart","params":{"appId":"' + $appId + '","fullRestart":' + ($full.ToString().ToLower()) + ',"pause":false,"reason":"manual"}}]'
   $w = [Diagnostics.Stopwatch]::StartNew()
@@ -50,7 +50,7 @@ function Cycle([string]$from, [string]$to, [bool]$full) {
     $l = NextLine 1000
     if (-not $l) { continue }
     if (-not $resp -and $l -match ('"id":' + $script:id + '[,}]')) { $resp = $l; $respT = $w.Elapsed.TotalMilliseconds }
-    if (-not $logT -and $l -match "UMR_RENDER $to") { $logT = $w.Elapsed.TotalMilliseconds }
+    if (-not $logT -and $l -match "TUMR_RENDER $to") { $logT = $w.Elapsed.TotalMilliseconds }
   }
   $kind = if ($full) { 'hot restart' } else { 'hot reload' }
   "{0} {1}->{2}: response {3:N0} ms, re-render seen {4:N0} ms  {5}" -f $kind, $from, $to, $respT, $logT, ($resp -replace '.*"result":', 'result=')
@@ -59,7 +59,7 @@ $n = 0
 foreach ($i in 1..$Reloads)  { Cycle "f$n" "f$($n+1)" $false; $n++; Start-Sleep 1 }
 foreach ($i in 1..$Restarts) { Cycle "f$n" "f$($n+1)" $true;  $n++; Start-Sleep 1 }
 # restore marker label and stop
-$text = [IO.File]::ReadAllText($MarkerFile); [IO.File]::WriteAllText($MarkerFile, $text.Replace("UMR_RENDER f$n", 'UMR_RENDER f0'))
+$text = [IO.File]::ReadAllText($MarkerFile); [IO.File]::WriteAllText($MarkerFile, $text.Replace("TUMR_RENDER f$n", 'TUMR_RENDER f0'))
 $p.StandardInput.WriteLine('[{"id":999,"method":"app.stop","params":{"appId":"' + $appId + '"}}]'); $p.StandardInput.Flush()
 Start-Sleep 3; if (-not $p.HasExited) { $p.Kill() }
 "FLUTTER machine events read: $events"

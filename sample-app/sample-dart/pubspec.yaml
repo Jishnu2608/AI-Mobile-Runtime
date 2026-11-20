@@ -1,5 +1,5 @@
 name: sample_calculator_dart
-description: "A small Android calculator in Dart (Flutter), to try the AI Mobile Runtime."
+description: "A small Android calculator in Dart (Flutter), to try the Toolchain Universal Mobile Runtime."
 publish_to: 'none'
 version: 1.0.0+1
 

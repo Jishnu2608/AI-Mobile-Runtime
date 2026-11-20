@@ -1,0 +1,54 @@
+[package]
+name = "tumr-core"
+description = "Runtime Core: background service that owns environment, devices, sessions and diagnostics."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "tumr-core"
+path = "src/main.rs"
+
+[dependencies]
+tumr-platform = { path = "../tumr-platform" }
+tumr-api = { path = "../tumr-api" }
+tumr-storage = { path = "../tumr-storage" }
+tumr-env = { path = "../tumr-env" }
+tumr-resolver = { path = "../tumr-resolver" }
+tumr-installer = { path = "../tumr-installer" }
+tumr-device = { path = "../tumr-device" }
+tumr-supervisor = { path = "../tumr-supervisor" }
+tumr-session = { path = "../tumr-session" }
+tumr-adapter = { path = "../../adapters/sdk" }
+tumr-adapter-gradle = { path = "../../adapters/gradle-android" }
+tumr-adapter-flutter = { path = "../../adapters/flutter" }
+tumr-adapter-react-native = { path = "../../adapters/react-native" }
+notify = "8"
+tumr-stream = { path = "../tumr-stream" }
+tumr-diagnostics = { path = "../tumr-diagnostics" }
+tumr-elevate = { path = "../../helpers/elevated-helper" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# API tokens: hashing (only SHA-256 hashes are stored) and OS randomness for generation.
+sha2 = "0.10"
+getrandom = "0.3"
+# Async runtime: Ctrl+C handling now; named-pipe API and process supervision later (CORE-003, DEV-004).
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "signal", "time", "sync", "net", "io-util"] }
+# Structured logging to rotating files (+ stderr in foreground mode).
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter"] }
+tracing-appender = "0.2"
+
+[dev-dependencies]
+tumr-platform = { path = "../tumr-platform" }
+tumr-env = { path = "../tumr-env" }
+tumr-storage = { path = "../tumr-storage" }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "io-util", "time"] }
+
+[lints]
+workspace = true

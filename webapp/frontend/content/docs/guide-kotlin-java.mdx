@@ -3,26 +3,26 @@ Projects created by Android Studio (or Android CLI) with a Gradle wrapper run as
 <Steps>
 <Step title="Check what the project needs">
 ```powershell
-umr plan .
+tumr plan .
 ```
 It reads `gradle-wrapper.properties`, the Android Gradle Plugin version and `compileSdk`, and lists the JDK and SDK packages it would install.
 </Step>
 <Step title="Install the missing parts and trust the folder">
 ```powershell
-umr install .
-umr trust .
+tumr install .
+tumr trust .
 ```
 </Step>
 <Step title="Run it">
 ```powershell
-umr run
+tumr run
 ```
 Gradle builds a debug APK through the project's own wrapper, the runtime installs it and launches the launcher activity.
 </Step>
 <Step title="Apply changes">
 Kotlin and Java have no hot reload outside Android Studio, so saving a file starts an incremental Gradle build and a reinstall by itself (about 15–20 s once the Gradle daemon is warm). To force one:
 ```powershell
-umr reload full
+tumr reload full
 ```
 </Step>
 </Steps>
@@ -31,4 +31,4 @@ umr reload full
 The Gradle daemon stays warm between runs and the configuration cache is on, so the second build is much faster than the first.
 </Callout>
 
-Compile errors from `kotlinc`, `javac` and Android resources (AAPT) appear in `umr problems` with their file and line; Gradle failures without a location appear with Gradle's own summary.
+Compile errors from `kotlinc`, `javac` and Android resources (AAPT) appear in `tumr problems` with their file and line; Gradle failures without a location appear with Gradle's own summary.

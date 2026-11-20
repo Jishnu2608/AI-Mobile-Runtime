@@ -14,12 +14,12 @@ use std::io::{Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
-use umr_adapter::problems::{gradle_failure, parse_line};
-use umr_adapter::{
+use tumr_adapter::problems::{gradle_failure, parse_line};
+use tumr_adapter::{
     Adapter, AdapterContext, AdapterError, Capabilities, Event, Framework, Issue, Phase, Problem,
     ReloadKind, RunningApp, Severity, Sink,
 };
-use umr_supervisor::{ProcessSpec, RunState};
+use tumr_supervisor::{ProcessSpec, RunState};
 
 /// Longest build the adapter waits for (cold builds download Gradle + dependencies).
 pub const BUILD_TIMEOUT: Duration = Duration::from_secs(30 * 60);
@@ -134,7 +134,7 @@ pub fn up_to_date_apk(root: &Path, module: &str, extra: &[PathBuf]) -> Option<Pa
 
 /// The file next to the APK whose time is the start of the last successful build.
 fn stamp_path(apk: &Path) -> PathBuf {
-    apk.with_file_name(".umr-built")
+    apk.with_file_name(".tumr-built")
 }
 
 /// Records that the build that started at `started` produced `apk` (AUD-P1-45).
@@ -211,13 +211,13 @@ impl Adapter for GradleAndroid {
             Some(j) if j.join("bin").join("java.exe").is_file() => {}
             _ => v.push(Issue {
                 message: "no JDK selected for the build".into(),
-                fix: "run `umr install` for this project".into(),
+                fix: "run `tumr install` for this project".into(),
             }),
         }
-        if umr_device::app::find_aapt2(&ctx.sdk).is_none() {
+        if tumr_device::app::find_aapt2(&ctx.sdk).is_none() {
             v.push(Issue {
                 message: "Android build-tools are not installed".into(),
-                fix: "run `umr install` for this project".into(),
+                fix: "run `tumr install` for this project".into(),
             });
         }
         v
@@ -276,7 +276,44 @@ impl Adapter for GradleAndroid {
     }
 }
 
-fn emit_line(line: &str, root: &Path, sink: &Sink, problems: &mut Vec<Problem>, tasks: &mut u32) {
+/// #56: javac's "cannot find symbol" names the symbol three lines later (after the source line
+/// and the caret): `  symbol:   method parseDoubl(String)`. Such a problem is held for up to
+/// three lines so the symbol can be added to its message.
+type Held = Option<(Problem, u8)>;
+
+fn publish(p: Problem, sink: &Sink, problems: &mut Vec<Problem>) {
+    if !problems.contains(&p) {
+        sink(Event::Problem(p.clone()));
+        problems.push(p);
+    }
+}
+
+/// Sends a held javac problem as it is (no symbol line came).
+fn flush_held(held: &mut Held, sink: &Sink, problems: &mut Vec<Problem>) {
+    if let Some((p, _)) = held.take() {
+        publish(p, sink, problems);
+    }
+}
+
+fn emit_line(
+    line: &str,
+    root: &Path,
+    sink: &Sink,
+    problems: &mut Vec<Problem>,
+    tasks: &mut u32,
+    held: &mut Held,
+) {
+    if let Some((p, n)) = held.as_mut() {
+        if let Some(sym) = line.trim().strip_prefix("symbol:") {
+            p.message = format!("{}: {}", p.message.trim_end(), sym.trim());
+            flush_held(held, sink, problems);
+            return;
+        }
+        *n += 1;
+        if *n >= 3 || !matches!(classify(line, root), LineKind::Other) {
+            flush_held(held, sink, problems);
+        }
+    }
     match classify(line, root) {
         LineKind::Task(t) => {
             *tasks += 1;
@@ -285,12 +322,10 @@ fn emit_line(line: &str, root: &Path, sink: &Sink, problems: &mut Vec<Problem>, 
                 message: t,
             });
         }
-        LineKind::Problem(p) => {
-            if !problems.contains(&p) {
-                sink(Event::Problem(p.clone()));
-                problems.push(p);
-            }
+        LineKind::Problem(p) if p.source == "javac" && p.message.trim() == "cannot find symbol" => {
+            *held = Some((p, 0));
         }
+        LineKind::Problem(p) => publish(p, sink, problems),
         LineKind::Other => {}
     }
 }
@@ -344,7 +379,7 @@ pub fn warm_up(ctx: &AdapterContext, module: &str) {
         .log_dir
         .join(format!("gradle-warm-{}.log", ctx.group.replace(':', "-")));
     let mut spec = gradle_spec(ctx, module, &[], &name, &log);
-    spec.restart = umr_supervisor::RestartPolicy::Never;
+    spec.restart = tumr_supervisor::RestartPolicy::Never;
     let _ = ctx.supervisor.start(spec);
 }
 
@@ -409,26 +444,30 @@ pub fn build_with(
 
     // follow the log while Gradle runs
     let (mut pos, mut pending, mut problems, mut tasks) = (0u64, String::new(), Vec::new(), 0u32);
-    let read_new =
-        |pos: &mut u64, pending: &mut String, problems: &mut Vec<Problem>, tasks: &mut u32| {
-            let Ok(mut f) = std::fs::File::open(&log) else {
-                return;
-            };
-            if f.seek(SeekFrom::Start(*pos)).is_err() {
-                return;
-            }
-            let mut buf = Vec::new();
-            if f.read_to_end(&mut buf).is_ok() {
-                *pos += buf.len() as u64;
-                pending.push_str(&String::from_utf8_lossy(&buf));
-                while let Some(nl) = pending.find('\n') {
-                    let line: String = pending.drain(..=nl).collect();
-                    emit_line(line.trim_end(), root, sink, problems, tasks);
-                }
-            }
+    let mut held: Held = None;
+    let read_new = |pos: &mut u64,
+                    pending: &mut String,
+                    problems: &mut Vec<Problem>,
+                    tasks: &mut u32,
+                    held: &mut Held| {
+        let Ok(mut f) = std::fs::File::open(&log) else {
+            return;
         };
+        if f.seek(SeekFrom::Start(*pos)).is_err() {
+            return;
+        }
+        let mut buf = Vec::new();
+        if f.read_to_end(&mut buf).is_ok() {
+            *pos += buf.len() as u64;
+            pending.push_str(&String::from_utf8_lossy(&buf));
+            while let Some(nl) = pending.find('\n') {
+                let line: String = pending.drain(..=nl).collect();
+                emit_line(line.trim_end(), root, sink, problems, tasks, held);
+            }
+        }
+    };
     let status = loop {
-        read_new(&mut pos, &mut pending, &mut problems, &mut tasks);
+        read_new(&mut pos, &mut pending, &mut problems, &mut tasks, &mut held);
         let st = ctx.supervisor.status(&name);
         match st.as_ref().map(|s| s.state) {
             Some(RunState::Running | RunState::Restarting) => {}
@@ -446,10 +485,18 @@ pub fn build_with(
         }
         std::thread::sleep(Duration::from_millis(300));
     };
-    read_new(&mut pos, &mut pending, &mut problems, &mut tasks);
+    read_new(&mut pos, &mut pending, &mut problems, &mut tasks, &mut held);
     if !pending.trim().is_empty() {
-        emit_line(pending.trim_end(), root, sink, &mut problems, &mut tasks);
+        emit_line(
+            pending.trim_end(),
+            root,
+            sink,
+            &mut problems,
+            &mut tasks,
+            &mut held,
+        );
     }
+    flush_held(&mut held, sink, &mut problems);
     let code = status.and_then(|s| s.exit_code);
     if code != Some(0) {
         let text = std::fs::read_to_string(&log).unwrap_or_default();
@@ -493,17 +540,18 @@ pub fn install(ctx: &AdapterContext, apk: &Path, sink: &Sink) -> Result<String, 
         phase: Phase::Installing,
         message: apk.display().to_string(),
     });
-    let aapt2 = umr_device::app::find_aapt2(&ctx.sdk)
+    let aapt2 = tumr_device::app::find_aapt2(&ctx.sdk)
         .ok_or_else(|| AdapterError::Missing("Android build-tools (aapt2)".into()))?;
-    let package = umr_device::app::apk_package(&aapt2, apk).map_err(AdapterError::InstallFailed)?;
+    let package =
+        tumr_device::app::apk_package(&aapt2, apk).map_err(AdapterError::InstallFailed)?;
     // AUD-P1-45: after a device switch the emulator usually has this very APK already
-    if umr_device::app::installed_same(ctx.device.adb.port, &ctx.device.serial, &package, apk) {
+    if tumr_device::app::installed_same(ctx.device.adb.port, &ctx.device.serial, &package, apk) {
         sink(Event::Log {
             line: format!("{package}: this APK is installed already"),
         });
         return Ok(package);
     }
-    umr_device::app::install(&ctx.device.adb, &ctx.device.serial, apk)
+    tumr_device::app::install(&ctx.device.adb, &ctx.device.serial, apk)
         .map_err(AdapterError::InstallFailed)?;
     Ok(package)
 }
@@ -517,7 +565,7 @@ pub fn launch(ctx: &AdapterContext, package: &str, sink: &Sink) -> Result<(), Ad
         phase: Phase::Launching,
         message: package.to_string(),
     });
-    let l = umr_device::app::launch(ctx.device.adb.port, &ctx.device.serial, package, None)
+    let l = tumr_device::app::launch(ctx.device.adb.port, &ctx.device.serial, package, None)
         .map_err(AdapterError::LaunchFailed)?;
     sink(Event::AppStarted {
         package: package.to_string(),
@@ -562,7 +610,7 @@ impl RunningApp for GradleApp {
     }
 
     fn is_alive(&mut self) -> bool {
-        umr_device::app::pid(
+        tumr_device::app::pid(
             self.ctx.device.adb.port,
             &self.ctx.device.serial,
             &self.package,
@@ -571,7 +619,7 @@ impl RunningApp for GradleApp {
     }
 
     fn stop(self: Box<Self>) {
-        let _ = umr_device::app::force_stop(
+        let _ = tumr_device::app::force_stop(
             self.ctx.device.adb.port,
             &self.ctx.device.serial,
             &self.package,
@@ -582,6 +630,45 @@ impl RunningApp for GradleApp {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn javac_cannot_find_symbol_names_the_symbol() {
+        let root = Path::new(r"C:\work\demo");
+        let seen = std::sync::Arc::new(std::sync::Mutex::new(Vec::<Problem>::new()));
+        let s2 = seen.clone();
+        let sink: Sink = std::sync::Arc::new(move |e| {
+            if let Event::Problem(p) = e {
+                s2.lock().unwrap().push(p);
+            }
+        });
+        let (mut problems, mut tasks, mut held) = (Vec::new(), 0u32, None);
+        for l in [
+            r"C:\work\demo\app\src\main\java\x\Calculator.java:104: error: cannot find symbol",
+            "            return Double.parseDoubl(display);",
+            "                         ^",
+            "  symbol:   method parseDoubl(String)",
+            "  location: class Double",
+            r"C:\work\demo\app\src\main\java\x\Main.java:7: error: cannot find symbol",
+            "> Task :app:compileDebugJavaWithJavac FAILED",
+        ] {
+            emit_line(l, root, &sink, &mut problems, &mut tasks, &mut held);
+        }
+        flush_held(&mut held, &sink, &mut problems);
+        let got: Vec<String> = seen
+            .lock()
+            .unwrap()
+            .iter()
+            .map(|p| p.message.clone())
+            .collect();
+        assert_eq!(
+            got,
+            vec![
+                "cannot find symbol: method parseDoubl(String)".to_string(),
+                "cannot find symbol".to_string(), // no symbol line before the next task
+            ]
+        );
+        assert_eq!(seen.lock().unwrap()[0].line, Some(104));
+    }
 
     #[test]
     fn an_unchanged_project_reuses_its_apk() {
@@ -635,7 +722,7 @@ mod tests {
     }
 
     fn tmp(tag: &str) -> PathBuf {
-        let d = std::env::temp_dir().join(format!("umr-gradle-{tag}-{}", std::process::id()));
+        let d = std::env::temp_dir().join(format!("tumr-gradle-{tag}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&d);
         std::fs::create_dir_all(&d).unwrap();
         d
@@ -714,7 +801,7 @@ mod tests {
         let c = GradleAndroid.capabilities();
         assert!(!c.hot_reload && !c.hot_restart && c.incremental_build);
         assert_eq!(
-            umr_adapter::contract::check_static(&GradleAndroid),
+            tumr_adapter::contract::check_static(&GradleAndroid),
             Vec::<String>::new()
         );
     }

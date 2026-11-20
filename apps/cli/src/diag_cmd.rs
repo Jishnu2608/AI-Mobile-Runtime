@@ -1,11 +1,11 @@
-//! `umr problems` and `umr logs` (DIA-004): the current run's classified problems and its log
+//! `tumr problems` and `tumr logs` (DIA-004): the current run's classified problems and its log
 //! lines (tool output, progress, the app's device log). Text arrives sanitised from the Core.
 
 use std::process::ExitCode;
 use std::time::Duration;
 
 use serde_json::{json, Value};
-use umr_api::methods;
+use tumr_api::methods;
 
 use crate::core_process::CoreTarget;
 use crate::fail;
@@ -97,7 +97,7 @@ pub async fn problems(target: &CoreTarget, category: Option<String>, json: bool)
             println!("{}", problem_line(e));
         }
     }
-    println!("Details and stack: `umr problems show <fingerprint>`.");
+    println!("Details and stack: `tumr problems show <fingerprint>`.");
     ExitCode::SUCCESS
 }
 

@@ -3,28 +3,28 @@ The runtime drives Flutter through `flutter run --machine`, so hot reload, hot r
 <Steps>
 <Step title="Install Flutter and the Android parts">
 ```powershell
-umr plan .
-umr install .
-umr trust .
+tumr plan .
+tumr install .
+tumr trust .
 ```
 The Flutter SDK version follows your `pubspec.yaml` constraint.
 </Step>
 <Step title="Run it">
 ```powershell
-umr run
+tumr run
 ```
 </Step>
 <Step title="Edit and save">
 Saved Dart files hot-reload by themselves. Use a restart when state must reset, and a full reload after native changes (Gradle files, plugins, `android/`):
 ```powershell
-umr reload restart
-umr reload full
+tumr reload restart
+tumr reload full
 ```
 </Step>
 </Steps>
 
 <Callout type="note" title="Faster second runs">
-When nothing native changed since the last build, `umr run` reuses the last debug APK; when that exact APK is already on the device, it attaches to it instead of reinstalling.
+When nothing native changed since the last build, `tumr run` reuses the last debug APK; when that exact APK is already on the device, it attaches to it instead of reinstalling.
 </Callout>
 
 Dart compile errors appear with their file and line. Flutter framework errors ("EXCEPTION CAUGHT BY …") and unhandled Dart exceptions appear once each, located at the widget that caused them or the first frame in your own code.

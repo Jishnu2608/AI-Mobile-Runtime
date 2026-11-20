@@ -55,5 +55,31 @@ jobs:
       - name: Smoke test
         shell: pwsh
         run: |
-          ./target/release/umr.exe --version
-          ./target/release/umr-core.exe --version
+          ./target/release/tumr.exe --version
+          ./target/release/tumr-core.exe --version
+
+  # DEC-047 (owner, 2026-11-19): the website's checks run here too, the same as the Website step
+  # of scripts/ci-local.ps1 (static export, so no server and no secrets).
+  website:
+    name: Website
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: webapp/frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: webapp/frontend/package-lock.json
+      - name: Install
+        run: npm ci --no-audit --no-fund
+      - name: Lint
+        run: npm run lint
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Build (static export)
+        run: npm run build
+      - name: Link check
+        run: npm run check

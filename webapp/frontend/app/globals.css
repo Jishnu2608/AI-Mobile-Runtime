@@ -427,6 +427,11 @@
     border-radius: 0 var(--r-sm) var(--r-sm) 0;
     color: var(--ink-2);
   }
+  /* wide tables scroll inside their box, never the page (home framework table on phones) */
+  .table-wrap {
+    max-width: 100%;
+    overflow-x: auto;
+  }
   .prose .table-wrap {
     overflow-x: auto;
     border: 1px solid var(--line);
@@ -551,3 +556,72 @@
 .vs-problems { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 9px 12px; border-top: 1px solid #262b34; background: #171a20; }
 .vs-problems code { color: #e8a59d; font-size: 11.5px; }
 .vs-statusbar { display: flex; justify-content: space-between; padding: 4px 12px; background: #2a5a2f; color: #e9f5ea; font-size: 11px; }
+
+/* DEC-052 (owner, 2026-11-19): a very faint criss-cross travelling gradient behind the page.
+   Two soft glows (lime and silver) cross diagonally as the page scrolls, tied to the scroll
+   position (no scroll-jacking, no timers). Low contrast on purpose: it must never compete with
+   the text. Browsers without scroll-driven animations get the glows at rest; reduced motion and
+   forced colours turn it off. */
+body { isolation: isolate; }
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  --glow-a: color-mix(in oklab, var(--lime) 9%, transparent);
+  --glow-b: color-mix(in oklab, var(--ink) 4%, transparent);
+  background:
+    radial-gradient(38rem 30rem at var(--ga-x, 12%) var(--ga-y, 18%), var(--glow-a), transparent 70%),
+    radial-gradient(34rem 28rem at var(--gb-x, 88%) var(--gb-y, 22%), var(--glow-b), transparent 70%);
+}
+[data-theme="dark"] body::before {
+  --glow-a: color-mix(in oklab, var(--lime) 6%, transparent);
+  --glow-b: color-mix(in oklab, var(--ink) 3%, transparent);
+}
+@property --ga-x { syntax: "<percentage>"; inherits: false; initial-value: 12%; }
+@property --ga-y { syntax: "<percentage>"; inherits: false; initial-value: 18%; }
+@property --gb-x { syntax: "<percentage>"; inherits: false; initial-value: 88%; }
+@property --gb-y { syntax: "<percentage>"; inherits: false; initial-value: 22%; }
+@keyframes tumr-criss-cross {
+  to { --ga-x: 82%; --ga-y: 84%; --gb-x: 16%; --gb-y: 80%; }
+}
+@supports (animation-timeline: scroll()) {
+  body::before {
+    animation: tumr-criss-cross linear both;
+    animation-timeline: scroll(root block);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  body::before { animation: none !important; }
+}
+/* DEC-052 enhancement: a soft glow under the mouse (set by components/motion/CursorGlow.tsx).
+   Behind the content like the travelling gradient, fades in and out, never blocks a click. */
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 400ms ease;
+  background: radial-gradient(
+    22rem 22rem at var(--cursor-x, 50%) var(--cursor-y, 50%),
+    color-mix(in oklab, var(--lime) 11%, transparent),
+    transparent 70%
+  );
+}
+html[data-cursor="on"] body::after { opacity: 1; }
+[data-theme="dark"] body::after {
+  background: radial-gradient(
+    22rem 22rem at var(--cursor-x, 50%) var(--cursor-y, 50%),
+    color-mix(in oklab, var(--lime) 7%, transparent),
+    transparent 70%
+  );
+}
+@media (prefers-reduced-motion: reduce) {
+  body::after { display: none; }
+}
+@media (forced-colors: active) {
+  body::before, body::after { display: none; }
+}

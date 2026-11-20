@@ -62,7 +62,7 @@ export function formatSize(bytes: number) {
 
 export const fileLabel: Record<string, { title: string; detail: string }> = {
   installer: { title: "Installer", detail: "Per-user install, no administrator rights. Adds a Start menu entry and an uninstaller." },
-  portable: { title: "Portable ZIP", detail: "The same four programs; unpack and run. Settings still go to %USERPROFILE%\\.umr." },
-  cli: { title: "Command line only", detail: "umr and the Runtime Core without the desktop app, for CI and headless machines." },
+  portable: { title: "Portable ZIP", detail: "The same four programs; unpack and run. Settings still go to %USERPROFILE%\\.tumr." },
+  cli: { title: "Command line only", detail: "tumr and the Runtime Core without the desktop app, for CI and headless machines." },
   vscode: { title: "VS Code extension", detail: "The extension as a .vsix file: Extensions › … › Install from VSIX. Needs the runtime installed." },
 };

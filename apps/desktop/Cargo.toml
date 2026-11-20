@@ -1,5 +1,5 @@
 [package]
-name = "umr-desktop"
+name = "tumr-desktop"
 description = "Desktop app (UI-001/002): Tauri 2 shell that talks to the Runtime Core and runs the onboarding wizard."
 version.workspace = true
 edition.workspace = true
@@ -8,13 +8,13 @@ repository.workspace = true
 publish.workspace = true
 
 [[bin]]
-name = "umr-desktop"
+name = "tumr-desktop"
 path = "src/main.rs"
 
 [features]
 # Load the built UI (`ui/dist`, embedded in the binary). Without it Tauri loads the Vite dev
 # server (`devUrl`); for UI work run `npm --prefix apps/desktop/ui run dev` and build with
-# `cargo run -p umr-desktop --no-default-features`.
+# `cargo run -p tumr-desktop --no-default-features`.
 default = ["custom-protocol"]
 custom-protocol = ["tauri/custom-protocol"]
 
@@ -28,9 +28,9 @@ serde_json = "1"
 # Windows' own folder picker for the wizard's project step (no file system plugin needed)
 rfd = { version = "0.15", default-features = false }
 tokio = { version = "1", features = ["sync", "rt"] }
-umr-api = { path = "../../crates/umr-api" }
-umr-core = { path = "../../crates/umr-core" }
-umr-platform = { path = "../../crates/umr-platform" }
+tumr-api = { path = "../../crates/tumr-api" }
+tumr-core = { path = "../../crates/tumr-core" }
+tumr-platform = { path = "../../crates/tumr-platform" }
 
 [lints]
 workspace = true

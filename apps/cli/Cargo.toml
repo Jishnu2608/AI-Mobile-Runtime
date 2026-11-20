@@ -1,6 +1,6 @@
 [package]
-name = "umr-cli"
-description = "The `umr` command-line interface."
+name = "tumr-cli"
+description = "The `tumr` command-line interface."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -8,19 +8,19 @@ repository.workspace = true
 publish.workspace = true
 
 [[bin]]
-name = "umr"
+name = "tumr"
 path = "src/main.rs"
 
 [dependencies]
-umr-core = { path = "../../crates/umr-core" }
-umr-api = { path = "../../crates/umr-api" }
-umr-mcp = { path = "../../crates/umr-mcp" }
-umr-platform = { path = "../../crates/umr-platform" }
-umr-env = { path = "../../crates/umr-env" }
-umr-resolver = { path = "../../crates/umr-resolver" }
-umr-installer = { path = "../../crates/umr-installer" }
-umr-storage = { path = "../../crates/umr-storage" }
-umr-elevate = { path = "../../helpers/elevated-helper" }
+tumr-core = { path = "../../crates/tumr-core" }
+tumr-api = { path = "../../crates/tumr-api" }
+tumr-mcp = { path = "../../crates/tumr-mcp" }
+tumr-platform = { path = "../../crates/tumr-platform" }
+tumr-env = { path = "../../crates/tumr-env" }
+tumr-resolver = { path = "../../crates/tumr-resolver" }
+tumr-installer = { path = "../../crates/tumr-installer" }
+tumr-storage = { path = "../../crates/tumr-storage" }
+tumr-elevate = { path = "../../helpers/elevated-helper" }
 # Command-line parsing (subcommands, --help, --version).
 clap = { version = "4", features = ["derive"] }
 serde_json = { version = "1", features = ["preserve_order"] }

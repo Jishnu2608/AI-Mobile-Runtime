@@ -3,7 +3,7 @@
 // one-click Run, the current problems, and what the coding agent was told and fixed.
 import { useEffect, useState } from "react";
 import { Bot, CircleAlert, FolderOpen, Play, Plus, Smartphone, Wrench } from "lucide-react";
-import { call, openPreview } from "./api";
+import { agentCli, call, openPreview } from "./api";
 
 interface Recent {
   path: string;
@@ -191,6 +191,43 @@ export function Home({ summary, onSetup, onNewProject, onAgents }: { summary: Ho
           ))}
         </ul>
       )}
+      <PathOption />
     </section>
+  );
+}
+
+type PathState = { on: boolean; changed: boolean; dir: string; chosen: boolean };
+
+/** W9 / DEC-042 (owner, 2026-11-19): `tumr` in any terminal, off unless the user ticks it. */
+function PathOption() {
+  const [s, setS] = useState<PathState | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    agentCli<PathState>({ action: "path_status" }).then(setS).catch(() => setS(null));
+  }, []);
+  if (!s) return null;
+  const toggle = async (on: boolean) => {
+    setBusy(true);
+    setError(null);
+    try {
+      setS(await agentCli<PathState>({ action: on ? "path_add" : "path_remove" }));
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <>
+      <h3>Terminal</h3>
+      <label className="path-option">
+        <input type="checkbox" checked={s.on} disabled={busy} onChange={(e) => toggle(e.target.checked)} />
+        <span>
+          Use <code>tumr</code> in any terminal (adds <code>{s.dir}</code> to your user PATH; new terminals only)
+        </span>
+      </label>
+      {error && <p className="problem small">{error}</p>}
+    </>
   );
 }

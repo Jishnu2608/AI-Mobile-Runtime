@@ -1,5 +1,5 @@
 {
-  "name": "umr-website",
+  "name": "tumr-website",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -39,5 +39,5 @@
     "tailwindcss": "4.3.3",
     "typescript": "^5"
   },
-  "description": "Website for the AI Mobile Runtime (working name; W1 pending). Static export."
+  "description": "Website for the Toolchain Universal Mobile Runtime (working name; W1 pending). Static export."
 }

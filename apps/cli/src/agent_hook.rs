@@ -1,6 +1,6 @@
 //! HOOK-001: the stop hook that closes the agent loop.
 //!
-//! `umr agent setup claude-code|codex|cursor|antigravity` registers `umr agent hook <client>` as the agent's
+//! `tumr agent setup claude-code|codex|cursor|antigravity` registers `tumr agent hook <client>` as the agent's
 //! *stop* hook. When the agent ends its turn, the hook asks the Runtime Core (`agent.check`) to
 //! wait for the rebuild or reload the agent's last saves started, then for the problems the agent
 //! should still fix in the code: an open build error (Kotlin, Java, Dart, JavaScript …) or a new
@@ -24,7 +24,7 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use serde_json::{json, Map, Value};
-use umr_api::methods;
+use tumr_api::methods;
 
 use crate::core_process::CoreTarget;
 use crate::mcp_cmd::token_path;
@@ -101,7 +101,7 @@ pub fn decide(problems: &[Value], rounds: u32, last: &str) -> (Verdict, u32) {
 #[must_use]
 pub fn report(problems: &[Value]) -> String {
     let mut out = String::from(
-        "AI Mobile Runtime: the app on the emulator still has problems after your changes.\n",
+        "Toolchain Universal Mobile Runtime: the app on the emulator still has problems after your changes.\n",
     );
     for p in problems {
         let what = match p["category"].as_str() {
@@ -125,7 +125,7 @@ pub fn report(problems: &[Value]) -> String {
         );
     }
     out.push_str(
-        "Fix them in the code and save: the runtime rebuilds or reloads by itself. Use the umr \
+        "Fix them in the code and save: the runtime rebuilds or reloads by itself. Use the tumr \
          MCP tools for details (`get_diagnostic` with the fp gives the full message and stack; \
          `runtime_status` and `screenshot` confirm the fix). If a problem cannot be fixed in the \
          code, or the user told you not to change that code, say so in one line and stop: you \
@@ -218,7 +218,7 @@ fn save_state(path: &Path, key: &str, s: HookState) {
 
 // ---- the command --------------------------------------------------------------------------
 
-/// `umr agent hook <client>`: reads the hook input on stdin, prints the verdict. Always exits 0.
+/// `tumr agent hook <client>`: reads the hook input on stdin, prints the verdict. Always exits 0.
 pub async fn run(target: &CoreTarget, client: &str) -> ExitCode {
     let mut raw = String::new();
     let _ = std::io::stdin().take(1 << 20).read_to_string(&mut raw);
@@ -227,7 +227,7 @@ pub async fn run(target: &CoreTarget, client: &str) -> ExitCode {
         Ok(v) => v,
         Err(e) => {
             // the agent must never be blocked by the hook itself
-            eprintln!("umr agent hook: {e}");
+            eprintln!("tumr agent hook: {e}");
             Verdict::Allow
         }
     };
@@ -249,7 +249,7 @@ async fn check(target: &CoreTarget, client: &str, input: &Value) -> Result<Verdi
         None => std::env::current_dir().map_err(|e| e.to_string())?,
     };
     let Ok(token) = std::fs::read_to_string(token_path(target, client)) else {
-        return Ok(Verdict::Allow); // not connected through `umr agent setup`
+        return Ok(Verdict::Allow); // not connected through `tumr agent setup`
     };
     let Some(mut core) = target.connect_as(token.trim()).await? else {
         return Ok(Verdict::Allow); // the Core is not running: nothing to check
@@ -304,7 +304,7 @@ pub fn after_edit_output(report: &str) -> String {
         .to_string()
 }
 
-/// `umr agent hook claude-code --after-edit`: the stop hook only speaks when the agent ends its
+/// `tumr agent hook claude-code --after-edit`: the stop hook only speaks when the agent ends its
 /// turn; this one runs after each file edit and passes on problems the running app shows *now*
 /// (from earlier saves). It does not wait for a build, does not count toward the stop hook's
 /// rounds, leaves the fix feed alone (`probe`) and says each set of problems once.
@@ -315,7 +315,7 @@ pub async fn run_after_edit(target: &CoreTarget, client: &str) -> ExitCode {
     match after_edit(target, client, &input).await {
         Ok(Some(report)) => println!("{}", after_edit_output(&report)),
         Ok(None) => {}
-        Err(e) => eprintln!("umr agent hook: {e}"),
+        Err(e) => eprintln!("tumr agent hook: {e}"),
     }
     ExitCode::SUCCESS
 }
@@ -484,7 +484,7 @@ pub fn hooks_set(client: &str, old: Option<&str>, path: &str, exe: &str) -> Resu
     if client == "antigravity" {
         strip_named(&mut v);
         if let Some(o) = v.as_object_mut() {
-            o.insert("umr".into(), json!({ "Stop": [antigravity_handler(exe)] }));
+            o.insert("tumr".into(), json!({ "Stop": [antigravity_handler(exe)] }));
         }
     } else if client == "cursor" {
         strip(&mut v, "stop", false);
@@ -625,7 +625,7 @@ pub fn has_hook(text: &str) -> bool {
 mod tests {
     use super::*;
 
-    const EXE: &str = r"C:\Users\u\AppData\Local\AI Mobile Runtime\umr.exe";
+    const EXE: &str = r"C:\Users\u\AppData\Local\Toolchain Universal Mobile Runtime\tumr.exe";
 
     fn build_problem() -> Value {
         json!({ "fp": "ab12", "category": "build", "at": "app/src/main/java/x/MainActivity.kt:12",
@@ -759,7 +759,7 @@ mod tests {
             once
         );
         let v: Value = serde_json::from_str(&once).unwrap();
-        let h = &v["umr"]["Stop"][0];
+        let h = &v["tumr"]["Stop"][0];
         assert_eq!(h["command"], format!("\"{EXE}\" agent hook antigravity"));
         assert_eq!(h["timeout"], HOOK_TIMEOUT_S);
         assert!(has_hook(&once));

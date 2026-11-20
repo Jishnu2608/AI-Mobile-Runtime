@@ -1,6 +1,6 @@
-//! Human-readable output of the environment report for `umr doctor`.
+//! Human-readable output of the environment report for `tumr doctor`.
 
-use umr_env::model::{EnvReport, Health, Origin, Severity};
+use tumr_env::model::{EnvReport, Health, Origin, Severity};
 
 fn gb(bytes: u64) -> String {
     #[allow(clippy::cast_precision_loss)]

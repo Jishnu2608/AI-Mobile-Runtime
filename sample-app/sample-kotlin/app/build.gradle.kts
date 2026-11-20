@@ -4,10 +4,10 @@ plugins {
 }
 
 android {
-  namespace = "com.umr.samples.kotlincalc"
+  namespace = "com.tumr.samples.kotlincalc"
   compileSdk = 36
   defaultConfig {
-    applicationId = "com.umr.samples.kotlincalc"
+    applicationId = "com.tumr.samples.kotlincalc"
     minSdk = 24
     targetSdk = 36
     versionCode = 1

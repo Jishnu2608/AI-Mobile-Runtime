@@ -3,10 +3,10 @@ plugins {
 }
 
 android {
-  namespace = "com.umr.samples.javacalc"
+  namespace = "com.tumr.samples.javacalc"
   compileSdk = 36
   defaultConfig {
-    applicationId = "com.umr.samples.javacalc"
+    applicationId = "com.tumr.samples.javacalc"
     minSdk = 24
     targetSdk = 36
     versionCode = 1

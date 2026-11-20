@@ -35,23 +35,23 @@ jobs:
           Get-CimInstance Win32_OperatingSystem | Select-Object Caption, Version, BuildNumber | Format-List
           Get-PSDrive -PSProvider FileSystem | Select-Object Name, @{n='FreeGB';e={[math]::Round($_.Free/1GB,1)}} | Format-Table
       - uses: Swatinem/rust-cache@v2
-      - name: Build umr, umr-core, umr-elevate and the test driver
+      - name: Build tumr, tumr-core, tumr-elevate and the test driver
         run: |
-          cargo build --release --locked -p umr-core -p umr-cli -p umr-elevate
-          cargo build --release --locked -p umr-cli --example clean_machine
+          cargo build --release --locked -p tumr-core -p tumr-cli -p tumr-elevate
+          cargo build --release --locked -p tumr-cli --example clean_machine
 
       - name: Choose toolchains folder (drive with most free space)
         shell: pwsh
         run: |
           $drive = Get-PSDrive -PSProvider FileSystem | Where-Object { $_.Free -gt 0 } | Sort-Object Free -Descending | Select-Object -First 1
-          $tc = "$($drive.Name):\umr-toolchains"
-          $home2 = "$env:USERPROFILE\.umr"
+          $tc = "$($drive.Name):\tumr-toolchains"
+          $home2 = "$env:USERPROFILE\.tumr"
           New-Item -ItemType Directory -Force $home2 | Out-Null
           @"
           [storage]
           toolchains_dir = '$tc'
           "@ | Set-Content -Encoding utf8 "$home2\config.toml"
-          "UMR_TOOLCHAINS=$tc" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+          "TUMR_TOOLCHAINS=$tc" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
           Write-Host "home $home2 · toolchains $tc ($([math]::Round($drive.Free/1GB,1)) GB free)"
 
       - name: Snapshot before
@@ -66,14 +66,14 @@ jobs:
             Remove-Item "Env:$v" -ErrorAction SilentlyContinue
           }
           Get-ChildItem Env: | Where-Object { $_.Name -like 'JAVA_HOME_*' } | ForEach-Object { Remove-Item "Env:$($_.Name)" }
-          $env:UMR_CORE_BIN = "$env:GITHUB_WORKSPACE\target\release\umr-core.exe"
+          $env:TUMR_CORE_BIN = "$env:GITHUB_WORKSPACE\target\release\tumr-core.exe"
           $project = "$env:GITHUB_WORKSPACE\tests\env-matrix\samples\android-native"
           $args = @($project, '--out', 'summary.json')
           if ('${{ inputs.interrupt }}' -eq 'false') { $args += '--no-interrupt' }
           ./target/release/examples/clean_machine.exe @args
           $code = $LASTEXITCODE
-          ./target/release/umr.exe components
-          ./target/release/umr.exe stop
+          ./target/release/tumr.exe components
+          ./target/release/tumr.exe stop
           exit $code
 
       - name: Snapshot after and compare
@@ -88,7 +88,7 @@ jobs:
         shell: pwsh
         run: |
           foreach ($v in 'JAVA_HOME', 'ANDROID_HOME', 'ANDROID_SDK_ROOT') { Remove-Item "Env:$v" -ErrorAction SilentlyContinue }
-          ./tests/env-matrix/leak-probe.ps1 -Toolchains $env:UMR_TOOLCHAINS
+          ./tests/env-matrix/leak-probe.ps1 -Toolchains $env:TUMR_TOOLCHAINS
 
       - name: Collect logs
         if: always()
@@ -96,8 +96,8 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force artifacts | Out-Null
           Copy-Item before.json, after.json, summary.json artifacts/ -ErrorAction SilentlyContinue
-          Copy-Item "$env:USERPROFILE\.umr\logs" artifacts/home-logs -Recurse -ErrorAction SilentlyContinue
-          if ($env:UMR_TOOLCHAINS) { Copy-Item "$env:UMR_TOOLCHAINS\logs" artifacts/install-logs -Recurse -ErrorAction SilentlyContinue }
+          Copy-Item "$env:USERPROFILE\.tumr\logs" artifacts/home-logs -Recurse -ErrorAction SilentlyContinue
+          if ($env:TUMR_TOOLCHAINS) { Copy-Item "$env:TUMR_TOOLCHAINS\logs" artifacts/install-logs -Recurse -ErrorAction SilentlyContinue }
       - uses: actions/upload-artifact@v4
         if: always()
         with:

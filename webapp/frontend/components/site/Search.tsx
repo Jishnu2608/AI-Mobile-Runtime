@@ -156,7 +156,7 @@ function SearchDialog({ ref }: { ref: React.RefObject<HTMLDialogElement | null> 
       </div>
       <ul id="site-search-results" role="listbox" aria-label="Results" className="max-h-[50vh] overflow-y-auto p-2">
         {q && index && results.length === 0 && <li className="px-3 py-6 text-center text-sm text-ink-2">No pages match “{q}”.</li>}
-        {!q && <li className="px-3 py-6 text-center text-sm text-ink-2">Type a command (umr run), a tool (screenshot) or an error message.</li>}
+        {!q && <li className="px-3 py-6 text-center text-sm text-ink-2">Type a command (tumr run), a tool (screenshot) or an error message.</li>}
         {results.map((r, i) => (
           <li key={r.href} id={`sr-${i}`} role="option" aria-selected={i === active}>
             <button

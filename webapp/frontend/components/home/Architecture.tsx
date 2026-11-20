@@ -4,9 +4,9 @@ import { useRef } from "react";
 import { gsap, registerGsap, useGSAP, prefersReducedMotion, ease } from "@/design-system/motion";
 
 const clients = [
-  { name: "umr", note: "command line" },
+  { name: "tumr", note: "command line" },
   { name: "Desktop app", note: "wizard and preview" },
-  { name: "umr mcp", note: "MCP server for agents" },
+  { name: "tumr mcp", note: "MCP server for agents" },
 ];
 const modules = [
   { name: "Environment and installer", note: "scan, plan, verified downloads" },
@@ -62,7 +62,7 @@ export function Architecture() {
       <div className="rounded-lg bg-band p-5 text-band-ink sm:p-7 dark:bg-band dark:ring-1 dark:ring-band-line">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <p className="text-lg font-semibold tracking-tight">Runtime Core</p>
-          <p className="font-mono text-xs text-band-ink-2">umr-core · one per Windows user · keeps sessions alive</p>
+          <p className="font-mono text-xs text-band-ink-2">tumr-core · one per Windows user · keeps sessions alive</p>
         </div>
         <ul className="mt-5 grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
           {modules.map((m) => (

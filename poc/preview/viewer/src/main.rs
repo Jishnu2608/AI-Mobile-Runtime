@@ -10,7 +10,7 @@ fn main() {
     tauri::Builder::default()
         .setup(move |app| {
             WebviewWindowBuilder::new(app, "preview", WebviewUrl::External(url.parse().unwrap()))
-                .title("UMR POC-003 preview")
+                .title("TUMR POC-003 preview")
                 .inner_size(420.0, 960.0)
                 .always_on_top(false)
                 .build()?;

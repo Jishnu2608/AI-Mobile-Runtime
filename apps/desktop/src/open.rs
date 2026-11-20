@@ -168,7 +168,7 @@ mod tests {
 
     #[test]
     fn only_existing_text_files_are_opened() {
-        let dir = std::env::temp_dir().join(format!("umr-open-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("tumr-open-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let kt = dir.join("Main.kt");
         std::fs::write(&kt, "fun main() {}").unwrap();
@@ -188,7 +188,7 @@ mod tests {
 
     #[test]
     fn a_bare_file_name_is_found_in_the_project() {
-        let root = std::env::temp_dir().join(format!("umr-resolve-{}", std::process::id()));
+        let root = std::env::temp_dir().join(format!("tumr-resolve-{}", std::process::id()));
         let src = root.join("app").join("src").join("main").join("kotlin");
         let built = root.join("app").join("build").join("tmp");
         std::fs::create_dir_all(&src).unwrap();

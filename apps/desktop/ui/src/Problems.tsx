@@ -43,7 +43,7 @@ export function listKey(entries: Problem[]): string {
 }
 
 /**
- * Problems of the current run, the same list `umr problems` shows (AUD-P1-3). Each poll reads the
+ * Problems of the current run, the same list `tumr problems` shows (AUD-P1-3). Each poll reads the
  * whole list instead of only what is new: problems that were fixed (dropped when a reload starts)
  * leave the panel, and a run of another project, which starts with an empty list, replaces the
  * old one. The list is small (at most 500, deduplicated) and comes from this PC.
@@ -135,7 +135,7 @@ interface RunContext {
 
 /** All problems, with what someone outside needs to know about the app and the device. */
 export function reportText(problems: Problem[], run: RunContext, when = new Date()): string {
-  const head = [`AI Mobile Runtime — ${problems.length} problem${problems.length === 1 ? "" : "s"} in the current run`];
+  const head = [`Toolchain Universal Mobile Runtime — ${problems.length} problem${problems.length === 1 ? "" : "s"} in the current run`];
   if (run.project) head.push(`Project: ${run.project}${run.adapter ? ` (${run.adapter})` : ""}`);
   if (run.package) {
     const device = [run.serial, run.avd && `emulator ${run.avd}`, run.profile && `${run.profile} size`].filter(Boolean).join(", ");
@@ -209,7 +209,7 @@ export function CopyAll({ problems, fetch: fetchAll }: { problems?: Problem[]; f
 
 /** A request an agent can act on: what to fix, where, the code and the stack. */
 export function agentRequest(p: Problem): string {
-  return `Please fix this problem in my app (reported by AI Mobile Runtime):\n\n${problemText(p)}\n`;
+  return `Please fix this problem in my app (reported by Toolchain Universal Mobile Runtime):\n\n${problemText(p)}\n`;
 }
 
 type BannerKind = "crashed" | "build" | "runtime";
@@ -460,7 +460,7 @@ function LogsTab() {
           <option value="">all</option>
           <option value="logcat">app</option>
           <option value="tool">tool</option>
-          <option value="umr">umr</option>
+          <option value="tumr">tumr</option>
         </select>
         <select value={level} onChange={(e) => setLevel(e.target.value)} title="Lowest level">
           <option value="">any</option>
@@ -507,8 +507,9 @@ interface Approval {
   detail: string;
 }
 
-/** MCP-003: agent requests waiting for the user (polls `approvals.list`). */
-export function Approvals() {
+/** MCP-003: agent requests waiting for the user (polls `approvals.list`). Shown in the preview
+ * window and (#54) in the main window, so a request is seen wherever the user looks. */
+export function Approvals({ className = "" }: { className?: string }) {
   const [pending, setPending] = useState<Approval[]>([]);
   const [busy, setBusy] = useState(false);
   useEffect(() => {
@@ -544,7 +545,7 @@ export function Approvals() {
   if (!pending.length) return null;
   const a = pending[0];
   return (
-    <div className="ap" role="alertdialog" aria-label="Agent request">
+    <div className={`ap ${className}`.trim()} role="alertdialog" aria-label="Agent request">
       <div className="ap-text">
         <b>{a.client}</b> wants to {a.action}: <span className="ap-detail">{a.detail}</span>
         {pending.length > 1 && <span className="ap-more"> (+{pending.length - 1} more)</span>}

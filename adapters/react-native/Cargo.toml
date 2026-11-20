@@ -1,5 +1,5 @@
 [package]
-name = "umr-adapter-react-native"
+name = "tumr-adapter-react-native"
 description = "React Native / Expo adapter (ADP-004/005/007): Expo Go fast path, native builds (bare React Native, Expo dev builds), Metro on --localhost with adb reverse."
 version.workspace = true
 edition.workspace = true
@@ -9,10 +9,10 @@ publish.workspace = true
 
 [dependencies]
 serde_json = "1"
-umr-adapter = { path = "../sdk" }
-umr-adapter-gradle = { path = "../gradle-android" }
-umr-device = { path = "../../crates/umr-device" }
-umr-supervisor = { path = "../../crates/umr-supervisor" }
+tumr-adapter = { path = "../sdk" }
+tumr-adapter-gradle = { path = "../gradle-android" }
+tumr-device = { path = "../../crates/tumr-device" }
+tumr-supervisor = { path = "../../crates/tumr-supervisor" }
 
 [lints]
 workspace = true

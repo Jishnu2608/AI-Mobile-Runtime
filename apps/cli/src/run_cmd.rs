@@ -1,4 +1,4 @@
-//! `umr run`, `umr reload`, `umr adapter check` (Phase 3).
+//! `tumr run`, `tumr reload`, `tumr adapter check` (Phase 3).
 
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
@@ -7,7 +7,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use serde_json::Value;
-use umr_api::methods;
+use tumr_api::methods;
 
 use crate::core_process::CoreTarget;
 use crate::fail;
@@ -187,11 +187,11 @@ pub async fn run(
         }
         if v["watching"] == true {
             println!(
-                "Watching for saved files (reloads by itself); `umr reload [{}]` also works.",
+                "Watching for saved files (reloads by itself); `tumr reload [{}]` also works.",
                 kinds.join("|")
             );
         } else {
-            println!("Reload with `umr reload [{}]`.", kinds.join("|"));
+            println!("Reload with `tumr reload [{}]`.", kinds.join("|"));
         }
         ExitCode::SUCCESS
     } else {

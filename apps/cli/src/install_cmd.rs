@@ -1,4 +1,4 @@
-//! `umr install [path] [--yes]` — installs what `umr plan` lists (INS-001…004).
+//! `tumr install [path] [--yes]` — installs what `tumr plan` lists (INS-001…004).
 //!
 //! 1. `install.prepare`: exact downloads and the full licence texts.
 //! 2. Each licence that is not accepted yet is printed in full; the user must type `accept`.
@@ -11,9 +11,9 @@ use std::process::ExitCode;
 use std::time::Duration;
 
 use serde_json::{json, Value};
-use umr_api::client::Client;
-use umr_api::methods::{self, AcceptLicenceParams, InstallStarted};
-use umr_installer::engine::{ItemState, JobState, JobStatus, Prepared, StepKind};
+use tumr_api::client::Client;
+use tumr_api::methods::{self, AcceptLicenceParams, InstallStarted};
+use tumr_installer::engine::{ItemState, JobState, JobStatus, Prepared, StepKind};
 
 use crate::core_process::CoreTarget;
 use crate::fail;
@@ -132,7 +132,7 @@ async fn accept_licences(client: &mut Client, prepared: &Prepared) -> bool {
     for l in prepared.unaccepted() {
         if !std::io::stdin().is_terminal() {
             eprintln!(
-                "umr: the {} must be accepted by you before anything is installed.\n     Run `umr install` in a terminal to read and accept it.",
+                "tumr: the {} must be accepted by you before anything is installed.\n     Run `tumr install` in a terminal to read and accept it.",
                 l.title
             );
             return false;
@@ -164,7 +164,7 @@ async fn accept_licences(client: &mut Client, prepared: &Prepared) -> bool {
             )
             .await
         {
-            eprintln!("umr: {e}");
+            eprintln!("tumr: {e}");
             return false;
         }
         println!("Accepted (recorded with the text's SHA-256).");
@@ -208,7 +208,7 @@ async fn follow(client: &mut Client, job_id: &str) -> ExitCode {
             println!();
             return match st.state {
                 JobState::Done => {
-                    println!("Install finished. Run `umr plan` to see the updated state.");
+                    println!("Install finished. Run `tumr plan` to see the updated state.");
                     ExitCode::SUCCESS
                 }
                 JobState::Cancelled => {

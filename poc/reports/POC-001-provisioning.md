@@ -1,6 +1,6 @@
 # POC-001 — Android provisioning on this machine (isolated)
 
-**Date:** 2026-11-11 · **Environment:** this machine, isolated (DEC-004) · **Managed root:** `D:\UMR-poc\`
+**Date:** 2026-11-11 · **Environment:** this machine, isolated (DEC-004) · **Managed root:** `D:\TUMR-poc\`
 **Status:** Part A (provisioning + boot) **done**. Part B (framework coverage checklist) **not started** — needs Flutter, Node and sample projects (overlaps POC-006).
 
 ## Steps and measurements
@@ -44,5 +44,5 @@ All items in `todo.md` POC-001 checklist remain open. They need Flutter SDK, Nod
 
 ## Cleanup state
 - Emulator, adb and Android CLI processes stopped.
-- `D:\UMR-poc\` kept for POC-003/006 (13.47 GB).
+- `D:\TUMR-poc\` kept for POC-003/006 (13.47 GB).
 - `%USERPROFILE%\.android\` and `%TEMP%\netsimd` left in place; owner to decide on deletion.

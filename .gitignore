@@ -15,6 +15,7 @@
 # Local planning document (kept private)
 /Planning_Mobile_Runtime_Companion.md
 /dev_plan.md
+/publication_agentic_ai.md
 
 # Rust build output
 /target/
@@ -24,7 +25,7 @@
 .claude/skills/
 skills-lock.json
 
-# Secrets: never commit (the Knowledge Pack signing key lives in %USERPROFILE%\.umr\keys)
+# Secrets: never commit (the Knowledge Pack signing key lives in %USERPROFILE%\.tumr\keys)
 .env
 .env.*
 *.key

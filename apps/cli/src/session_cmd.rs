@@ -1,11 +1,11 @@
-//! `umr device use`, `umr session`, `umr app`, `umr screenshot`, `umr ui`, `umr input`,
-//! `umr device posture` (steps 2.5 / 2.6).
+//! `tumr device use`, `tumr session`, `tumr app`, `tumr screenshot`, `tumr ui`, `tumr input`,
+//! `tumr device posture` (steps 2.5 / 2.6).
 
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use serde_json::Value;
-use umr_api::methods;
+use tumr_api::methods;
 
 use crate::core_process::CoreTarget;
 use crate::fail;
@@ -37,7 +37,7 @@ pub async fn call_print(target: &CoreTarget, method: &str, params: Value) -> Exi
 fn print_session(v: &Value) {
     let s = &v["session"];
     if s.is_null() {
-        println!("No session. Start one with `umr device use <profile>`.");
+        println!("No session. Start one with `tumr device use <profile>`.");
         return;
     }
     println!(
@@ -100,7 +100,7 @@ pub async fn use_profile(
     }
 }
 
-/// `umr session follow`: one `session.wait` at a time (SES-002); prints each change.
+/// `tumr session follow`: one `session.wait` at a time (SES-002); prints each change.
 pub async fn follow(target: &CoreTarget, json: bool) -> ExitCode {
     let mut c = match target.connect_or_start().await {
         Ok((c, _)) => c,

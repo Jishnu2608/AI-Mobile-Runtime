@@ -14,9 +14,9 @@
   Do not build the VS Code extension (.vsix) into the release.
 
 .NOTES
-  Signing: set UMR_SIGN_THUMBPRINT to the SHA-1 thumbprint of a code-signing certificate in the
+  Signing: set TUMR_SIGN_THUMBPRINT to the SHA-1 thumbprint of a code-signing certificate in the
   current user's certificate store (the private key never leaves the store), and optionally
-  UMR_SIGN_TIMESTAMP_URL (default http://timestamp.digicert.com). Needs signtool.exe (Windows SDK).
+  TUMR_SIGN_TIMESTAMP_URL (default http://timestamp.digicert.com). Needs signtool.exe (Windows SDK).
   Run from the repository root. ASCII only (Windows PowerShell 5.1 reads scripts as ANSI).
 #>
 param(
@@ -32,8 +32,8 @@ $root = (Get-Location).Path
 $version = (Select-String -Path Cargo.toml -Pattern '^version = "([^"]+)"' | Select-Object -First 1).Matches[0].Groups[1].Value
 $out = Join-Path $root "dist\$version"
 $maxBytes = 60MB   # NFR-05
-$thumb = $env:UMR_SIGN_THUMBPRINT
-$tsUrl = if ($env:UMR_SIGN_TIMESTAMP_URL) { $env:UMR_SIGN_TIMESTAMP_URL } else { "http://timestamp.digicert.com" }
+$thumb = $env:TUMR_SIGN_THUMBPRINT
+$tsUrl = if ($env:TUMR_SIGN_TIMESTAMP_URL) { $env:TUMR_SIGN_TIMESTAMP_URL } else { "http://timestamp.digicert.com" }
 
 # GitHub Releases (W5): files under .../releases/download/v<version>/, notes on .../releases/tag/v<version>
 $base = $BaseUrl.TrimEnd('/')
@@ -48,13 +48,13 @@ function Find-SignTool {
   $hit = Get-ChildItem $kits -Recurse -Filter signtool.exe -ErrorAction SilentlyContinue |
     Where-Object { $_.FullName -match "\\x64\\" } | Sort-Object FullName -Descending | Select-Object -First 1
   if ($hit) { return $hit.FullName }
-  throw "UMR_SIGN_THUMBPRINT is set but signtool.exe was not found (install the Windows SDK)"
+  throw "TUMR_SIGN_THUMBPRINT is set but signtool.exe was not found (install the Windows SDK)"
 }
 
 function Sign([string[]]$files) {
   if (-not $thumb) { return }
   $tool = Find-SignTool
-  & $tool sign /sha1 $thumb /fd sha256 /tr $tsUrl /td sha256 /d "AI Mobile Runtime" @files
+  & $tool sign /sha1 $thumb /fd sha256 /tr $tsUrl /td sha256 /d "Toolchain Universal Mobile Runtime" @files
   if ($LASTEXITCODE -ne 0) { throw "signing failed" }
 }
 
@@ -66,10 +66,10 @@ if (-not $SkipBuild) {
   Step "Release binaries"
   # cargo can reuse a cached build carrying another version string (seen after the version went
   # back to one built before): rebuild the shipped packages from scratch
-  cargo clean --release -p umr-core -p umr-cli -p umr-elevate -p umr-desktop
-  cargo build --release --locked -p umr-core -p umr-cli -p umr-elevate
+  cargo clean --release -p tumr-core -p tumr-cli -p tumr-elevate -p tumr-desktop
+  cargo build --release --locked -p tumr-core -p tumr-cli -p tumr-elevate
   if ($LASTEXITCODE -ne 0) { throw "cargo build failed" }
-  Sign @("target\release\umr.exe", "target\release\umr-core.exe", "target\release\umr-elevate.exe")
+  Sign @("target\release\tumr.exe", "target\release\tumr-core.exe", "target\release\tumr-elevate.exe")
 
   Step "Desktop UI"
   npm --prefix apps\desktop\ui ci --no-audit --no-fund
@@ -93,7 +93,7 @@ if (-not $SkipBuild) {
 }
 
 Step "Versions"
-foreach ($f in @("umr.exe", "umr-core.exe")) {
+foreach ($f in @("tumr.exe", "tumr-core.exe")) {
   $v = (& "target\release\$f" --version 2>&1 | Out-String).Trim()
   Write-Host "$f -> $v"
   if ($v -notmatch [regex]::Escape(" $version")) { throw "$f reports '$v', expected $version" }
@@ -104,25 +104,25 @@ if (Test-Path $out) { Remove-Item $out -Recurse -Force }
 New-Item -ItemType Directory -Force $out | Out-Null
 $nsis = Get-ChildItem "target\release\bundle\nsis" -Filter "*_$($version)_x64-setup.exe" | Select-Object -First 1
 if (-not $nsis) { throw "installer for $version not found under target\release\bundle\nsis" }
-$installer = Join-Path $out "AI-Mobile-Runtime_$($version)_x64-setup.exe"
+$installer = Join-Path $out "Toolchain-Universal-Mobile-Runtime_$($version)_x64-setup.exe"
 Copy-Item $nsis.FullName $installer
 
-# portable ZIP: the same four programs; settings and toolchains go to %USERPROFILE%\.umr as usual
-$stage = Join-Path $out "zip-stage\AI-Mobile-Runtime-$version"
+# portable ZIP: the same four programs; settings and toolchains go to %USERPROFILE%\.tumr as usual
+$stage = Join-Path $out "zip-stage\Toolchain-Universal-Mobile-Runtime-$version"
 New-Item -ItemType Directory -Force $stage | Out-Null
-foreach ($f in @("umr.exe", "umr-core.exe", "umr-desktop.exe", "umr-elevate.exe")) { Copy-Item "target\release\$f" $stage }
+foreach ($f in @("tumr.exe", "tumr-core.exe", "tumr-desktop.exe", "tumr-elevate.exe")) { Copy-Item "target\release\$f" $stage }
 Copy-Item THIRD_PARTY_NOTICES.md $stage
 Copy-Item README.md $stage
-$zip = Join-Path $out "AI-Mobile-Runtime_$($version)_x64-portable.zip"
+$zip = Join-Path $out "Toolchain-Universal-Mobile-Runtime_$($version)_x64-portable.zip"
 Compress-Archive -Path $stage -DestinationPath $zip -CompressionLevel Optimal
 Remove-Item (Join-Path $out "zip-stage") -Recurse -Force
 
-# CLI only (CI / headless machines): umr + Core + elevation helper, no desktop app
-$stage = Join-Path $out "cli-stage\umr-cli-$version"
+# CLI only (CI / headless machines): tumr + Core + elevation helper, no desktop app
+$stage = Join-Path $out "cli-stage\tumr-cli-$version"
 New-Item -ItemType Directory -Force $stage | Out-Null
-foreach ($f in @("umr.exe", "umr-core.exe", "umr-elevate.exe")) { Copy-Item "target\release\$f" $stage }
+foreach ($f in @("tumr.exe", "tumr-core.exe", "tumr-elevate.exe")) { Copy-Item "target\release\$f" $stage }
 Copy-Item THIRD_PARTY_NOTICES.md $stage
-$cli = Join-Path $out "umr-cli_$($version)_x64.zip"
+$cli = Join-Path $out "tumr-cli_$($version)_x64.zip"
 Compress-Archive -Path $stage -DestinationPath $cli -CompressionLevel Optimal
 Remove-Item (Join-Path $out "cli-stage") -Recurse -Force
 
@@ -135,8 +135,8 @@ if (-not $SkipVscode) {
   npm --prefix apps/vscode run package
   if ($LASTEXITCODE -ne 0) { throw "packaging the VS Code extension failed" }
   $extVersion = (Get-Content apps\vscode\package.json -Raw | ConvertFrom-Json).version
-  $vsix = Join-Path $out "umr-vscode-$($extVersion)-win32-x64.vsix"
-  Copy-Item apps\vscode\dist\umr-vscode.vsix $vsix
+  $vsix = Join-Path $out "tumr-vscode-$($extVersion)-win32-x64.vsix"
+  Copy-Item apps\vscode\dist\tumr-vscode.vsix $vsix
 }
 
 Step "Checks"
@@ -168,7 +168,7 @@ $entries = foreach ($f in $files) {
 }
 $manifest = [ordered]@{
   schema   = 1
-  product  = "AI Mobile Runtime"
+  product  = "Toolchain Universal Mobile Runtime"
   releases = @([ordered]@{
       version           = $version
       channel           = $Channel
@@ -181,5 +181,5 @@ $manifest = [ordered]@{
 }
 [System.IO.File]::WriteAllText((Join-Path $out "releases.json"), ($manifest | ConvertTo-Json -Depth 6), [System.Text.UTF8Encoding]::new($false))
 Get-ChildItem $out | Format-Table Name, Length -AutoSize
-if (-not $signed) { Write-Warning "UNSIGNED build: SmartScreen will warn. Set UMR_SIGN_THUMBPRINT to sign (REL-001)." }
+if (-not $signed) { Write-Warning "UNSIGNED build: SmartScreen will warn. Set TUMR_SIGN_THUMBPRINT to sign (REL-001)." }
 Write-Host "Release $version ready in $out"

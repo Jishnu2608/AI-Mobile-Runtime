@@ -24,7 +24,7 @@ export function SiteHeader({ hasRelease }: { hasRelease: boolean }) {
           <Wordmark />
         </Link>
 
-        <nav aria-label="Main" className="hidden lg:block">
+        <nav aria-label="Main" className="hidden min-[1120px]:block">
           <ul className="flex items-center gap-1">
             {nav.map((n) => {
               const active = isActive(path, n.href);
@@ -55,7 +55,7 @@ export function SiteHeader({ hasRelease }: { hasRelease: boolean }) {
           </Link>
 
           {/* phone menu: <details> works without script */}
-          <details className="group lg:hidden">
+          <details className="group min-[1120px]:hidden">
             <summary
               className="flex size-11 cursor-pointer list-none items-center justify-center rounded-sm text-ink hover:bg-sunken [&::-webkit-details-marker]:hidden"
               aria-label="Menu"

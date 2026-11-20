@@ -179,7 +179,7 @@ export function Agents({ tools }: { tools: ToolLite[] }) {
             Code. It shows you the exact change first, keeps your other servers, and undoes itself with --remove.
           </p>
           <div className="mt-8 grid gap-3" data-reveal>
-            {["umr agent setup claude-code", "umr agent setup cursor", "umr agent doctor"].map((c) => (
+            {["tumr agent setup claude-code", "tumr agent setup cursor", "tumr agent doctor"].map((c) => (
               <pre key={c} className="overflow-x-auto rounded-md border border-band-line bg-band-sunken px-4 py-3 font-mono text-sm text-band-ink">
                 {c}
               </pre>
@@ -329,10 +329,10 @@ export function OpenSource() {
 
 const faq = [
   { q: "Does it replace Android Studio?", a: "No. It runs next to it. It uses its own adb server and its own SDK folder, so Android Studio and your existing SDKs keep working as before." },
-  { q: "Does it work in VS Code?", a: "Yes. The AI Mobile Runtime extension runs your app on the emulator from the Command Palette, shows the phone in a Mobile Preview panel beside your code, puts build errors and crashes in the Problems panel and connects Copilot's agent mode. It is coming to the VS Code Marketplace; until then it installs from a .vsix file. It needs the runtime installed." },
+  { q: "Does it work in VS Code?", a: "Yes. The Toolchain Universal Mobile Runtime extension runs your app on the emulator from the Command Palette, shows the phone in a Mobile Preview panel beside your code, puts build errors and crashes in the Problems panel and connects Copilot's agent mode. It is coming to the VS Code Marketplace; until then it installs from a .vsix file. It needs the runtime installed." },
   { q: "Can it run iOS apps?", a: "No. The iOS Simulator needs macOS and Xcode. This runtime is for Windows 11 x64 and Android today." },
-  { q: "Which coding agents does it work with?", a: "Claude Code, Codex, Cursor, Antigravity, Claude Desktop and VS Code each connect with one command, umr agent setup, and umr agent doctor checks the connection. Any other MCP client can start umr mcp by hand. The claude.ai website and mobile app cannot reach a program on your PC." },
-  { q: "Does my code leave my machine?", a: "No. The runtime has no cloud service. It downloads tools from their official publishers and nothing else, unless you run umr update." },
+  { q: "Which coding agents does it work with?", a: "Claude Code, Codex, Cursor, Antigravity, Claude Desktop and VS Code each connect with one command, tumr agent setup, and tumr agent doctor checks the connection. Any other MCP client can start tumr mcp by hand. The claude.ai website and mobile app cannot reach a program on your PC." },
+  { q: "Does my code leave my machine?", a: "No. The runtime has no cloud service. It downloads tools from their official publishers and nothing else, unless you run tumr update." },
   { q: "What does it need from my PC?", a: "Windows 11 x64, virtualisation turned on in the firmware, and room for the toolchain and one phone image. The requirements page lists each level." },
   { q: "How do I remove it?", a: "Uninstall it from Windows Settings. The uninstall guide lists every folder it created and how to remove the downloaded tools too." },
 ];
