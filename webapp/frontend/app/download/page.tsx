@@ -223,20 +223,42 @@ function VsCodeExtension() {
           )}
         </div>
         <div className="mt-6 flex flex-wrap items-center gap-3">
-          <Status kind="info">Coming soon to the Marketplace</Status>
+          {site.vscode.marketplace.published ? (
+            <Status kind="ok">On the VS Code Marketplace (preview)</Status>
+          ) : (
+            <Status kind="info">Coming soon to the Marketplace</Status>
+          )}
           <span className="t-desc">Extension ID <code>{site.vscode.id}</code></span>
         </div>
-        <p className="t-body mt-6">
-          Until the listing is live, install the <code>{site.vscode.vsix}</code> file. It will be attached to each release next to the
-          installer; you can also build it from the repository (<code>npm --prefix apps/vscode run package</code>).
-        </p>
-        <CodeBlock data-language="powershell">
-          <code>{`code --install-extension ${site.vscode.vsix}`}</code>
-        </CodeBlock>
-        <p className="t-desc mt-3">
-          Or in VS Code: Extensions › … › Install from VSIX…. Then open your app&apos;s folder and click <strong>Mobile</strong> in the status
-          bar.
-        </p>
+        {site.vscode.marketplace.published ? (
+          <>
+            <p className="t-body mt-6">
+              In VS Code: Extensions, search <strong>Toolchain Universal Mobile Runtime</strong>, Install. Or from a terminal:
+            </p>
+            <CodeBlock data-language="powershell">
+              <code>{`code --install-extension ${site.vscode.id}`}</code>
+            </CodeBlock>
+            <p className="t-desc mt-3">
+              Then open your app&apos;s folder and click <strong>Mobile</strong> in the status bar. VS Code updates the extension by itself.
+              Cursor, Windsurf and VSCodium use Open VSX; until the listing there is live, install the <code>{site.vscode.vsix}</code> file
+              (Extensions › … › Install from VSIX…).
+            </p>
+          </>
+        ) : (
+          <>
+            <p className="t-body mt-6">
+              Until the listing is live, install the <code>{site.vscode.vsix}</code> file. It will be attached to each release next to the
+              installer; you can also build it from the repository (<code>npm --prefix apps/vscode run package</code>).
+            </p>
+            <CodeBlock data-language="powershell">
+              <code>{`code --install-extension ${site.vscode.vsix}`}</code>
+            </CodeBlock>
+            <p className="t-desc mt-3">
+              Or in VS Code: Extensions › … › Install from VSIX…. Then open your app&apos;s folder and click <strong>Mobile</strong> in the
+              status bar.
+            </p>
+          </>
+        )}
       </div>
     </section>
   );

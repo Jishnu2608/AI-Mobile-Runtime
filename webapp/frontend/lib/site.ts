@@ -27,7 +27,7 @@ export const site = {
     vsix: "tumr-vscode.vsix",
     marketplace: {
       url: "https://marketplace.visualstudio.com/items?itemName=tumr.tumr-vscode",
-      published: false as boolean,
+      published: true as boolean,
     },
     openVsx: {
       url: "https://open-vsx.org/extension/tumr/tumr-vscode",

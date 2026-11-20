@@ -4,7 +4,7 @@ The **Toolchain Universal Mobile Runtime** extension runs your Android app on th
 
 ## Install
 1. Install the Toolchain Universal Mobile Runtime itself (see [Getting started](getting-started.md)).
-2. In VS Code: **Extensions › … › Install from VSIX…** and pick `tumr-vscode.vsix` (built by `npm --prefix apps/vscode run package` into `apps/vscode/dist`), or run `code --install-extension tumr-vscode.vsix`.
+2. Install the extension from the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=tumr.tumr-vscode): in VS Code open **Extensions**, search **Toolchain Universal Mobile Runtime** and press **Install**, or run `code --install-extension tumr.tumr-vscode`. VS Code keeps it up to date. Cursor, Windsurf and VSCodium use Open VSX, where the listing is not live yet: install the `tumr-vscode.vsix` file instead (**Extensions › … › Install from VSIX…**, built by `npm --prefix apps/vscode run package` into `apps/vscode/dist`).
 3. Open your app's folder. The extension starts when the folder holds an Android, Flutter or React Native project; a **Mobile** item appears in the status bar (bottom left).
 
 It finds `tumr.exe` on `PATH` or in `%LOCALAPPDATA%\Toolchain Universal Mobile Runtime`. Elsewhere: set **tumr.path**, or run **Toolchain Universal Mobile Runtime: Locate tumr.exe**. Inside this repository it also uses the newest `target\release` or `target\debug` build, so the samples work straight from a checkout.

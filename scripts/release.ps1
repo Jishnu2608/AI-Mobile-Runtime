@@ -147,6 +147,7 @@ $server = Get-Content packaging\mcpb\server.json -Raw | ConvertFrom-Json
 $server.version = $version
 $server.packages[0].identifier = "$($BaseUrl.TrimEnd('/'))/v$version/$(Split-Path $mcpb -Leaf)"
 $server.packages[0].fileSha256 = (Get-FileHash $mcpb -Algorithm SHA256).Hash.ToLower()
+$server.packages[0].version = $version
 [System.IO.File]::WriteAllText((Join-Path $out "server.json"), ($server | ConvertTo-Json -Depth 8), [System.Text.UTF8Encoding]::new($false))
 
 # VS Code extension (.vsix, Windows x64 target): the same file the Marketplace gets

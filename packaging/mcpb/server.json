@@ -1,5 +1,5 @@
 {
-  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-09-29/server.schema.json",
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.jishnu2608/tumr",
   "title": "Toolchain Universal Mobile Runtime",
   "description": "Android app on a live emulator for agents: status, problems with file:line, screenshots, taps",
@@ -12,6 +12,7 @@
     {
       "registryType": "mcpb",
       "identifier": "https://github.com/Jishnu2608/TUMR/releases/download/v0.0.0/tumr-mcp_0.0.0_win32-x64.mcpb",
+      "version": "0.0.0",
       "fileSha256": "",
       "transport": {
         "type": "stdio"
