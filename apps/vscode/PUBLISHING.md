@@ -20,10 +20,14 @@ The extension is published as `tumr.tumr-vscode` (the `publisher` and `name` fie
      Marketplace credential that lasts 15 minutes. Nothing is stored in the repository.
    - If the repository is ever made private, run the workflow within 48 hours of creating the policy.
 3. **Open VSX** (used by VSCodium, Cursor, Windsurf and others)
-   - Sign in at https://open-vsx.org with GitHub, sign the Eclipse publisher agreement, create an access token.
-   - Create the namespace once: `npx ovsx create-namespace tumr -p <token>` from `apps/vscode`.
-4. **GitHub secret** (*Settings › Secrets and variables › Actions*): `OVSX_PAT` (the Open VSX token).
-   A `VSCE_PAT` secret is no longer used; delete it if one was added.
+   - Sign in at https://open-vsx.org with GitHub and sign the Eclipse publisher agreement.
+   - Create the namespace once: *Settings › Namespaces › Create namespace* › `tumr` (no access
+     token needed).
+   - *Settings › Trusted Publishers*: register the namespace `tumr` for repository owner
+     `Jishnu2608`, repository `TUMR`, workflow `publish-vscode.yml`, no environment. The workflow
+     then publishes with `ovsx publish --trusted-publishing` (ovsx 1.3.0, pinned).
+4. **No GitHub secrets.** Both stores use Trusted Publishing. Do not add `OVSX_PAT` (it would take
+   precedence over Trusted Publishing) or `VSCE_PAT`; delete them if they exist.
 5. **Licence**: Apache-2.0 (`LICENSE` and `NOTICE` in this folder are copies of the ones at the repository root; keep them the same). The Marketplace shows it on the listing.
 
 ## Each release
@@ -44,7 +48,7 @@ Publishing from this PC instead of GitHub (fallback): `npm run publish:marketpla
 `vsce publish --azure-credential`, which signs in with Microsoft Entra ID through the Azure CLI
 (`az login` first); that identity must be added to the publisher as a member. Microsoft documents
 this path for work accounts; with a personal Microsoft account the GitHub workflow is the reliable
-route. For Open VSX set `OVSX_PAT` in the shell and run `npm run publish:openvsx`. Always
+route. For Open VSX set `OVSX_PAT` (an access token) in the shell and run `npm run publish:openvsx`. Always
 `npm run package` first.
 
 ## What the release build does

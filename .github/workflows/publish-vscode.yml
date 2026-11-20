@@ -8,7 +8,10 @@ name: Publish VS Code extension
 #     owner Jishnu2608, repository TUMR, workflow file publish-vscode.yml, no
 #     environment. GitHub hands this job a short-lived identity token (id-token: write below);
 #     vsce (4.1.0 or later) exchanges it for a Marketplace credential that lasts 15 minutes.
-#   Open VSX: repository secret OVSX_PAT (Settings > Secrets and variables > Actions).
+#   Open VSX: Trusted Publishing too (ovsx publish --trusted-publishing). The owner registers it
+#     once on open-vsx.org (Settings > Trusted Publishers) for the `tumr` namespace: owner
+#     Jishnu2608, repository TUMR, workflow publish-vscode.yml, no environment. No OVSX_PAT
+#     secret: if one is set it would take precedence, so leave it out.
 # With "dry run" on, nothing is published: the .vsix is only built and kept as an artifact.
 on:
   workflow_dispatch:
@@ -110,9 +113,7 @@ jobs:
       - name: Publish to Open VSX
         if: ${{ !inputs.dry_run && (inputs.target == 'both' || inputs.target == 'openvsx') }}
         working-directory: apps/vscode
-        shell: pwsh
-        env:
-          OVSX_PAT: ${{ secrets.OVSX_PAT }}
-        run: |
-          if (-not $env:OVSX_PAT) { throw "The OVSX_PAT secret is not set" }
-          npx --no-install ovsx publish dist/tumr-vscode.vsix
+        # Trusted Publishing as well (ovsx 1.3.0 or later, pinned): no secret. Fails until the
+        # owner has registered this repository and workflow as a trusted publisher of the `tumr`
+        # namespace on open-vsx.org (Settings > Trusted Publishers).
+        run: npx --no-install ovsx publish --trusted-publishing --packagePath dist/tumr-vscode.vsix
