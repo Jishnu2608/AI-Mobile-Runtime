@@ -1,0 +1,11 @@
+{
+  "tumr": {
+    "Stop": [
+      {
+        "type": "command",
+        "command": "call bin\\tumr.cmd agent hook antigravity",
+        "timeout": 600
+      }
+    ]
+  }
+}

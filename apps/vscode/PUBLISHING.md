@@ -24,7 +24,7 @@ The extension is published as `tumr.tumr-vscode` (the `publisher` and `name` fie
    - Create the namespace once: `npx ovsx create-namespace tumr -p <token>` from `apps/vscode`.
 4. **GitHub secret** (*Settings › Secrets and variables › Actions*): `OVSX_PAT` (the Open VSX token).
    A `VSCE_PAT` secret is no longer used; delete it if one was added.
-5. **Licence**: replace `LICENSE.md` with the real licence once it is chosen. The Marketplace shows it on the listing.
+5. **Licence**: Apache-2.0 (`LICENSE` and `NOTICE` in this folder are copies of the ones at the repository root; keep them the same). The Marketplace shows it on the listing.
 
 ## Each release
 
@@ -33,7 +33,9 @@ The extension is published as `tumr.tumr-vscode` (the `publisher` and `name` fie
    Install `dist/tumr-vscode.vsix` (*Extensions › … › Install from VSIX*) and try Run on Emulator.
 3. GitHub › Actions › **Publish VS Code extension** › Run workflow:
    - first with **dry run** on (builds, tests, uploads the `.vsix` as an artifact, publishes nothing);
-   - then with dry run off and the store: `both`, `marketplace` or `openvsx`.
+   - then with dry run off and the store: `both`, `marketplace` or `openvsx`. The workflow first
+     checks that `CHANGELOG.md` has an entry for the version and that the Marketplace does not
+     have that version yet, and stops with a clear message if either is wrong.
 4. After the first publish, in `webapp/frontend/lib/site.ts` set `site.vscode.marketplace.published` and
    `site.vscode.openVsx.published` to `true` with the real listing URLs, so the website links to the stores.
 5. When the extension is stable, remove `"preview": true`.

@@ -121,7 +121,8 @@ function Latest({ release }: { release: Release }) {
         <div className="mt-8 rounded-md border border-line bg-bg-alt p-5">
           <p className="font-semibold text-ink">Licence</p>
           <p className="t-desc mt-2">
-            The product licence is published with the first public release. The components the app installs come with their own licences,
+            The runtime is licensed under the{" "}
+            <a className="link" href={`${site.repository}/blob/main/LICENSE`} rel="noreferrer">Apache License 2.0</a>. The components the app installs come with their own licences,
             which the setup wizard shows you one by one before anything downloads. The ones shipped inside the app are on the{" "}
             <Link className="link" href="/licences/">licences page</Link>.
           </p>

@@ -6,7 +6,7 @@
 pub const INSTRUCTIONS: &str = "\
 Toolchain Universal Mobile Runtime runs the user's Android app (Kotlin/Java, Flutter, React Native/Expo) on an \
 emulator and reports what happens. Loop: edit code → saved files reload by themselves (Flutter hot \
-reload, Metro Fast Refresh, an incremental Gradle rebuild for Kotlin/Java) → call runtime_status → if it shows \
+reload, Metro Fast Refresh, an incremental Gradle rebuild for Kotlin/Java; wait_for_app waits for a long build) → call runtime_status → if it shows \
 new problems, get_diagnostic <fp> → fix → runtime_status again. Use screenshot (or ui_tree for exact \
 coordinates) to check what the user sees; tap/swipe/type_text take device pixels; fingerprint \
 touches the fingerprint sensor (lock screen, BiometricPrompt). runtime_status \
@@ -33,10 +33,15 @@ lets you see and drive it.
 1. `runtime_status` — what runs, and only what changed since your last call (problem counts,
    up to 3 new problems with `fp`, a hint). Small; call it after every edit.
 2. Edit code and save. Saved files are applied by themselves: Flutter hot reload, React Native
-   Fast Refresh, and for Kotlin/Java an incremental Gradle rebuild and reinstall (15–20 s; wait
-   for it before `runtime_status`). `reload` `restart` restarts the app's state, `full` forces a
-   rebuild. When you finish, a stop hook may hand you build errors or crashes that are still
-   open: fix them, or say why you cannot.
+   Fast Refresh, and for Kotlin/Java an incremental Gradle rebuild and reinstall (15–20 s, a
+   cold Gradle build several minutes). `wait_for_app` waits for that build and then lists the
+   open problems; while it says `busy`, call it again. `reload` `restart` restarts the app's
+   state, `full` forces a rebuild.
+   When you finish your task, the runtime checks the app again (it waits for the build first)
+   and hands you any build error, crash or runtime error that is still open: fix it in the code
+   and save, also when it is in a file you did not change (the user wants the app left working). This repeats until the app has no problems; if the same problem comes back five
+   times in a row it stops and tells the user. If a problem cannot be fixed in the code, say
+   why in one line.
 3. `runtime_status` again. New problems → `get_diagnostic` with the `fp` (message, `file:line`,
    stack) → fix → repeat.
 4. Check the result: `screenshot` (scaled image; it says the device size) or `ui_tree` (texts,

@@ -71,6 +71,9 @@ pub struct ApiState {
     /// Phase 3: the app an adapter runs now, what it is, and its events.
     pub run_app: Mutex<Option<Box<dyn tumr_adapter::RunningApp>>>,
     pub run_info: Mutex<Option<crate::run_api::RunInfo>>,
+    /// PLUG-003: a run whose first build failed. Its folder stays watched and the run is tried
+    /// again on the next save, so the agent loop goes on until the app builds.
+    pub run_retry: Mutex<Option<crate::run_api::RetryRun>>,
     /// AUD-P1-6: the process group of a run that is still building or starting (Cancel stops
     /// it), and whether that run was cancelled.
     pub run_starting: Mutex<Option<String>>,
@@ -135,6 +138,7 @@ impl ApiState {
             session_busy: std::sync::atomic::AtomicBool::new(false),
             run_app: Mutex::new(None),
             run_info: Mutex::new(None),
+            run_retry: Mutex::new(None),
             run_starting: Mutex::new(None),
             fold: Mutex::new(None),
             run_cancelled: std::sync::atomic::AtomicBool::new(false),
@@ -406,6 +410,11 @@ fn dispatch_checked(state: &ApiState, conn: &mut Connection, req: &Request) -> R
             id,
             &req.params,
             |id, p: tumr_api::methods::AgentCheckParams| crate::agent_api::check(state, id, &p),
+        ),
+        methods::AGENT_NOTE => with_params(
+            id,
+            &req.params,
+            |id, p: tumr_api::methods::AgentNoteParams| crate::agent_api::note(state, id, &p),
         ),
         methods::APPROVALS_LIST => crate::agent_api::approvals_list(state, id),
         methods::APPROVALS_DECIDE => with_params(id, &req.params, |id, p: DecideParams| {

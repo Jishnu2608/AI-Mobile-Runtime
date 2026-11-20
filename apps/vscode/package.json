@@ -2,11 +2,11 @@
   "name": "tumr-vscode",
   "displayName": "Toolchain Universal Mobile Runtime",
   "description": "Run your Android app on an emulator right inside VS Code: a live phone preview beside your code, build errors and crashes in the Problems panel, and Copilot agent tools. Kotlin, Java, Flutter and React Native.",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "publisher": "tumr",
   "preview": true,
   "pricing": "Free",
-  "license": "SEE LICENSE IN LICENSE.md",
+  "license": "Apache-2.0",
   "icon": "media/icon.png",
   "repository": {
     "type": "git",

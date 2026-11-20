@@ -146,6 +146,16 @@ impl DiagStore {
         }
     }
 
+    /// A `connected` / `gave_up` line from an agent (`agent.note`).
+    pub fn note(&mut self, kind: &'static str, message: String) {
+        self.push_feed(FeedEvent {
+            at_ms: now_ms(),
+            kind,
+            message,
+            seconds: None,
+        });
+    }
+
     fn push_feed(&mut self, e: FeedEvent) {
         self.feed.push_back(e);
         while self.feed.len() > Self::KEEP_FEED {
@@ -905,6 +915,21 @@ mod tests {
         assert_eq!(e.file, None);
         let d = tumr_diagnostics::from_js_error(&e);
         assert_eq!(d.message, "Error: boom (in component <App>)");
+    }
+
+    #[test]
+    fn agent_notes_go_into_the_feed() {
+        let mut s = DiagStore::default();
+        s.note(
+            "connected",
+            "Claude Code connected itself through its plugin".into(),
+        );
+        s.note("gave_up", "Stopped sending Cursor back".into());
+        let kinds: Vec<_> = s.feed.iter().map(|e| e.kind).collect();
+        assert_eq!(kinds, ["connected", "gave_up"]);
+        // a new run keeps the feed
+        s.reset();
+        assert_eq!(s.feed.len(), 2);
     }
 
     #[test]

@@ -56,6 +56,8 @@ pub(crate) async fn ensure_client(
         return Err("agents never get the admin scope".into());
     }
     let file = token_path(target, name);
+    // connecting on purpose (setup, `agent add`) undoes a disconnect in the app
+    let _ = std::fs::remove_file(crate::mcp_cmd::off_path(target, name));
     if find_client(target, name).await?.is_some() && file.is_file() {
         return Ok(false);
     }
@@ -168,6 +170,8 @@ pub async fn remove(target: &CoreTarget, name: &str) -> ExitCode {
                 return fail(&e);
             }
             let _ = std::fs::remove_file(token_path(target, name));
+            // PLUG-002: its plugin must not connect it again by itself
+            let _ = std::fs::write(crate::mcp_cmd::off_path(target, name), b"disconnected\n");
             println!("Agent client '{name}' removed; its token no longer works.");
             ExitCode::SUCCESS
         }

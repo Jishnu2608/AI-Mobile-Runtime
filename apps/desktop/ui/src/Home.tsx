@@ -14,7 +14,7 @@ interface Recent {
 }
 interface FeedItem {
   at_ms: number;
-  kind: "told" | "fixed";
+  kind: "told" | "fixed" | "connected" | "gave_up";
   message: string;
   seconds?: number;
 }
@@ -184,8 +184,21 @@ export function Home({ summary, onSetup, onNewProject, onAgents }: { summary: Ho
               <Bot aria-hidden />
               <span className="muted small">{time(f.at_ms)}</span>
               <span>
-                {f.kind === "told" ? "Told your agent: " : `Fixed${f.seconds !== undefined ? ` after ${f.seconds < 120 ? `${f.seconds} s` : `${Math.round(f.seconds / 60)} min`}` : ""}: `}
+                {f.kind === "told"
+                  ? "Told your agent: "
+                  : f.kind === "fixed"
+                    ? `Fixed${f.seconds !== undefined ? ` after ${f.seconds < 120 ? `${f.seconds} s` : `${Math.round(f.seconds / 60)} min`}` : ""}: `
+                    : ""}
                 {f.message}
+                {f.kind === "connected" && (
+                  <>
+                    {" "}
+                    <button className="link" onClick={onAgents}>
+                      Manage
+                    </button>
+                  </>
+                )}
+                {f.kind === "gave_up" && " Look at it yourself, or send it again from the Problems list."}
               </span>
             </li>
           ))}

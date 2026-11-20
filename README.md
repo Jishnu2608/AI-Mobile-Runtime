@@ -84,6 +84,8 @@ Contributions are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) explains how to bu
 
 ## Licence
 
-The licence will be published with the first public release. Third-party components and their licences are listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Android SDK components, the emulator, the JDK, Flutter and Node.js are downloaded from their publishers at your request and are never redistributed.
+Toolchain Universal Mobile Runtime is licensed under the [Apache License, Version 2.0](LICENSE); see also [NOTICE](NOTICE). If you use the project or build on it, a mention with a link back to this repository would be greatly appreciated. That is a request, not a condition of the licence. The name and logo follow the [trademark policy](TRADEMARKS.md).
+
+Third-party components and their licences are listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Android SDK components, the emulator, the JDK, Flutter and Node.js are downloaded from their publishers at your request and are never redistributed.
 
 Android is a trademark of Google LLC. This project is not affiliated with or endorsed by Google.

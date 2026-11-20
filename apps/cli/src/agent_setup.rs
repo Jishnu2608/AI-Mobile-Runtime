@@ -116,6 +116,10 @@ fn hook_place(c: &Client, scope: Scope) -> Option<Place> {
         ("cursor", Scope::User) => Some(Place::Home(".cursor/hooks.json")),
         ("antigravity", Scope::Project) => Some(Place::Project(".agents/hooks.json")),
         ("antigravity", Scope::User) => Some(Place::Home(".gemini/config/hooks.json")),
+        // PLUG-005: GitHub Copilot's agent hooks (workspace `.github/hooks/*.json`, user
+        // `~/.copilot/hooks/*.json`)
+        ("vscode", Scope::Project) => Some(Place::Project(".github/hooks/tumr.json")),
+        ("vscode", Scope::User) => Some(Place::Home(".copilot/hooks/tumr.json")),
         _ => None,
     }
 }
@@ -633,6 +637,7 @@ async fn setup_json(
             }
             if !keep {
                 let _ = std::fs::remove_file(token_path(target, c.id));
+                let _ = std::fs::write(crate::mcp_cmd::off_path(target, c.id), b"disconnected\n");
             }
         } else {
             ensure_client(target, c.id, &AGENT_SCOPES.map(String::from)).await?;
@@ -818,6 +823,7 @@ async fn remove(
             }
         }
         let _ = std::fs::remove_file(token_path(target, c.id));
+        let _ = std::fs::write(crate::mcp_cmd::off_path(target, c.id), b"disconnected\n");
     }
     let what = if keep.is_some() {
         format!(
@@ -1561,6 +1567,57 @@ pub async fn doctor(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// PLUG-001: the plugin folders carry the same instructions `tumr agent setup` writes, and the
+    /// runtime's version. `TUMR_BLESS=1 cargo test -p tumr-cli plugin_files` rewrites them.
+    #[test]
+    fn plugin_files_match_the_runtime() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../plugins");
+        let client = |id: &str| crate::agent_clients::find(id).unwrap();
+        let skill = tumr_mcp::instructions::skill_markdown(true);
+        let files = [
+            ("claude/skills/tumr-runtime/SKILL.md", skill.clone()),
+            ("codex/skills/tumr-runtime/SKILL.md", skill),
+            (
+                "cursor/rules/tumr-runtime.mdc",
+                instructions_text(client("cursor")),
+            ),
+            (
+                "antigravity/rules/tumr-runtime.md",
+                instructions_text(client("antigravity")),
+            ),
+        ];
+        let bless = std::env::var_os("TUMR_BLESS").is_some();
+        for (rel, want) in &files {
+            let path = root.join(rel);
+            if bless {
+                std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+                std::fs::write(&path, want).unwrap();
+            }
+            let have = std::fs::read_to_string(&path)
+                .unwrap_or_default()
+                .replace("\r\n", "\n");
+            assert_eq!(
+                &have, want,
+                "{rel} is out of date: run TUMR_BLESS=1 cargo test -p tumr-cli plugin_files"
+            );
+        }
+        for manifest in [
+            "claude/.claude-plugin/plugin.json",
+            "codex/plugin.json",
+            "cursor/.cursor-plugin/plugin.json",
+            "antigravity/plugin.json",
+        ] {
+            let v: Value =
+                serde_json::from_str(&std::fs::read_to_string(root.join(manifest)).unwrap())
+                    .unwrap();
+            assert_eq!(
+                v["version"],
+                env!("CARGO_PKG_VERSION"),
+                "{manifest}: version"
+            );
+        }
+    }
 
     fn temp(name: &str) -> PathBuf {
         let d = std::env::temp_dir().join(format!("tumr-setup-{name}-{}", std::process::id()));

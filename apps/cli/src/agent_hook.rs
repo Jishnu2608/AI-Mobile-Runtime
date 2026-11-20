@@ -11,9 +11,15 @@
 //!   `reason` as its next instruction. Cursor: `{"followup_message":…}` is sent as the next user
 //!   message. Antigravity: `{"decision":"continue","reason":…}` re-enters its loop with `reason`
 //!   as a system message.
-//! * Never in the way: no Core, no run of this folder, no token, a rebuild still running at the
-//!   timeout or any error → the agent stops normally. After [`MAX_ROUNDS`] reports in a row the
-//!   hook lets the agent stop, so a problem it cannot fix does not loop forever.
+//! * The loop (PLUG-003, owner decision 2026-11-20 "until fixed, safety cap"): the agent is sent
+//!   back as long as the app has problems and they change. Only when the same set of problems is
+//!   reported [`STUCK_LIMIT`] times in a row does the hook let the agent stop, and it says so on
+//!   the home screen. A problem the user sends with "Send to agent" always goes through.
+//! * The conditional timer: the Core answers at once when nothing builds and otherwise waits for
+//!   the build or reload, however long, up to the hook's time. A build still running then sends
+//!   the agent back to wait for it (`wait_for_app`), at most [`BUSY_LIMIT`] times in a row.
+//! * Never in the way: no Core, no run of this folder, no token or any error → the agent stops
+//!   normally.
 //! * Uses the agent's own client token (scope observe), never the admin token, and never starts
 //!   the Core.
 
@@ -29,12 +35,14 @@ use tumr_api::methods;
 use crate::core_process::CoreTarget;
 use crate::mcp_cmd::token_path;
 
-/// Reports in a row before the hook lets the agent stop anyway.
-pub const MAX_ROUNDS: u32 = 3;
-/// Seconds the agent gives the hook (a cold Gradle build fits; the Core waits up to 120 s).
-pub const HOOK_TIMEOUT_S: u64 = 150;
-/// The clients that get a stop hook.
-pub const HOOK_CLIENTS: [&str; 4] = ["claude-code", "codex", "cursor", "antigravity"];
+/// Reports of the same problems in a row before the hook lets the agent stop.
+pub const STUCK_LIMIT: u32 = 5;
+/// "Still building" answers in a row before the hook lets the agent stop.
+pub const BUSY_LIMIT: u32 = 3;
+/// Seconds the agent gives the hook. The Core waits for a build up to 20 s less.
+pub const HOOK_TIMEOUT_S: u64 = 600;
+/// The clients that get a stop hook (`vscode`: GitHub Copilot's agent in VS Code).
+pub const HOOK_CLIENTS: [&str; 5] = ["claude-code", "codex", "cursor", "antigravity", "vscode"];
 
 // ---- what the agent sent ------------------------------------------------------------------
 
@@ -74,34 +82,81 @@ pub enum Verdict {
     Continue(String),
 }
 
-/// The problems as `fp:count` pairs: a fix attempt that rebuilt and failed again raises a count,
-/// so an unchanged signature means the agent left the code alone since the last report.
+/// The problems as a sorted list of fingerprints: the same set again means no progress.
 #[must_use]
 pub fn signature(problems: &[Value]) -> String {
-    let mut v: Vec<String> = problems
+    let mut v: Vec<&str> = problems
         .iter()
-        .map(|p| format!("{}:{}", p["fp"].as_str().unwrap_or("?"), p["count"]))
+        .map(|p| p["fp"].as_str().unwrap_or("?"))
         .collect();
-    v.sort();
+    v.sort_unstable();
+    v.dedup();
     v.join(",")
 }
 
-/// The verdict for these problems, given the reports in a row so far (`rounds`) and the last
-/// report's [`signature`]; returns the new round count. Each problem set is reported once until
-/// the agent changes something, and never more than [`MAX_ROUNDS`] times in a row.
+/// Where the loop stands for one agent and project.
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct Loop {
+    /// Reports in a row of the problem set [`Loop::last`] (above [`STUCK_LIMIT`]: given up).
+    pub stuck: u32,
+    /// [`signature`] of the last report.
+    pub last: String,
+    /// "Still building" answers in a row.
+    pub busy: u32,
+}
+
+/// The verdict for these problems after `prev`; also whether the loop gives up now (once).
+/// Each change of the problem set starts the count again: the agent is making progress.
 #[must_use]
-pub fn decide(problems: &[Value], rounds: u32, last: &str) -> (Verdict, u32) {
-    if problems.is_empty() || rounds >= MAX_ROUNDS || (rounds > 0 && signature(problems) == last) {
-        return (Verdict::Allow, 0);
+pub fn decide(problems: &[Value], prev: &Loop) -> (Verdict, Loop, bool) {
+    if problems.is_empty() {
+        return (Verdict::Allow, Loop::default(), false);
     }
-    (Verdict::Continue(report(problems)), rounds + 1)
+    let last = signature(problems);
+    let stuck = if last == prev.last { prev.stuck + 1 } else { 1 };
+    let next = Loop {
+        stuck,
+        last,
+        busy: 0,
+    };
+    if stuck > STUCK_LIMIT {
+        // given up on this set; quiet until the problems change
+        let gave_up = prev.stuck == STUCK_LIMIT;
+        return (Verdict::Allow, next, gave_up);
+    }
+    (Verdict::Continue(report(problems)), next, false)
+}
+
+/// The verdict while a build still runs at the hook's time limit.
+#[must_use]
+pub fn decide_busy(prev: &Loop, running: &str, waited_s: u64) -> (Verdict, Loop) {
+    let busy = prev.busy + 1;
+    let next = Loop {
+        busy,
+        ..prev.clone()
+    };
+    if busy > BUSY_LIMIT {
+        return (Verdict::Allow, Loop { busy: 0, ..next });
+    }
+    let mins = waited_s.div_ceil(60);
+    (
+        Verdict::Continue(format!(
+            "Toolchain Universal Mobile Runtime: {running} started by your changes is still running \
+             after {mins} min, so the app has not been checked yet. Call the tumr `wait_for_app` tool \
+             (again while it answers `busy`) until it is ready, then fix any problem it lists. Do not \
+             start another build meanwhile."
+        )),
+        next,
+    )
 }
 
 /// The text the agent gets.
 #[must_use]
 pub fn report(problems: &[Value]) -> String {
     let mut out = String::from(
-        "Toolchain Universal Mobile Runtime: the app on the emulator still has problems after your changes.\n",
+        "Toolchain Universal Mobile Runtime: the app on the emulator does not work yet. The user \
+         connected this runtime so that you leave the app building and running when you finish, \
+         so fix these problems now, also when they are in files you did not change:\n",
     );
     for p in problems {
         let what = match p["category"].as_str() {
@@ -127,9 +182,10 @@ pub fn report(problems: &[Value]) -> String {
     out.push_str(
         "Fix them in the code and save: the runtime rebuilds or reloads by itself. Use the tumr \
          MCP tools for details (`get_diagnostic` with the fp gives the full message and stack; \
-         `runtime_status` and `screenshot` confirm the fix). If a problem cannot be fixed in the \
-         code, or the user told you not to change that code, say so in one line and stop: you \
-         will not be asked again for it in this turn.",
+         `runtime_status` and `screenshot` confirm the fix). The runtime checks again after \
+         each of your turns until the app is clean. Leave a problem only if the user named that \
+         code as off limits or it cannot be fixed in the code; then say why in one line. After \
+         five reports of the same problem the runtime stops asking and tells the user.",
     );
     out
 }
@@ -157,9 +213,7 @@ struct HookState {
     cursor: u64,
     /// The Core start the cursor belongs to.
     epoch: u64,
-    rounds: u32,
-    /// [`signature`] of the last report.
-    last: String,
+    looping: Loop,
 }
 
 fn state_file(target: &CoreTarget) -> PathBuf {
@@ -180,14 +234,17 @@ fn load_states(path: &Path) -> BTreeMap<String, HookState> {
             o.iter()
                 .map(|(k, s)| {
                     let n = |f: &str| s[f].as_u64().unwrap_or(0);
-                    let rounds = u32::try_from(n("rounds")).unwrap_or(0);
+                    let small = |f: &str| u32::try_from(n(f)).unwrap_or(0);
                     (
                         k.clone(),
                         HookState {
                             cursor: n("cursor"),
                             epoch: n("epoch"),
-                            rounds,
-                            last: s["last"].as_str().unwrap_or("").to_string(),
+                            looping: Loop {
+                                stuck: small("stuck"),
+                                last: s["last"].as_str().unwrap_or("").to_string(),
+                                busy: small("busy"),
+                            },
                         },
                     )
                 })
@@ -207,7 +264,8 @@ fn save_state(path: &Path, key: &str, s: HookState) {
         .map(|(k, s)| {
             (
                 k.clone(),
-                json!({ "cursor": s.cursor, "epoch": s.epoch, "rounds": s.rounds, "last": s.last }),
+                json!({ "cursor": s.cursor, "epoch": s.epoch, "stuck": s.looping.stuck,
+                        "last": s.looping.last, "busy": s.looping.busy }),
             )
         })
         .collect();
@@ -262,29 +320,53 @@ async fn check(target: &CoreTarget, client: &str, input: &Value) -> Result<Verdi
             methods::AGENT_CHECK,
             json!({ "project": project.display().to_string(), "since": state.cursor,
                     "epoch": (state.epoch > 0).then_some(state.epoch),
-                    "timeout_ms": (HOOK_TIMEOUT_S - 30) * 1000 }),
+                    "timeout_ms": (HOOK_TIMEOUT_S - 20) * 1000 }),
         )
         .await
         .map_err(|e| e.to_string())?;
+    if r["status"] == "busy" {
+        let (verdict, looping) = decide_busy(
+            &state.looping,
+            r["running"].as_str().unwrap_or("a build"),
+            r["waited_s"].as_u64().unwrap_or(0),
+        );
+        save_state(&file, &key, HookState { looping, ..state });
+        return Ok(verdict);
+    }
     if r["status"] != "ok" {
-        return Ok(Verdict::Allow); // not this folder's run, or still building at the timeout
+        return Ok(Verdict::Allow); // not this folder's run
     }
     let problems = r["problems"].as_array().cloned().unwrap_or_default();
     // AUD-P1-7: problems the user sent with "Send to agent" pass the loop guard
     let sent_by_user = r["flagged"].as_array().is_some_and(|f| !f.is_empty());
-    let (verdict, rounds) = if sent_by_user && !problems.is_empty() {
-        (Verdict::Continue(report(&problems)), 1)
+    let (verdict, looping, gave_up) = if sent_by_user && !problems.is_empty() {
+        let l = Loop {
+            stuck: 1,
+            last: signature(&problems),
+            busy: 0,
+        };
+        (Verdict::Continue(report(&problems)), l, false)
     } else {
-        decide(&problems, state.rounds, &state.last)
+        decide(&problems, &state.looping)
     };
+    if gave_up {
+        let name = crate::agent_clients::find(client).map_or(client, |c| c.name);
+        let first = problems[0]["msg"].as_str().unwrap_or("a problem");
+        let _ = core
+            .call_raw(
+                methods::AGENT_NOTE,
+                json!({ "kind": "gave_up", "message": format!(
+                    "Stopped sending {name} back: the same problem came {STUCK_LIMIT} times in a row ({first})") }),
+            )
+            .await;
+    }
     save_state(
         &file,
         &key,
         HookState {
             cursor: r["cursor"].as_u64().unwrap_or(state.cursor),
             epoch: r["epoch"].as_u64().unwrap_or(0),
-            rounds,
-            last: signature(&problems),
+            looping,
         },
     );
     Ok(verdict)
@@ -354,8 +436,8 @@ async fn after_edit(
     }
     let problems = r["problems"].as_array().cloned().unwrap_or_default();
     let sig = signature(&problems);
-    if problems.is_empty() || sig == seen.last {
-        if problems.is_empty() && !seen.last.is_empty() {
+    if problems.is_empty() || sig == seen.looping.last {
+        if problems.is_empty() && !seen.looping.last.is_empty() {
             save_state(&file, &key, HookState::default());
         }
         return Ok(None);
@@ -364,7 +446,10 @@ async fn after_edit(
         &file,
         &key,
         HookState {
-            last: sig,
+            looping: Loop {
+                last: sig,
+                ..Loop::default()
+            },
             ..HookState::default()
         },
     );
@@ -402,7 +487,7 @@ pub fn codex_handler(exe: &str) -> Value {
 #[must_use]
 pub fn cursor_entry(exe: &str) -> Value {
     json!({ "command": format!("& '{}' agent hook cursor", exe.replace('\'', "''")),
-            "timeout": HOOK_TIMEOUT_S, "loop_limit": MAX_ROUNDS })
+            "timeout": HOOK_TIMEOUT_S, "loop_limit": Value::Null })
 }
 
 /// The Stop handler for Antigravity (a command line run through `cmd.exe` on Windows).
@@ -412,15 +497,21 @@ pub fn antigravity_handler(exe: &str) -> Value {
             "timeout": HOOK_TIMEOUT_S })
 }
 
+/// The Stop entry for GitHub Copilot in VS Code (its `powershell` command runs on Windows).
+#[must_use]
+pub fn vscode_entry(exe: &str) -> Value {
+    json!({ "type": "command",
+            "powershell": format!("& '{}' agent hook vscode", exe.replace('\'', "''")),
+            "timeoutSec": HOOK_TIMEOUT_S })
+}
+
 /// A handler or entry written by setup (its command runs `agent hook`).
 fn is_ours(h: &Value) -> bool {
     let in_args = h["args"]
         .as_array()
         .is_some_and(|a| a.len() >= 2 && a[0] == "agent" && a[1] == "hook");
-    in_args
-        || h["command"]
-            .as_str()
-            .is_some_and(|c| c.contains(" agent hook "))
+    let runs_hook = |f: &str| h[f].as_str().is_some_and(|c| c.contains(" agent hook "));
+    in_args || runs_hook("command") || runs_hook("powershell")
 }
 
 fn parse(old: Option<&str>, path: &str) -> Result<Value, String> {
@@ -486,8 +577,9 @@ pub fn hooks_set(client: &str, old: Option<&str>, path: &str, exe: &str) -> Resu
         if let Some(o) = v.as_object_mut() {
             o.insert("tumr".into(), json!({ "Stop": [antigravity_handler(exe)] }));
         }
-    } else if client == "cursor" {
-        strip(&mut v, "stop", false);
+    } else if client == "cursor" || client == "vscode" {
+        let event = if client == "cursor" { "stop" } else { "Stop" };
+        strip(&mut v, event, false);
         if v.get("version").is_none() {
             if let Some(o) = v.as_object_mut() {
                 // `version` first, as in Cursor's own examples
@@ -498,9 +590,13 @@ pub fn hooks_set(client: &str, old: Option<&str>, path: &str, exe: &str) -> Resu
             }
         }
         let hooks = hooks_of(&mut v);
-        let list = hooks.entry("stop").or_insert_with(|| json!([]));
+        let list = hooks.entry(event).or_insert_with(|| json!([]));
         if let Some(a) = list.as_array_mut() {
-            a.push(cursor_entry(exe));
+            a.push(if client == "cursor" {
+                cursor_entry(exe)
+            } else {
+                vscode_entry(exe)
+            });
         }
     } else {
         strip(&mut v, "Stop", true);
@@ -560,10 +656,10 @@ pub fn hooks_remove(client: &str, old: &str, path: &str) -> Result<Option<String
             Some(pretty(&v))
         });
     }
-    let (event, grouped) = if client == "cursor" {
-        ("stop", false)
-    } else {
-        ("Stop", true)
+    let (event, grouped) = match client {
+        "cursor" => ("stop", false),
+        "vscode" => ("Stop", false),
+        _ => ("Stop", true),
     };
     if client == "claude-code" {
         strip(&mut v, "PostToolUse", true);
@@ -615,10 +711,11 @@ pub fn has_hook(text: &str) -> bool {
                     .is_some_and(|hs| hs.iter().any(is_ours))
             })
         });
+    // Cursor (`stop`) and GitHub Copilot (`Stop`): flat lists of entries
     grouped
-        || hooks["stop"]
-            .as_array()
-            .is_some_and(|l| l.iter().any(is_ours))
+        || ["stop", "Stop"]
+            .iter()
+            .any(|e| hooks[*e].as_array().is_some_and(|l| l.iter().any(is_ours)))
 }
 
 #[cfg(test)]
@@ -646,24 +743,47 @@ mod tests {
     }
 
     #[test]
-    fn problems_keep_the_agent_going_a_few_rounds_only() {
+    fn the_loop_goes_on_until_fixed_and_stops_on_a_stuck_problem() {
         let p = [build_problem()];
-        let (v, r) = decide(&p, 0, "");
+        let (v, mut l, gave_up) = decide(&p, &Loop::default());
         let Verdict::Continue(text) = &v else {
             panic!("{v:?}")
         };
         assert!(text.contains("build error at app/src/main/java/x/MainActivity.kt:12"));
         assert!(text.contains("[fp ab12]") && text.contains("get_diagnostic"));
-        assert_eq!(r, 1);
-        assert_eq!(decide(&p, MAX_ROUNDS, ""), (Verdict::Allow, 0));
-        assert_eq!(decide(&[], 2, ""), (Verdict::Allow, 0));
-        // the agent left the code alone (declined, or cannot fix it): not asked again
-        let same = signature(&p);
-        assert_eq!(decide(&p, 1, &same), (Verdict::Allow, 0));
-        // it tried, the rebuild failed again (count went up): asked again
-        let mut again = build_problem();
-        again["count"] = json!(2);
-        assert!(matches!(decide(&[again], 1, &same).0, Verdict::Continue(_)));
+        assert!(!gave_up && l.stuck == 1);
+        // the same problem: reported again up to STUCK_LIMIT times in a row
+        for n in 2..=STUCK_LIMIT {
+            let (v, next, g) = decide(&p, &l);
+            assert!(matches!(v, Verdict::Continue(_)) && !g && next.stuck == n);
+            l = next;
+        }
+        // then the loop gives up once, and stays quiet while nothing changes
+        let (v, next, g) = decide(&p, &l);
+        assert!(v == Verdict::Allow && g);
+        let (v, after, g) = decide(&p, &next);
+        assert!(v == Verdict::Allow && !g && after.stuck > STUCK_LIMIT);
+        // progress (another problem) starts the count again
+        let mut other = build_problem();
+        other["fp"] = json!("cd34");
+        let (v, l2, _) = decide(&[other], &after);
+        assert!(matches!(v, Verdict::Continue(_)) && l2.stuck == 1);
+        // fixed: the agent stops, the loop resets
+        assert_eq!(decide(&[], &l2), (Verdict::Allow, Loop::default(), false));
+    }
+
+    #[test]
+    fn a_long_build_sends_the_agent_to_wait_a_few_times() {
+        let mut l = Loop::default();
+        for _ in 0..BUSY_LIMIT {
+            let (v, next) = decide_busy(&l, "a build or reload", 590);
+            let Verdict::Continue(text) = &v else {
+                panic!("{v:?}")
+            };
+            assert!(text.contains("wait_for_app") && text.contains("10 min"));
+            l = next;
+        }
+        assert_eq!(decide_busy(&l, "a build", 590).0, Verdict::Allow);
     }
 
     #[test]
@@ -739,7 +859,7 @@ mod tests {
         let v: Value = serde_json::from_str(&once).unwrap();
         let e = &v["hooks"]["stop"][0];
         assert_eq!(e["command"], format!("& '{EXE}' agent hook cursor"));
-        assert_eq!(e["loop_limit"], MAX_ROUNDS);
+        assert_eq!(e["loop_limit"], Value::Null);
         assert_eq!(hooks_remove("cursor", &once, "f").unwrap(), None);
         let other = r#"{"version":1,"hooks":{"afterFileEdit":[{"command":"fmt.ps1"}]}}"#;
         let with = hooks_set("cursor", Some(other), "f", EXE).unwrap();

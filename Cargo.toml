@@ -5,10 +5,11 @@ members = ["crates/tumr-platform", "crates/tumr-api", "crates/tumr-storage", "cr
 exclude = ["poc"]
 
 [workspace.package]
-version = "0.1.32"
+version = "0.1.33"
 edition = "2021"
 rust-version = "1.89"  # std::fs::File::try_lock
 repository = "https://github.com/Jishnu2608/TUMR"
+license = "Apache-2.0"
 publish = false
 
 [workspace.lints.rust]

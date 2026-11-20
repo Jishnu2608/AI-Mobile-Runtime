@@ -283,6 +283,8 @@ pre.diff { margin: 4px 0 8px; max-height: 220px; overflow: auto; background: var
 .home-feed li { display: grid; grid-template-columns: 18px 64px 1fr; gap: 8px; align-items: start; font-size: 13.5px; }
 .home-feed li svg { width: 16px; height: 16px; color: var(--muted); margin-top: 2px; }
 .home-feed li.fixed svg { color: var(--ok); }
+.home-feed li.connected svg { color: var(--accent, var(--ok)); }
+.home-feed li.gave_up svg { color: var(--warn); }
 .home > p > button { display: inline-flex; align-items: center; gap: 6px; }
 /* AUD-P1-7: what the phone shows is not the current code */
 .pv-banner { display: flex; gap: 8px; align-items: center; justify-content: space-between; flex-wrap: wrap; margin: 6px 8px 0; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--bad); background: var(--bad-bg); color: var(--text); font-size: 12.5px; }

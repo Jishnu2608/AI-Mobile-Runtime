@@ -1,0 +1,19 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
+  "mcpServers": {
+    "tumr": {
+      "type": "stdio",
+      "command": "cmd",
+      "args": [
+        "/d",
+        "/s",
+        "/c",
+        "call",
+        "./bin/tumr.cmd",
+        "mcp",
+        "--client",
+        "codex"
+      ]
+    }
+  }
+}

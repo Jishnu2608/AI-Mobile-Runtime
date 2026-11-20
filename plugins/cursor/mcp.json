@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "tumr": {
+      "command": "cmd",
+      "args": [
+        "/d",
+        "/c",
+        "call",
+        "${CURSOR_PLUGIN_ROOT}/bin/tumr.cmd",
+        "mcp",
+        "--client",
+        "cursor"
+      ]
+    }
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cmd /d /c call \"${PLUGIN_ROOT}/bin/tumr.cmd\" agent hook codex",
+            "timeout": 600
+          }
+        ]
+      }
+    ]
+  }
+}

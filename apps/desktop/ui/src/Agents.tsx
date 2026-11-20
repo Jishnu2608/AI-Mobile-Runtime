@@ -21,7 +21,7 @@ type Report = { client: string; checks: Check[]; fixed: string[] }[];
 const DEFAULT_SCOPE: Record<string, "project" | "user"> = { "claude-code": "project", codex: "user", cursor: "project", "claude-desktop": "user", vscode: "project", antigravity: "user" };
 
 /** Agents whose connection also installs the stop hook: the automatic error loop (HOOK-001). */
-const LOOP: Record<string, true> = { "claude-code": true, codex: true, cursor: true, antigravity: true };
+const LOOP: Record<string, true> = { "claude-code": true, codex: true, cursor: true, antigravity: true, vscode: true };
 
 /** AUD-P1-8: whether the automatic error loop is on for this agent, in one sentence. */
 function loopLine(row: ClientRow, connected: boolean): { ok: boolean; text: string } {

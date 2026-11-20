@@ -1,0 +1,16 @@
+Toolchain Universal Mobile Runtime (T-UMR)
+Copyright 2026 the Toolchain Universal Mobile Runtime authors
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+Source: https://github.com/Jishnu2608/TUMR
+
+This product includes third-party software. The packages and their licences
+are listed in THIRD_PARTY_NOTICES.md.
+
+The names "Toolchain Universal Mobile Runtime", "T-UMR" and "tumr" (as a product
+name) and the logo are not licensed under Apache 2.0; see TRADEMARKS.md.
+
+A request, not a condition of the licence: if you use this project, or build
+on it, a mention of "Toolchain Universal Mobile Runtime" with a link to
+https://github.com/Jishnu2608/TUMR would be greatly appreciated, for example
+in your README, documentation or credits.

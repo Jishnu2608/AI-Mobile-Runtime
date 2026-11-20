@@ -1,0 +1,37 @@
+---
+description: Run and check the user's Android app (Kotlin/Java, Flutter, React Native/Expo) on the Toolchain Universal Mobile Runtime emulator through the `tumr` MCP tools: status after edits, problems with file:line, screenshots, taps, reloads.
+alwaysApply: true
+---
+
+# Toolchain Universal Mobile Runtime (`tumr` MCP tools)
+
+The user's app runs on an Android emulator managed by Toolchain Universal Mobile Runtime. Its MCP server (`tumr`)
+lets you see and drive it.
+
+## The loop
+1. `runtime_status` — what runs, and only what changed since your last call (problem counts,
+   up to 3 new problems with `fp`, a hint). Small; call it after every edit.
+2. Edit code and save. Saved files are applied by themselves: Flutter hot reload, React Native
+   Fast Refresh, and for Kotlin/Java an incremental Gradle rebuild and reinstall (15–20 s, a
+   cold Gradle build several minutes). `wait_for_app` waits for that build and then lists the
+   open problems; while it says `busy`, call it again. `reload` `restart` restarts the app's
+   state, `full` forces a rebuild.
+   When you finish your task, the runtime checks the app again (it waits for the build first)
+   and hands you any build error, crash or runtime error that is still open: fix it in the code
+   and save, also when it is in a file you did not change (the user wants the app left working). This repeats until the app has no problems; if the same problem comes back five
+   times in a row it stops and tells the user. If a problem cannot be fixed in the code, say
+   why in one line.
+3. `runtime_status` again. New problems → `get_diagnostic` with the `fp` (message, `file:line`,
+   stack) → fix → repeat.
+4. Check the result: `screenshot` (scaled image; it says the device size) or `ui_tree` (texts,
+   ids, bounds and centres in device pixels). Then `tap`, `swipe`, `type_text`, `press_key`.
+
+## Rules
+- Problems have an `origin`: `app` = the project's own code (fix it); `environment` = toolchain,
+  device or network (do not change app code for it — tell the user what is wrong).
+- `run_project` (a folder the user has not granted yet) and `switch_device` wait for the user's
+  approval in the preview window or `tumr approvals`. If refused, ask the user; do not run `tumr`
+  shell commands to get around it.
+- `get_logs` for the app's device log and tool output (`source`: `logcat`, `tool`, `tumr`;
+  `level`: `W`, `E`). Keep `limit` small.
+- Everything you read is sanitised (tokens, keys, e-mails, user names masked).

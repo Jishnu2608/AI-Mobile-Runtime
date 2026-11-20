@@ -1,0 +1,49 @@
+{
+  "manifest_version": "0.3",
+  "name": "tumr",
+  "display_name": "Toolchain Universal Mobile Runtime",
+  "version": "0.0.0",
+  "description": "Your Android app (Kotlin/Java, Flutter, React Native/Expo) on a live emulator: status, problems with file:line, screenshots, taps, reloads.",
+  "long_description": "Needs Toolchain Universal Mobile Runtime installed on the PC (https://github.com/Jishnu2608/TUMR/releases). This bundle only starts its MCP server: it finds tumr.exe in the default install folder, through TUMR_EXE, or on PATH, and connects itself to the runtime on first use.",
+  "author": {
+    "name": "Toolchain Universal Mobile Runtime authors"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Jishnu2608/TUMR"
+  },
+  "homepage": "https://github.com/Jishnu2608/TUMR",
+  "documentation": "https://github.com/Jishnu2608/TUMR/blob/main/docs/user/agents.md",
+  "support": "https://github.com/Jishnu2608/TUMR/issues",
+  "license": "Apache-2.0",
+  "icon": "icon.png",
+  "server": {
+    "type": "binary",
+    "entry_point": "tumr.cmd",
+    "mcp_config": {
+      "command": "cmd",
+      "args": [
+        "/d",
+        "/c",
+        "call",
+        "${__dirname}/tumr.cmd",
+        "mcp",
+        "--client",
+        "claude-desktop"
+      ]
+    }
+  },
+  "keywords": [
+    "android",
+    "emulator",
+    "flutter",
+    "react-native",
+    "kotlin",
+    "mobile"
+  ],
+  "compatibility": {
+    "platforms": [
+      "win32"
+    ]
+  }
+}

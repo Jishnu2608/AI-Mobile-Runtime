@@ -48,18 +48,25 @@ for (const [from, to] of files) {
   }
 }
 
-// MCP tool catalogue straight from the product (`tumr mcp --list-tools`)
+// MCP tool catalogue straight from the product (`tumr mcp --list-tools`). The committed copy
+// (content/mcp-tools.json, kept current by the tumr-mcp test `site_tool_list_is_current`) is
+// used where no tumr.exe is built, as on the CI runners.
+const tools = join(site, "content", "mcp-tools.json");
 const tumr = ["target/release/tumr.exe", "target/debug/tumr.exe"].map((p) => join(repo, p)).find(existsSync);
 if (tumr) {
   try {
     const json = execFileSync(tumr, ["mcp", "--list-tools"], { encoding: "utf8" });
     JSON.parse(json);
-    writeFileSync(join(out, "mcp-tools.json"), json.trim() + "\n");
-    copied++;
+    writeFileSync(tools, json.replace(/\r\n/g, "\n").trim() + "\n");
   } catch (e) {
     console.warn(`sync-content: could not list MCP tools (${e.message}); keeping the committed copy`);
   }
 }
+if (!existsSync(tools)) {
+  throw new Error("sync-content: content/mcp-tools.json is missing; run `cargo test -p tumr-mcp` with TUMR_BLESS=1");
+}
+copyFileSync(tools, join(out, "mcp-tools.json"));
+copied++;
 
 // the release manifest the release pipeline publishes (DIST-002); none published yet
 const manifest = join(site, "content", "releases.json");

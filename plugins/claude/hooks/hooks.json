@@ -1,0 +1,46 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cmd",
+            "args": [
+              "/d",
+              "/c",
+              "call",
+              "${CLAUDE_PLUGIN_ROOT}/bin/tumr.cmd",
+              "agent",
+              "hook",
+              "claude-code"
+            ],
+            "timeout": 600
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|MultiEdit|Write|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cmd",
+            "args": [
+              "/d",
+              "/c",
+              "call",
+              "${CLAUDE_PLUGIN_ROOT}/bin/tumr.cmd",
+              "agent",
+              "hook",
+              "claude-code",
+              "--after-edit"
+            ],
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}

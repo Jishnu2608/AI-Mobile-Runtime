@@ -101,6 +101,23 @@ fn fast_refresh_check(state: &Arc<ApiState>) {
 }
 
 pub fn start(state: &ApiState, root: &Path, adapter_id: &str) -> Result<Watch, String> {
+    spawn(state, root, adapter_id, None)
+}
+
+/// PLUG-003: watches the folder of a run that did not build; the next save runs it again.
+pub fn start_retry(state: &ApiState, retry: crate::run_api::RetryRun) -> Result<Watch, String> {
+    let root = PathBuf::from(&retry.project);
+    let adapter = retry.adapter.clone();
+    spawn(state, &root, &adapter, Some(retry))
+}
+
+#[allow(clippy::too_many_lines)] // one loop: collect saves, debounce, reload or run again
+fn spawn(
+    state: &ApiState,
+    root: &Path,
+    adapter_id: &str,
+    retry: Option<crate::run_api::RetryRun>,
+) -> Result<Watch, String> {
     let weak: Weak<ApiState> = state
         .self_ref
         .get()
@@ -159,6 +176,23 @@ pub fn start(state: &ApiState, root: &Path, adapter_id: &str) -> Result<Watch, S
                 }
                 let files = std::mem::take(&mut pending);
                 let Some(state) = weak.upgrade() else { return };
+                if let Some(r) = &retry {
+                    let list: Vec<&str> = files.iter().map(String::as_str).take(5).collect();
+                    tracing::info!(files = ?list, "file change: running the project again");
+                    // replaces this watcher (a new one starts if the build fails again)
+                    match crate::run_api::run_inner(
+                        &state,
+                        &r.project,
+                        r.profile.as_deref(),
+                        false,
+                        true,
+                    ) {
+                        Ok(v) => tracing::info!(status = %v["status"], "retried run"),
+                        Err(e) => tracing::warn!(error = %e.message, "retried run"),
+                    }
+                    state.watch_busy.store(false, Ordering::SeqCst);
+                    return;
+                }
                 let Some(kind) = decide(adapter.as_ref(), &files) else {
                     // the framework applies these itself (React Native Fast Refresh): the new
                     // code reports its own errors again, the old ones are gone (AUD-P0-2)

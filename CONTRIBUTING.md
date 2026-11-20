@@ -41,4 +41,4 @@ The desktop UI alone: `npm --prefix apps/desktop/ui run dev` (sample data in a b
 7. One topic per pull request; describe what you checked and how.
 
 ## Licence of contributions
-The project's licence is published with the first public release, and contributions will be accepted under it. Until then, please share ideas and larger changes as issues or discussions rather than pull requests with substantial code.
+The project is licensed under the [Apache License, Version 2.0](LICENSE). Unless you state otherwise, any contribution you submit for inclusion is licensed under the same terms, as section 5 of the licence says, with no additional terms or conditions. For larger changes, open an issue or discussion first.

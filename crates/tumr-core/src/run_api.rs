@@ -72,6 +72,14 @@ impl EventLog {
     }
 }
 
+/// A run that did not build yet (PLUG-003): tried again when a file in its folder is saved.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RetryRun {
+    pub project: String,
+    pub adapter: String,
+    pub profile: Option<String>,
+}
+
 /// What runs now.
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct RunInfo {
@@ -345,6 +353,10 @@ pub(crate) fn stop_run(state: &ApiState) -> Option<RunInfo> {
 /// Stops the watcher and the app but keeps the run's background tools (Gradle daemon) warm:
 /// a device switch re-runs the project in the same group (AC-CLI-03).
 pub(crate) fn stop_app(state: &ApiState) -> Option<RunInfo> {
+    *state
+        .run_retry
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner) = None;
     // the watcher first, so no reload starts while the app stops
     drop(
         state
@@ -602,10 +614,45 @@ pub(crate) fn run_inner(
             state.supervisor.stop_group(&ctx.group);
             tracing::warn!(adapter = adapter.id(), error = %e, "run failed");
             let status = cancelled_or(state, status);
+            // PLUG-003: a build error in the app's code: keep the folder watched and run again
+            // on the next save, so the fix is picked up (and the agent's stop hook sees it)
+            let retrying = watch
+                && status == "build_failed"
+                && matches!(e, AdapterError::BuildFailed { .. })
+                && start_retry(
+                    state,
+                    RetryRun {
+                        project: path.clone(),
+                        adapter: adapter.id().to_string(),
+                        profile: profile.map(String::from),
+                    },
+                );
             Ok(json!({
                 "status": status, "adapter": adapter.id(), "error": e.to_string(),
-                "problems": problems_of(&e), "session": s,
+                "problems": problems_of(&e), "session": s, "watching": retrying,
             }))
+        }
+    }
+}
+
+/// Watches a run that did not build and tries it again on the next save. Returns whether the
+/// folder is watched.
+fn start_retry(state: &ApiState, retry: RetryRun) -> bool {
+    match crate::watch::start_retry(state, retry.clone()) {
+        Ok(w) => {
+            *state
+                .run_watch
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner) = Some(w);
+            *state
+                .run_retry
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner) = Some(retry);
+            true
+        }
+        Err(e) => {
+            tracing::warn!(error = %e, "file watching is off");
+            false
         }
     }
 }

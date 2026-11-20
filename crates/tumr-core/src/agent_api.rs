@@ -439,22 +439,46 @@ pub fn check(state: &ApiState, id: Id, p: &AgentCheckParams) -> Response {
         .lock()
         .unwrap_or_else(PoisonError::into_inner)
         .as_ref()
-        .is_some_and(|r| works_on(&r.project, &p.project));
+        .is_some_and(|r| p.project.trim().is_empty() || works_on(&r.project, &p.project))
+        // PLUG-003: a run that did not build yet counts: its build errors are for the agent
+        || state
+            .run_retry
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .as_ref()
+            .is_some_and(|r| p.project.trim().is_empty() || works_on(&r.project, &p.project));
     if !running {
         return ok(id, &json!({ "status": "not_running", "problems": [] }));
     }
-    let deadline = Instant::now() + Duration::from_millis(p.timeout_ms.min(170_000));
+    // the conditional timer: nothing building → answer after the debounce; a build or reload
+    // running → wait for it however long it takes, up to the caller's limit
+    let start = Instant::now();
+    let deadline =
+        start + Duration::from_millis(p.timeout_ms.min(tumr_api::methods::AGENT_CHECK_MAX_MS));
     // the watcher picks up the last save after its debounce
-    std::thread::sleep(crate::watch::DEBOUNCE + Duration::from_millis(500));
+    if p.timeout_ms > 0 {
+        std::thread::sleep(crate::watch::DEBOUNCE + Duration::from_millis(500));
+    }
     loop {
-        let idle = !state.watch_busy.load(Ordering::SeqCst)
-            && !state.session_busy.load(Ordering::SeqCst)
-            && state.run_app.try_lock().is_ok();
-        if idle {
+        let (watch, session, app) = (
+            state.watch_busy.load(Ordering::SeqCst),
+            state.session_busy.load(Ordering::SeqCst),
+            state.run_app.try_lock().is_err(),
+        );
+        if !watch && !session && !app {
             break;
         }
-        if Instant::now() > deadline {
-            return ok(id, &json!({ "status": "busy", "problems": [] }));
+        if Instant::now() >= deadline {
+            let what = if session {
+                "the device"
+            } else {
+                "a build or reload"
+            };
+            return ok(
+                id,
+                &json!({ "status": "busy", "problems": [], "running": what,
+                         "waited_s": start.elapsed().as_secs() }),
+            );
         }
         std::thread::sleep(Duration::from_millis(200));
     }
@@ -494,8 +518,33 @@ pub fn check(state: &ApiState, id: Id, p: &AgentCheckParams) -> Response {
     }
     ok(
         id,
-        &json!({ "status": "ok", "problems": problems, "flagged": flagged, "cursor": d.problems.cursor(), "epoch": core_epoch(), "alive": alive }),
+        &json!({ "status": "ok", "problems": problems, "flagged": flagged, "cursor": d.problems.cursor(), "epoch": core_epoch(), "alive": alive,
+                 "waited_s": start.elapsed().as_secs() }),
     )
+}
+
+/// `agent.note`: a `connected` or `gave_up` line in the home screen's agent feed.
+pub fn note(state: &ApiState, id: Id, p: &tumr_api::methods::AgentNoteParams) -> Response {
+    let kind = match p.kind.as_str() {
+        "connected" => "connected",
+        "gave_up" => "gave_up",
+        other => {
+            return Response::err(
+                Some(id),
+                RpcError::new(
+                    codes::INVALID_PARAMS,
+                    format!("unknown note kind '{other}'"),
+                ),
+            )
+        }
+    };
+    let message = short(&sanitize(&p.message), 300);
+    state
+        .diag
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .note(kind, message);
+    ok(id, &json!({}))
 }
 
 /// MCP-002: what changed, small enough to call after every edit (≤ 1 KB).

@@ -1,0 +1,17 @@
+{
+  "mcpServers": {
+    "tumr": {
+      "type": "stdio",
+      "command": "cmd",
+      "args": [
+        "/d",
+        "/c",
+        "call",
+        "${CLAUDE_PLUGIN_ROOT}/bin/tumr.cmd",
+        "mcp",
+        "--client",
+        "claude-code"
+      ]
+    }
+  }
+}

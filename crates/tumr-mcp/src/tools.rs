@@ -155,6 +155,14 @@ const TOOLS: &[Tool] = &[
         read_only: false,
     },
     Tool {
+        name: "wait_for_app",
+        title: "Wait for the app",
+        description: "Wait until the rebuild or reload your last saves started has finished (Gradle builds can take minutes), then list the app's open problems. Waits up to `seconds` (default 50) per call: while it answers `busy`, call it again.",
+        schema: || json!({ "type": "object", "properties": {
+            "seconds": { "type": "integer", "minimum": 1, "maximum": 55, "description": "Longest wait for this call; default 50." } } }),
+        read_only: true,
+    },
+    Tool {
         name: "run_project",
         title: "Run project",
         description: "Build, install and launch a project folder on the device (stops what runs). Takes up to a few minutes. A folder the user has not granted yet waits for their approval.",
@@ -502,6 +510,30 @@ pub async fn run<C: Core>(
                 r["error"] = json!(first_line(e, 300));
                 r["problems"] = json!(problems_brief(&v["problems"], 5));
             }
+            Ok(vec![text(&compact(&r))])
+        }
+        "wait_for_app" => {
+            let secs = args["seconds"].as_u64().unwrap_or(50).clamp(1, 55);
+            let v = s
+                .core
+                .call(
+                    "agent.check",
+                    json!({ "project": "", "since": 0, "probe": true, "timeout_ms": secs * 1000 }),
+                )
+                .await?;
+            let r = match v["status"].as_str() {
+                Some("busy") => {
+                    json!({ "status": "busy", "running": v["running"], "waited_s": v["waited_s"],
+                    "hint": "still building: call wait_for_app again" })
+                }
+                Some("not_running") => {
+                    json!({ "status": "not_running", "hint": "nothing runs: use run_project" })
+                }
+                _ => json!({ "status": "ready", "waited_s": v["waited_s"], "app_alive": v["alive"],
+                    "problems": v["problems"].as_array().into_iter().flatten().take(5).map(|p| json!({
+                        "fp": p["fp"], "category": p["category"], "at": p["at"],
+                        "msg": first_line(p["msg"].as_str().unwrap_or(""), 160) })).collect::<Vec<_>>() }),
+            };
             Ok(vec![text(&compact(&r))])
         }
         "run_project" => {

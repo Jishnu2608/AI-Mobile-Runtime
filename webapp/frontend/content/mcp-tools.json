@@ -1,0 +1,477 @@
+[
+  {
+    "name": "runtime_status",
+    "title": "Runtime status",
+    "description": "What runs (device, app, alive) and what changed since your last call: problem counts by category, up to 3 new problems with their fp, the last event and a hint. ≤ 1 KB. Call after every edit.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "reset": {
+          "type": "boolean",
+          "description": "Report everything, not only what changed since the last call."
+        }
+      }
+    },
+    "annotations": {
+      "title": "Runtime status",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "get_diagnostics",
+    "title": "Problems",
+    "description": "The current run's problems, classified (build, runtime, crash, environment, device, network) and deduplicated: fp, category, origin (app = your code, environment = toolchain/device/network), file:line, message, count.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "category": {
+          "type": "string",
+          "enum": [
+            "environment",
+            "build",
+            "runtime",
+            "crash",
+            "device",
+            "network"
+          ]
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 50,
+          "description": "Default 20 (most recently seen)."
+        }
+      }
+    },
+    "annotations": {
+      "title": "Problems",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "get_diagnostic",
+    "title": "Problem details",
+    "description": "One problem by its fp, with the full message and stack.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "fingerprint": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "fingerprint"
+      ]
+    },
+    "annotations": {
+      "title": "Problem details",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "get_logs",
+    "title": "Logs",
+    "description": "Recent log lines: the app's device log (logcat), the build/framework tool's output (tool) and runtime progress (tumr).",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "source": {
+          "type": "string",
+          "enum": [
+            "logcat",
+            "tool",
+            "tumr"
+          ]
+        },
+        "level": {
+          "type": "string",
+          "enum": [
+            "V",
+            "D",
+            "I",
+            "W",
+            "E",
+            "F"
+          ],
+          "description": "Lowest level shown."
+        },
+        "grep": {
+          "type": "string",
+          "description": "Case-insensitive text or tag filter."
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 200,
+          "description": "Default 50."
+        }
+      }
+    },
+    "annotations": {
+      "title": "Logs",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "screenshot",
+    "title": "Screenshot",
+    "description": "PNG of the device screen, scaled down (default 540 px wide). The text part gives the device size: tap/swipe take device pixels.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "max_width": {
+          "type": "integer",
+          "minimum": 200,
+          "maximum": 1440
+        }
+      }
+    },
+    "annotations": {
+      "title": "Screenshot",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "ui_tree",
+    "title": "UI tree",
+    "description": "Visible UI elements of the current screen: class, text, id, description, centre and bounds in device pixels, clickable/scrollable. Takes 1–3 s. Use the centre for tap.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "UI tree",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "list_device_profiles",
+    "title": "Device profiles",
+    "description": "Device sizes available for switch_device (phone, foldable, tablet …).",
+    "inputSchema": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "Device profiles",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "tap",
+    "title": "Tap",
+    "description": "Tap at device pixels (x, y).",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "x": {
+          "type": "integer"
+        },
+        "y": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "x",
+        "y"
+      ]
+    },
+    "annotations": {
+      "title": "Tap",
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "swipe",
+    "title": "Swipe",
+    "description": "Swipe from (x, y) to (x2, y2) in device pixels.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "x": {
+          "type": "integer"
+        },
+        "y": {
+          "type": "integer"
+        },
+        "x2": {
+          "type": "integer"
+        },
+        "y2": {
+          "type": "integer"
+        },
+        "ms": {
+          "type": "integer",
+          "minimum": 50,
+          "maximum": 5000,
+          "description": "Duration, default 300."
+        }
+      },
+      "required": [
+        "x",
+        "y",
+        "x2",
+        "y2"
+      ]
+    },
+    "annotations": {
+      "title": "Swipe",
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "type_text",
+    "title": "Type text",
+    "description": "Type text into the focused field.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ]
+    },
+    "annotations": {
+      "title": "Type text",
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "press_key",
+    "title": "Press key",
+    "description": "Press a device key: back, home, recents, enter, delete, arrows …",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "key": {
+          "type": "string",
+          "enum": [
+            "back",
+            "home",
+            "recents",
+            "enter",
+            "delete",
+            "tab",
+            "escape",
+            "menu",
+            "up",
+            "down",
+            "left",
+            "right"
+          ]
+        }
+      },
+      "required": [
+        "key"
+      ]
+    },
+    "annotations": {
+      "title": "Press key",
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "rotate",
+    "title": "Rotate",
+    "description": "Rotate the device by 90°.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "Rotate",
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "fingerprint",
+    "title": "Fingerprint",
+    "description": "Touch the emulator's fingerprint sensor with enrolled finger 1 (or `finger`): unlocks the lock screen or answers the app's BiometricPrompt, e.g. to test fingerprint login. `touch`: tap (default), down or up (hold while Settings enrols a finger). Needs a screen lock and an enrolled finger; the result says whether the device is still locked and how many fingers are enrolled.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "touch": {
+          "type": "string",
+          "enum": [
+            "tap",
+            "down",
+            "up"
+          ]
+        },
+        "finger": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10
+        }
+      }
+    },
+    "annotations": {
+      "title": "Fingerprint",
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "fold",
+    "title": "Fold (hinge angle)",
+    "description": "Foldable emulators only (fold, flip): set the hinge angle in degrees (0 closed, 90 half open / tabletop, 180 open flat). Android's posture and Jetpack WindowManager's FoldingFeature follow the angle; closed, the app moves to the cover screen. Without `angle` it reports the hinge as it is.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "angle": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 180
+        }
+      }
+    },
+    "annotations": {
+      "title": "Fold (hinge angle)",
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "reload",
+    "title": "Reload",
+    "description": "Apply code changes: hot (keep state; Flutter / React Native), restart (restart the app's state) or full (rebuild, reinstall, relaunch — needed for Kotlin/Java and native changes).",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "hot",
+            "restart",
+            "full"
+          ]
+        }
+      }
+    },
+    "annotations": {
+      "title": "Reload",
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "wait_for_app",
+    "title": "Wait for the app",
+    "description": "Wait until the rebuild or reload your last saves started has finished (Gradle builds can take minutes), then list the app's open problems. Waits up to `seconds` (default 50) per call: while it answers `busy`, call it again.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "seconds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 55,
+          "description": "Longest wait for this call; default 50."
+        }
+      }
+    },
+    "annotations": {
+      "title": "Wait for the app",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "run_project",
+    "title": "Run project",
+    "description": "Build, install and launch a project folder on the device (stops what runs). Takes up to a few minutes. A folder the user has not granted yet waits for their approval.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Absolute project folder."
+        },
+        "profile": {
+          "type": "string",
+          "description": "Device profile; default: the current one."
+        }
+      },
+      "required": [
+        "path"
+      ]
+    },
+    "annotations": {
+      "title": "Run project",
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "stop_app",
+    "title": "Stop app",
+    "description": "Stop the running app and its build tools (the device keeps running).",
+    "inputSchema": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "Stop app",
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "switch_device",
+    "title": "Switch device",
+    "description": "Switch to (and boot) another device profile, keeping the session. Waits for the user's approval.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "profile": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "profile"
+      ]
+    },
+    "annotations": {
+      "title": "Switch device",
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "openWorldHint": false
+    }
+  }
+]

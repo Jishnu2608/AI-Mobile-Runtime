@@ -47,17 +47,45 @@ jobs:
             apps/desktop/ui/package-lock.json
             apps/vscode/package-lock.json
 
-      # the Mobile Preview panel is the desktop app's preview page
-      - name: Build the preview page
-        run: |
-          npm --prefix apps/desktop/ui ci --no-audit --no-fund
-          npm --prefix apps/desktop/ui run build
+      # One command per step: on Windows the steps run in PowerShell, where a failing npm line in
+      # a multi-line block does not stop the block (only the last exit code counts).
 
-      - name: Package and test the extension
+      # the Mobile Preview panel is the desktop app's preview page
+      - name: Install the preview page's packages
+        run: npm --prefix apps/desktop/ui ci --no-audit --no-fund
+
+      - name: Build the preview page
+        run: npm --prefix apps/desktop/ui run build
+
+      - name: Install the extension's packages
+        run: npm --prefix apps/vscode ci --no-audit --no-fund
+
+      - name: Package the extension
+        run: npm --prefix apps/vscode run package
+
+      - name: Test the extension
+        run: npm --prefix apps/vscode test
+
+      # the Marketplace refuses a version it already has: stop here with a clear message instead
+      - name: Check the version and its release notes
+        if: ${{ !inputs.dry_run }}
+        shell: pwsh
+        working-directory: apps/vscode
         run: |
-          npm --prefix apps/vscode ci --no-audit --no-fund
-          npm --prefix apps/vscode run package
-          npm --prefix apps/vscode test
+          $m = Get-Content package.json -Raw | ConvertFrom-Json
+          $notes = Get-Content CHANGELOG.md -Raw
+          if ($notes -notmatch "(?m)^## $([regex]::Escape($m.version))\s*$") {
+            throw "CHANGELOG.md has no '## $($m.version)' entry: bump the version and describe the change first"
+          }
+          # not listed yet (first publish) or offline: nothing to compare with
+          $listed = npx --no-install vsce show "$($m.publisher).$($m.name)" --json 2>$null
+          if ($LASTEXITCODE -eq 0 -and $listed) {
+            $versions = @(($listed | Out-String | ConvertFrom-Json).versions.version)
+            if ($versions -contains $m.version) {
+              throw "Version $($m.version) is already on the Visual Studio Marketplace: bump it in package.json"
+            }
+          }
+          $global:LASTEXITCODE = 0
 
       - name: Show what will be published
         shell: pwsh
@@ -77,13 +105,14 @@ jobs:
         working-directory: apps/vscode
         # Trusted Publishing: no secret. Fails with an authorisation error until the owner has
         # created the policy for this repository and workflow on the publisher.
-        run: npx vsce publish --oidc --packagePath dist/tumr-vscode.vsix
+        run: npx --no-install vsce publish --oidc --packagePath dist/tumr-vscode.vsix
 
       - name: Publish to Open VSX
         if: ${{ !inputs.dry_run && (inputs.target == 'both' || inputs.target == 'openvsx') }}
         working-directory: apps/vscode
+        shell: pwsh
         env:
           OVSX_PAT: ${{ secrets.OVSX_PAT }}
         run: |
           if (-not $env:OVSX_PAT) { throw "The OVSX_PAT secret is not set" }
-          npx ovsx publish dist/tumr-vscode.vsix
+          npx --no-install ovsx publish dist/tumr-vscode.vsix

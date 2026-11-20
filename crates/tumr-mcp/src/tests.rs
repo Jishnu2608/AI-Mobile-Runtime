@@ -83,7 +83,7 @@ async fn the_catalogue_is_well_formed() {
         .await
         .unwrap();
     let list = r["result"]["tools"].as_array().unwrap();
-    assert_eq!(list.len(), 18);
+    assert_eq!(list.len(), 19);
     for t in list {
         let name = t["name"].as_str().unwrap();
         assert!(
@@ -96,6 +96,27 @@ async fn the_catalogue_is_well_formed() {
     }
     let r = s.handle(&call("no_such_tool", json!({}))).await.unwrap();
     assert_eq!(r["error"]["code"], -32602);
+}
+
+/// The website's MCP reference reads the committed tool list (CI has no `tumr.exe` to ask).
+/// `TUMR_BLESS=1 cargo test -p tumr-mcp site_tool_list` rewrites it.
+#[test]
+fn site_tool_list_is_current() {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../webapp/frontend/content/mcp-tools.json");
+    let want = serde_json::to_string_pretty(&crate::tools::catalogue()).unwrap() + "\n";
+    if std::env::var_os("TUMR_BLESS").is_some() {
+        std::fs::write(&path, &want).unwrap();
+    }
+    // compared as JSON values: the key order depends on serde_json's features in this build
+    let have: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&path).unwrap_or_default())
+            .unwrap_or_default();
+    assert_eq!(
+        have,
+        serde_json::Value::Array(crate::tools::catalogue()),
+        "webapp/frontend/content/mcp-tools.json is out of date: run TUMR_BLESS=1 cargo test -p tumr-mcp site_tool_list"
+    );
 }
 
 #[tokio::test]

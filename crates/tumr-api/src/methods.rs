@@ -225,6 +225,10 @@ pub const RUNTIME_DIGEST: &str = "runtime.digest";
 /// problems seen after `since`. Called by the agents' stop hooks (`tumr agent hook`), so an agent
 /// cannot finish its turn while the app it changed does not build or crashes. Scope: observe.
 pub const AGENT_CHECK: &str = "agent.check";
+/// `agent.note` [`AgentNoteParams`] → `{}`: a line in the home screen's agent feed, written by
+/// `tumr mcp` (an agent connected through its plugin) and the stop hook (the loop gave up on a
+/// problem). Scope: observe.
+pub const AGENT_NOTE: &str = "agent.note";
 /// `approvals.list` → `{ pending: [{id, client, action, detail, created_ms}] }`: requests from
 /// agents waiting for the user (running an ungranted project, switching the device). Scope: admin.
 pub const APPROVALS_LIST: &str = "approvals.list";
@@ -417,7 +421,9 @@ pub struct AppParams {
 /// Parameters of [`AGENT_CHECK`].
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AgentCheckParams {
-    /// The agent's project folder; only a run of this folder is checked.
+    /// The agent's project folder; only a run of this folder is checked. Empty: the current run,
+    /// whatever its folder (the `wait_for_app` MCP tool, which does not know the agent's folder).
+    #[serde(default)]
     pub project: String,
     /// Problem cursor from the previous check (0: all runtime / crash problems of the run).
     #[serde(default)]
@@ -429,13 +435,28 @@ pub struct AgentCheckParams {
     /// A connection test (`tumr agent doctor`): answer, but record nothing (feed, flags).
     #[serde(default)]
     pub probe: bool,
-    /// How long to wait for a rebuild to finish; capped at 170 s. Default 120 s.
+    /// How long to wait for a rebuild to finish; capped at [`AGENT_CHECK_MAX_MS`]. Default 120 s.
+    /// The wait is conditional: with nothing building it returns after the watcher's debounce;
+    /// while a build or reload runs it waits for it, however long, up to this limit, and then
+    /// answers `busy` with what is running and for how long.
     #[serde(default = "default_check_ms")]
     pub timeout_ms: u64,
 }
 
 fn default_check_ms() -> u64 {
     120_000
+}
+
+/// The longest [`AGENT_CHECK`] waits for a build (the stop hooks get 600 s from their agent).
+pub const AGENT_CHECK_MAX_MS: u64 = 580_000;
+
+/// Parameters of [`AGENT_NOTE`].
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AgentNoteParams {
+    /// `connected` (an agent connected itself through its plugin) or `gave_up` (the loop stopped
+    /// on a problem the agent did not get past).
+    pub kind: String,
+    pub message: String,
 }
 
 /// Parameters of [`SESSION_WAIT`].

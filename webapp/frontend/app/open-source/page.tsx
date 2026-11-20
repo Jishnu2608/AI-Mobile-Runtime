@@ -23,7 +23,9 @@ export default async function OpenSourcePage() {
           The repository holds the Runtime Core, the command line, the desktop app, the VS Code extension, this website and the user
           guides: <a href={site.repository} rel="noreferrer">{site.repository.replace("https://", "")}</a>.
         </p>
-        <p>The licence is published with the first public release.</p>
+        <p>
+          Licensed under the <a href={`${site.repository}/blob/main/LICENSE`} rel="noreferrer">Apache License, Version 2.0</a>.
+        </p>
       </DocSection>
       <DocSection id="contributing" title="Contributing">
         {contributing}

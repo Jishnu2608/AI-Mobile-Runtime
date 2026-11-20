@@ -112,6 +112,7 @@ $stage = Join-Path $out "zip-stage\Toolchain-Universal-Mobile-Runtime-$version"
 New-Item -ItemType Directory -Force $stage | Out-Null
 foreach ($f in @("tumr.exe", "tumr-core.exe", "tumr-desktop.exe", "tumr-elevate.exe")) { Copy-Item "target\release\$f" $stage }
 Copy-Item THIRD_PARTY_NOTICES.md $stage
+Copy-Item LICENSE, NOTICE, TRADEMARKS.md $stage
 Copy-Item README.md $stage
 $zip = Join-Path $out "Toolchain-Universal-Mobile-Runtime_$($version)_x64-portable.zip"
 Compress-Archive -Path $stage -DestinationPath $zip -CompressionLevel Optimal
@@ -122,9 +123,31 @@ $stage = Join-Path $out "cli-stage\tumr-cli-$version"
 New-Item -ItemType Directory -Force $stage | Out-Null
 foreach ($f in @("tumr.exe", "tumr-core.exe", "tumr-elevate.exe")) { Copy-Item "target\release\$f" $stage }
 Copy-Item THIRD_PARTY_NOTICES.md $stage
+Copy-Item LICENSE, NOTICE, TRADEMARKS.md $stage
 $cli = Join-Path $out "tumr-cli_$($version)_x64.zip"
 Compress-Archive -Path $stage -DestinationPath $cli -CompressionLevel Optimal
 Remove-Item (Join-Path $out "cli-stage") -Recurse -Force
+
+# MCPB bundle (PLUG-006): Claude Desktop and the official MCP Registry. Only the manifest, the
+# launcher and the icon: the bundle starts the installed runtime's MCP server, it carries no copy.
+$stage = Join-Path $out "mcpb-stage"
+New-Item -ItemType Directory -Force $stage | Out-Null
+$mcpbManifest = Get-Content packaging\mcpb\manifest.json -Raw | ConvertFrom-Json
+$mcpbManifest.version = $version
+[System.IO.File]::WriteAllText((Join-Path $stage "manifest.json"), ($mcpbManifest | ConvertTo-Json -Depth 8), [System.Text.UTF8Encoding]::new($false))
+Copy-Item plugins\claude\bin\tumr.cmd $stage
+Copy-Item brand\logo-1024.png (Join-Path $stage "icon.png")
+Copy-Item LICENSE, NOTICE $stage
+$mcpb = Join-Path $out "tumr-mcp_$($version)_win32-x64.mcpb"
+Compress-Archive -Path (Join-Path $stage "*") -DestinationPath "$mcpb.zip" -CompressionLevel Optimal
+Move-Item "$mcpb.zip" $mcpb -Force
+Remove-Item $stage -Recurse -Force
+# the MCP Registry entry for this bundle (published with mcp-publisher by the owner)
+$server = Get-Content packaging\mcpb\server.json -Raw | ConvertFrom-Json
+$server.version = $version
+$server.packages[0].identifier = "$($BaseUrl.TrimEnd('/'))/v$version/$(Split-Path $mcpb -Leaf)"
+$server.packages[0].fileSha256 = (Get-FileHash $mcpb -Algorithm SHA256).Hash.ToLower()
+[System.IO.File]::WriteAllText((Join-Path $out "server.json"), ($server | ConvertTo-Json -Depth 8), [System.Text.UTF8Encoding]::new($false))
 
 # VS Code extension (.vsix, Windows x64 target): the same file the Marketplace gets
 $vsix = $null
@@ -140,7 +163,7 @@ if (-not $SkipVscode) {
 }
 
 Step "Checks"
-$files = @(Get-Item $installer, $zip, $cli)
+$files = @(Get-Item $installer, $zip, $cli, $mcpb)
 if ($vsix) { $files += Get-Item $vsix }
 foreach ($f in $files) {
   $mb = [math]::Round($f.Length / 1MB, 1)
@@ -155,7 +178,7 @@ if ($thumb -and -not $signed) { throw "signing was requested but the installer s
 Step "SHA256SUMS and releases.json"
 $sums = foreach ($f in $files) { "{0}  {1}" -f (Get-FileHash $f.FullName -Algorithm SHA256).Hash.ToLower(), $f.Name }
 [System.IO.File]::WriteAllText((Join-Path $out "SHA256SUMS"), (($sums -join "`n") + "`n"), [System.Text.UTF8Encoding]::new($false))
-$kinds = @{ $installer = "installer"; $zip = "portable"; $cli = "cli" }
+$kinds = @{ $installer = "installer"; $zip = "portable"; $cli = "cli"; $mcpb = "mcpb" }
 if ($vsix) { $kinds[$vsix] = "vscode" }
 $entries = foreach ($f in $files) {
   [ordered]@{

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.4
+
+- The Mobile Preview opens to the left of your code. Move it anywhere afterwards; it stays there.
+- Connect Copilot now also adds the error loop: when Copilot's agent finishes a task and the app still has a build error, crash or runtime error, it is sent back to fix it (a long Gradle build is waited for first).
+- Licensed under Apache-2.0.
+- Needs Toolchain Universal Mobile Runtime 0.1.33 or later.
+
 ## 0.1.3
 
 - New name: Toolchain Universal Mobile Runtime. The extension is now `tumr.tumr-vscode` and runs `tumr.exe` (the old `umr-vscode` extension can be uninstalled). Commands start with `tumr.`.

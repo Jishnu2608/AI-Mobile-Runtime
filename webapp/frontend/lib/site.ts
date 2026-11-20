@@ -10,8 +10,8 @@ export const site = {
   command: "tumr",
   /** No domain yet: no absolute URLs, sitemap or canonical links. */
   domain: null as string | null,
-  /** The product licence, once published. */
-  licence: null as string | null,
+  /** The product licence (SPDX id). */
+  licence: "Apache-2.0",
   /** Where the website is hosted (release files are on GitHub Releases). */
   hosting: null as string | null,
   releasesHost: "GitHub Releases",

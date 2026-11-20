@@ -1,0 +1,17 @@
+{
+  "name": "tumr",
+  "owner": {
+    "name": "Toolchain Universal Mobile Runtime authors"
+  },
+  "metadata": {
+    "description": "Toolchain Universal Mobile Runtime plugins",
+    "version": "0.1.33"
+  },
+  "plugins": [
+    {
+      "name": "tumr",
+      "source": "./plugins/cursor",
+      "description": "See and run your Android app (Kotlin/Java, Flutter, React Native/Expo) on a live emulator while the agent codes. Build errors, crashes and runtime errors go back to the agent until they are fixed."
+    }
+  ]
+}

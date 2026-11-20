@@ -20,8 +20,10 @@
 # Rust build output
 /target/
 
-# Locally installed agent skills (per developer, not part of the application)
-.agents/
+# Locally installed agent skills (per developer, not part of the application); the Codex plugin
+# marketplace in .agents/plugins is part of the product
+.agents/*
+!.agents/plugins/
 .claude/skills/
 skills-lock.json
 

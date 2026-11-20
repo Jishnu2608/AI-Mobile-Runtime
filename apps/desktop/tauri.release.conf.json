@@ -5,7 +5,10 @@
       "../../target/release/tumr.exe": "tumr.exe",
       "../../target/release/tumr-core.exe": "tumr-core.exe",
       "../../target/release/tumr-elevate.exe": "tumr-elevate.exe",
-      "../../THIRD_PARTY_NOTICES.md": "THIRD_PARTY_NOTICES.md"
+      "../../THIRD_PARTY_NOTICES.md": "THIRD_PARTY_NOTICES.md",
+      "../../LICENSE": "LICENSE",
+      "../../NOTICE": "NOTICE",
+      "../../TRADEMARKS.md": "TRADEMARKS.md"
     }
   }
 }

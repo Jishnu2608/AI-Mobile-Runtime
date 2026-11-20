@@ -22,7 +22,7 @@ export class PreviewPanel {
     const panel = vscode.window.createWebviewPanel(
       "tumrPreview",
       "Mobile Preview",
-      { viewColumn: vscode.ViewColumn.Beside, preserveFocus: true },
+      { viewColumn: vscode.ViewColumn.Beside, preserveFocus: false },
       {
         enableScripts: true,
         retainContextWhenHidden: true,
@@ -31,6 +31,21 @@ export class PreviewPanel {
     );
     panel.iconPath = vscode.Uri.joinPath(context.extensionUri, "media", "icon.png");
     PreviewPanel.current = new PreviewPanel(panel, context, core);
+    // PLUG-004 (owner decision 2026-11-20): the phone goes to the left of the code, once, when the
+    // panel opens; if the user moves it later it stays there
+    void PreviewPanel.dockLeft();
+  }
+
+  private static async dockLeft(): Promise<void> {
+    if (vscode.window.tabGroups.all.length < 2) {
+      return;
+    }
+    try {
+      await vscode.commands.executeCommand("workbench.action.moveActiveEditorGroupLeft");
+      await vscode.commands.executeCommand("workbench.action.focusNextGroup");
+    } catch {
+      // the layout stays as VS Code made it
+    }
   }
 
   private constructor(

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { PageShell, DocSection } from "@/components/site/PageShell";
 import { readGenerated } from "@/lib/docs";
 import { renderMarkdown } from "@/lib/mdx";
+import { site } from "@/lib/site";
 
 export const metadata: Metadata = {
   title: "Licences",
@@ -18,8 +19,21 @@ export default async function LicencesPage() {
     >
       <DocSection id="product" title="Product licence">
         <p>
-          The runtime&apos;s own licence is published with the first public release. Until then, no licence is granted beyond what the
-          third-party licences below allow for their own components.
+          The runtime is licensed under the{" "}
+          <a href={`${site.repository}/blob/main/LICENSE`} rel="noreferrer">Apache License, Version 2.0</a>. Its{" "}
+          <a href={`${site.repository}/blob/main/NOTICE`} rel="noreferrer">NOTICE</a> file goes with every copy you pass on.
+        </p>
+        <p>
+          If you use the runtime or build on it, a mention with a link to the repository would be greatly appreciated. That is a
+          request, not a condition of the licence.
+        </p>
+      </DocSection>
+      <DocSection id="trademarks" title="Name and logo">
+        <p>
+          The Apache licence covers the code, not the name or the logo. You can name the project, say your work is based on it or
+          works with it, and pass on unchanged copies. A fork or a modified build you distribute needs its own name and icon. The
+          details are in the{" "}
+          <a href={`${site.repository}/blob/main/TRADEMARKS.md`} rel="noreferrer">trademark policy</a>.
         </p>
       </DocSection>
       <DocSection id="fonts" title="Website fonts">
